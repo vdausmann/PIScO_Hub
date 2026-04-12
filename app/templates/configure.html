@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+
+{% block title %}Configure {{ module_id }}{% endblock %}
+
+{% block content %}
+<div style="max-width: 800px; margin: 0 auto;">
+    <h1>Configure Module: {{ module_id }}</h1>
+    <p>Edit the parameters below. These will be passed to the binary upon execution.</p>
+
+    <form action="{{ url_for('processing.run', module_id=module_id) }}" method="POST">
+        <textarea 
+            name="config_content" 
+            style="width: 100%; height: 400px; font-family: monospace; padding: 15px; border-radius: 8px; border: 1px solid #ccc; background: var(--bg); color: var(--text); resize: vertical;"
+        >{{ content }}</textarea>
+
+        <div style="margin-top: 20px; display: flex; gap: 10px;">
+            <button type="submit" style="background: var(--accent); color: white; padding: 12px 24px; font-weight: bold;">
+                Start Processing
+            </button>
+            <a href="{{ url_for('processing.hub') }}" style="padding: 12px; text-decoration: none; color: var(--text); opacity: 0.7;">
+                Cancel
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}

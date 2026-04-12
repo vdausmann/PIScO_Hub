@@ -1,0 +1,7 @@
+{
+    "display_name": "Segmenter",
+    "executable": "Segmenter",
+    "description": "Segmenter code for PIScO data",
+    "file_extension": ".dat",
+	"id": "segmenter"
+}

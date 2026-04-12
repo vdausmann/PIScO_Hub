@@ -1,0 +1,8 @@
+.env
+.envrc
+instance/
+__pycache__/
+.direnv
+*.pyc
+*.db
+flake.lock
