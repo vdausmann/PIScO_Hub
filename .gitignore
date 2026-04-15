@@ -1,6 +1,7 @@
 .env
 .envrc
 instance/
+testing/
 __pycache__/
 .direnv
 *.pyc

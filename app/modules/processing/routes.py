@@ -1,5 +1,4 @@
 import os
-import json
 import signal
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify
 from flask_login import login_required
@@ -7,44 +6,13 @@ from ...models import db, Task
 
 processing_bp = Blueprint('processing', __name__)
 
-def get_installed_modules():
-    modules = []
-    # Path relative to the app root
-    tools_dir = os.path.join("app", 'modules', 'processing', 'tools')
-    print(tools_dir)
-    if not os.path.exists(tools_dir):
-        return []
-    for folder in os.listdir(tools_dir):
-        config_path = os.path.join(tools_dir, folder, 'config.json')
-        if os.path.exists(config_path):
-            with open(config_path, 'r') as f:
-                modules.append(json.load(f))
-    return modules
-
-
-
-@processing_bp.route('/configure/<module_id>')
-def configure(module_id):
-    print(module_id)
-    # Find the specific module folder
-    module_path = os.path.join('modules', 'processing', 'tools', module_id)
-    config_file_path = os.path.join(module_path, 'settings.cfg')
-    
-    if not os.path.exists(config_file_path):
-        content = "# No template configuration found for this module."
-    else:
-        with open(config_file_path, 'r') as f:
-            content = f.read()
-            
-    return render_template('configure.html', module_id=module_id, content=content)
-
-
 
 @processing_bp.route('/')
 @login_required
 def hub():
-    modules = get_installed_modules()
+    modules = []
     return render_template('processing_hub.html', modules=modules)
+
 
 
 @processing_bp.route('/run/<module_id>', methods=['POST'])

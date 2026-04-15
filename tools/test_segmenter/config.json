@@ -1,0 +1,8 @@
+{
+	"name": "test_segmenter",
+	"execution_call": "python3 /home/tim/Documents/Arbeit/PiscoWebApp/tools/test_segmenter/program.py",
+    "settings_template_path": "./settings.cfg",
+    "description": "This is a short description of this tool",
+    "priority": 1,
+    "weight": 8
+}

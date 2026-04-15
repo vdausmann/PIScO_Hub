@@ -1,9 +1,9 @@
 from flask import render_template
 from flask_login import login_required
 from app.factory import create_app
-from app.models import db
+from app.backend.models import db
 
-app = create_app(run_worker=True)
+app = create_app()
 
 @app.route('/')
 @login_required

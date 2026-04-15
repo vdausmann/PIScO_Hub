@@ -5,6 +5,7 @@ from flask_login import UserMixin
 
 db = SQLAlchemy()
 login_manager = LoginManager()
+login_manager.login_view = 'auth.login'
 
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
@@ -17,16 +18,22 @@ class Workflow(db.Model):
     name = db.Column(db.String(100))
     status = db.Column(db.String(20), default='Pending') 
     created_at = db.Column(db.DateTime, default=db.func.now())
-    steps = db.relationship('Task', backref='workflow', lazy=True, cascade="all, delete-orphan")
+    tasks = db.relationship('Task', backref='workflow', lazy=True, cascade="all, delete-orphan")
 
 
 class Task(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     workflow_id = db.Column(db.Integer, db.ForeignKey('workflow.id'))
-    module_name = db.Column(db.String(50)) # e.g., 'c_analyzer'
+    tool_name = db.Column(db.String(50)) 
     priority = db.Column(db.Integer, default=1)
     weight = db.Column(db.Integer, default=1)
     status = db.Column(db.String(20), default='Pending')
-    pid = db.Column(db.Integer, nullable=True) # To stop the process
-    config_snapshot = db.Column(db.Text) # The text config used at start
+    pid = db.Column(db.Integer, nullable=True)
     log_path = db.Column(db.String(255))
+    settings_file_path = db.Column(db.String(255))
+
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))

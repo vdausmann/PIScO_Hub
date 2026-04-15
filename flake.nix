@@ -36,6 +36,7 @@ outputs = { self, nixpkgs, flake-utils, ... }:
 						flask-login
 						python-dotenv
 						h5py
+						requests
                     ]))
 					tailwindcss
 					sqlite
