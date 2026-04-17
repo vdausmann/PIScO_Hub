@@ -1,19 +1,20 @@
 from flask import Blueprint, render_template, request, jsonify
 from flask_login import login_required
 
-from app.backend.task_manager import create_new_workflow
+from app.backend.task_manager import create_new_workflow, get_current_load
+
 
 task_manager_bp = Blueprint('task_manager', __name__)
 
 @task_manager_bp.route('/workflow/create', methods=['POST'])
-@login_required
+# @login_required
 def api_create_workflow():
     """
     Expects JSON:
     {
         "name": "Gamma Ray Analysis",
-        "tools": ["segmenter", "c_analyzer"],
-        "settings": ["/path/to/seg_config.json", "/path/to/ana_config.json"]
+        "tools": ["tool1", "tool2"],
+        "settings": ["/path/to/config1.json", "/path/to/config2.json"]
     }
     """
     data = request.get_json()
@@ -51,6 +52,8 @@ def api_create_workflow():
 
 
 
-    return jsonify({
-        "status": "success",
-    }), 201
+@task_manager_bp.route('/get-load', methods=['GET'])
+@login_required
+def get_load():
+    load = get_current_load()
+    return jsonify({"load": load}), 200

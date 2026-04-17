@@ -3,10 +3,10 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.factory import create_app
-from app.models import db, User
+from app.backend.models import db, User
 from werkzeug.security import generate_password_hash
 
-app = create_app()
+app = create_app(False)
 
 def create_admin():
     with app.app_context():

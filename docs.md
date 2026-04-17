@@ -6,12 +6,13 @@ A tool is defined by a config.json file following the template:
 
 ```json
 {
-	"name": "example_tool",
-	"execution_call": "python3 /path/to/program.py",
-    "settings_template_path": "path/to/settings/template",
+	"name": "test_load",
+	"program_path": "/home/tim/Documents/Arbeit/PiscoWebApp/tools/test_load/load_test.py",
+	"program_type": "python",
+    "settings_template_path": "",
     "description": "This is a short description of this tool",
-    "priority": 1,
-    "weight": 1
+    "default_priority": 1,
+    "defalt_weight": 8
 }
 ```
 

@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<form method="POST">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Setting</th>
+                <th>Value</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in settings %}
+            <tr>
+                <td><strong>{{ s.key }}</strong></td>
+                <td>
+                    <input type="text" name="{{ s.key }}" value="{{ s.value }}" class="form-control">
+                </td>
+                <td><small class="text-muted">{{ s.description }}</small></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <button type="submit" class="btn btn-primary">Save Configuration</button>
+</form>
+
+{% endblock %}

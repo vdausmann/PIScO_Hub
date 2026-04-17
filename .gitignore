@@ -2,6 +2,7 @@
 .envrc
 instance/
 testing/
+logs/
 __pycache__/
 .direnv
 *.pyc

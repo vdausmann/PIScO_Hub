@@ -1,8 +1,9 @@
 {
 	"name": "test_segmenter",
-	"execution_call": "python3 /home/tim/Documents/Arbeit/PiscoWebApp/tools/test_segmenter/program.py",
+	"program_path": "/home/tim/Documents/Arbeit/PiscoWebApp/tools/test_segmenter/program.py",
+	"program_type": "python",
     "settings_template_path": "./settings.cfg",
     "description": "This is a short description of this tool",
-    "priority": 1,
-    "weight": 8
+    "default_priority": 1,
+    "default_weight": 8
 }

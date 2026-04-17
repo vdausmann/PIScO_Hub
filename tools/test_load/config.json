@@ -1,8 +1,9 @@
 {
 	"name": "test_load",
-	"execution_call": "python3 /home/tim/Documents/Arbeit/PiscoWebApp/tools/test_load/load_test.py",
+	"program_path": "/home/tim/Documents/Arbeit/PiscoWebApp/tools/test_load/load_test.py",
+	"program_type": "python",
     "settings_template_path": "",
     "description": "This is a short description of this tool",
-    "priority": 1,
-    "weight": 8
+    "default_priority": 1,
+    "default_weight": 8
 }

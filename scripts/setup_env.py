@@ -15,7 +15,7 @@ def setup_env():
     # 3. Construct the .env content
     env_content = [
         f"FLASK_SECRET_KEY={secret_key}",
-        f"DATABASE_URL=sqlite:///user.db",
+        f"DATABASE_URL=sqlite:///app.db",
     ]
 
     secret_key = None
