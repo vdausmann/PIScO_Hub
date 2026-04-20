@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Processing Dashboard{% endblock %}
+
+{% block content %}
+<h1>Workflows</h1>
+
+<div id="tree"></div>
+
+<style>
+.workflow {
+    background: var(--card);
+    border: 1px solid #4443;
+    margin-bottom: 10px;
+    padding: 12px;
+    border-radius: 8px;
+}
+
+.workflow-header {
+    display: flex;
+    justify-content: space-between;
+    cursor: pointer;
+}
+
+.task {
+    margin-left: 20px;
+    padding: 6px;
+    font-size: 0.9em;
+}
+
+.running { color: orange; }
+.completed { color: lightgreen; }
+.failed { color: #ff6b6b; }
+.pending { color: gray; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let workflows = {{ initial_data | tojson }};
+const container = document.getElementById("tree");
+
+function renderTree(data) {
+    container.innerHTML = "";
+
+    data.forEach(wf => {
+        const wfDiv = document.createElement("div");
+        wfDiv.className = "workflow";
+
+        wfDiv.innerHTML = `
+            <strong>${wf.name}</strong> (${wf.status})
+        `;
+
+        wf.tasks.forEach(task => {
+            const t = document.createElement("div");
+            t.className = "task";
+            t.innerHTML = `Task ${task.id} - ${task.status}`;
+            wfDiv.appendChild(t);
+        });
+
+        container.appendChild(wfDiv);
+    });
+}
+
+// initial render
+renderTree(workflows);
+
+const ws = new WebSocket(`ws://${location.host}/ws`);
+
+ws.onopen = () => {
+    console.log("WebSocket connected");
+};
+
+ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    workflows = data;
+    renderTree(workflows);
+};
+
+ws.onclose = () => {
+    console.log("WebSocket disconnected");
+};
+</script>
+{% endblock %}

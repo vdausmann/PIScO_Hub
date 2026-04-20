@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_login import UserMixin
@@ -31,8 +30,9 @@ class Task(db.Model):
     weight = db.Column(db.Integer, default=1)
     status = db.Column(db.String(20), default='Pending')
     pid = db.Column(db.Integer, nullable=True)
-    log_path = db.Column(db.String(255))
+    log_prefix = db.Column(db.String(255))
     settings_file_path = db.Column(db.String(255))
+    exit_code = db.Column(db.Integer, nullable=True)
 
     started_at = db.Column(db.DateTime, nullable=True)
     completed_at = db.Column(db.DateTime, nullable=True)

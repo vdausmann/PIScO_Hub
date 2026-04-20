@@ -8,6 +8,13 @@ from app.backend.models import db, Task, Workflow, Tool
 
 app = create_app(False)
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from app.factory import create_app
+from app.backend.models import db, Task, Workflow, Tool
+
+app = create_app(False)
+
 def reset_tasks_only():
     with app.app_context():
         print("[*] Clearing Tasks and Steps...")

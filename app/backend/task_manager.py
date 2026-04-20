@@ -110,10 +110,10 @@ class TaskManager:
             if res == None:
                 return
 
-            pid, log_path = res
+            pid, log_prefix = res
 
             task.pid = pid
-            task.log_path = log_path
+            task.log_prefix = log_prefix
             task.status = "Running"
             task.workflow.status = "Running"
             task.started_at = datetime.now()
@@ -136,20 +136,20 @@ class TaskManager:
         log_dir = os.path.join("logs", tool.name)
         os.makedirs(log_dir, exist_ok=True)
 
-        # log_name = str(uuid.uuid4()) + ".log"
-        log_name = "test.log"
-        log_path = os.path.join(log_dir, log_name)
+        prefix = os.path.join(log_dir, str(uuid.uuid4()))
+        log_path = prefix + ".log"
+        error_path = prefix + ".err"
 
         try:
-            with open(log_path, "w") as f:
+            with open(log_path, "w") as f, open(error_path, "w") as e:
                 process = subprocess.Popen(
                     execution_call + [settings_file_path],
                     stdout=f,
-                    stderr=f,
+                    stderr=e,
                     start_new_session=True
                 )
             print(f"[*] Started {tool.name} (PID: {process.pid})")
-            return (process.pid, log_path)
+            return (process.pid, prefix)
         except Exception as e:
             print(f"[!] Failed to start {tool.name}: {e}")
             return None

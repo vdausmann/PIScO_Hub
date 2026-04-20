@@ -44,7 +44,9 @@ def create_app(create_worker=True):
 
     if create_worker:
         from .backend.task_manager import TaskManager
+        from .backend.task_watcher import TaskWatcher
         TaskManager(app)
+        TaskWatcher(app)
 
 
     return app
