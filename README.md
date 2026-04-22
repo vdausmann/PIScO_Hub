@@ -5,7 +5,7 @@ This project implements a local server to controll the PIScO pipeline.
 
 ## TODOs
 - Implement TaskManager module
-    - Visualization
+    - ~~Visualization~~
     - ~~TaskWatcher~~
     - ~~Module loading and detection~~
     - ~~Starting of modules~~
