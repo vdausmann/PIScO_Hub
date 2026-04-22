@@ -28,6 +28,7 @@ def create_new_workflow(workflow_name: str, tools: list[str], settings:
         task = Task()
         task.workflow_id = new_workflow.id
         task.tool_id = tool.id
+        task.workflow_position = i
         task.priority = tool.default_priority
         task.weight = tool.default_weight
         task.settings_file_path = settings[i]
@@ -85,19 +86,34 @@ class TaskManager:
         if remaining_capacity <= 0:
             return
 
-        # find task with the highest priority that can be dispatched. If multiple tasks 
-        # have the same priority, choose the one with the oldest creation date.
-        next_task = Task.query.join(Workflow).filter(
-                Task.status == 'Pending',
-                Task.weight <= remaining_capacity
-            ).order_by(
-                    Task.priority.desc(), Workflow.created_at.asc()
-            ).first()
-
-
-        if not next_task or not isinstance(next_task, Task):
+       # Get a list of all pending workflows:
+        pending_workflows = Workflow.query.filter_by(status='Pending').all()
+        if len(pending_workflows) == 0:
             return
 
+        # For each workflow, find the task with the lowest workflow_position which is not finished yet
+        next_tasks = []
+        for workflow in pending_workflows:
+            tasks = Task.query.filter_by(workflow_id=workflow.id).order_by(Task.workflow_position.asc()).all()
+            for task in tasks:
+                if task.status == 'Pending':
+                    next_tasks.append(task)
+                    break
+
+        if len(next_tasks) == 0:
+            return
+
+        # filter out tasks which have a higher weight than the remaining capacity
+        next_tasks = [task for task in next_tasks if task.weight <= remaining_capacity]
+
+        if len(next_tasks) == 0:
+            return
+
+        # sort tasks by priority and workflow creation date
+        next_tasks.sort(key=lambda t: (t.priority, t.workflow.created_at))
+
+        # dispatch the task with the highest priority
+        next_task = next_tasks[0]
         self._dispatch_task(next_task)
 
 
@@ -106,7 +122,11 @@ class TaskManager:
         if tool is None:
             raise KeyError(f"Could not find tool with id {task.tool_id} in database.")
         try:
-            res = self._run_tool(tool, task.settings_file_path)
+            # create settings file:
+            ...
+            settings_file_path = ""
+
+            res = self._run_tool(tool, settings_file_path)
             if res == None:
                 return
 

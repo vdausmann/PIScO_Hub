@@ -1,6 +1,7 @@
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, redirect, render_template, request, jsonify, url_for
 from flask_login import login_required
 
+from app.backend.models import Workflow, db
 from app.backend.task_manager import create_new_workflow, get_current_load
 
 
@@ -57,3 +58,15 @@ def api_create_workflow():
 def get_load():
     load = get_current_load()
     return jsonify({"load": load}), 200
+
+
+
+@task_manager_bp.route('/workflow/<string:workflow_id>/delete', methods=['POST'])
+@login_required
+def delete_workflow(workflow_id):
+    workflow = Workflow.query.get_or_404(workflow_id)
+
+    db.session.delete(workflow)
+    db.session.commit()
+
+    return redirect(url_for('processing.dashboard'))

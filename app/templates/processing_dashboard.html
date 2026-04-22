@@ -1,84 +1,142 @@
 {% extends "base.html" %}
 
-{% block title %}Processing Dashboard{% endblock %}
-
 {% block content %}
-<h1>Workflows</h1>
 
-<div id="tree"></div>
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+<h1>Workflows</h1>
+	<form action="{{ url_for('workflow.init_workflow') }}" method="POST">
+		<button type="submit" class="btn btn-primary">
+			+ Create New Workflow
+		</button>
+	</form>
+</div>
+
+<div 
+	id="workflow-container"
+    hx-get="/processing/partials/workflows"
+    hx-trigger="load, every 2s"
+    hx-swap="innerHTML"
+>
+    Loading...
+</div>
+
+<script>
+function toggle(el) {
+    const next = el.nextElementSibling;
+    next.style.display = next.style.display === "none" ? "block" : "none";
+}
+</script>
+
+<script>
+const openNodes = new Set();
+
+function toggle(el) {
+    const id = el.dataset.id;
+    const content = el.nextElementSibling;
+
+    if (openNodes.has(id)) {
+        openNodes.delete(id);
+        content.style.display = "none";
+    } else {
+        openNodes.add(id);
+        content.style.display = "block";
+    }
+}
+
+// restore open state after HTMX reload
+document.body.addEventListener("htmx:afterSwap", (event) => {
+    if (event.target.id !== "workflow-container") return;
+
+    document.querySelectorAll(".workflow-header").forEach(el => {
+        const id = el.dataset.id;
+        const content = el.nextElementSibling;
+
+        if (!content) return;
+
+        content.style.display = openNodes.has(id) ? "block" : "none";
+    });
+});
+</script>
 
 <style>
-.workflow {
+.workflow-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.workflow-card {
     background: var(--card);
-    border: 1px solid #4443;
-    margin-bottom: 10px;
-    padding: 12px;
     border-radius: 8px;
+    padding: 10px;
+    border: 1px solid #4443;
 }
 
 .workflow-header {
     display: flex;
-    justify-content: space-between;
+    align-items: center;
+    gap: 12px;              /* spacing between items */
+    padding: 6px 0;
     cursor: pointer;
+    font-weight: bold;
 }
 
-.task {
+.workflow-header:hover {
+    opacity: 0.8;
+}
+
+.task-list {
+    margin-top: 8px;
     margin-left: 20px;
-    padding: 6px;
+    display: none;
+}
+
+.task-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 0;
     font-size: 0.9em;
 }
 
-.running { color: orange; }
-.completed { color: lightgreen; }
-.failed { color: #ff6b6b; }
-.pending { color: gray; }
-</style>
-{% endblock %}
-
-{% block scripts %}
-<script>
-let workflows = {{ initial_data | tojson }};
-const container = document.getElementById("tree");
-
-function renderTree(data) {
-    container.innerHTML = "";
-
-    data.forEach(wf => {
-        const wfDiv = document.createElement("div");
-        wfDiv.className = "workflow";
-
-        wfDiv.innerHTML = `
-            <strong>${wf.name}</strong> (${wf.status})
-        `;
-
-        wf.tasks.forEach(task => {
-            const t = document.createElement("div");
-            t.className = "task";
-            t.innerHTML = `Task ${task.id} - ${task.status}`;
-            wfDiv.appendChild(t);
-        });
-
-        container.appendChild(wfDiv);
-    });
+.task-row:not(:last-child) {
+    border-bottom: 1px solid #4442;
 }
 
-// initial render
-renderTree(workflows);
+/* status dots */
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
 
-const ws = new WebSocket(`ws://${location.host}/ws`);
+.workflow-status,
+.task-status {
+    margin-left: auto;
+}
 
-ws.onopen = () => {
-    console.log("WebSocket connected");
-};
+.status-running { background: orange; }
+.status-done { background: #22c55e; }
+.status-failed { background: #ef4444; }
+.status-pending { background: gray; }
+.log-button {
+    margin-left: 10px;
+    padding: 4px 8px;
+    font-size: 0.8em;
 
-ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    workflows = data;
-    renderTree(workflows);
-};
+    background: var(--accent);
+    color: white;
 
-ws.onclose = () => {
-    console.log("WebSocket disconnected");
-};
-</script>
+    text-decoration: none;
+    border-radius: 4px;
+
+    transition: 0.2s;
+}
+
+.log-button:hover {
+    opacity: 0.8;
+}
+</style>
+
 {% endblock %}

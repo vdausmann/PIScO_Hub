@@ -1,5 +1,6 @@
 from flask import Flask
-from .routes import auth, processing, visualization, task_manager, global_settings
+from .routes import (auth, processing, visualization, task_manager, global_settings,
+    workflow_builder)
 from .backend.models import db, login_manager
 from .backend.global_settings import seed_settings
 from .backend.tools import register_tools
@@ -36,6 +37,8 @@ def create_app(create_worker=True):
     app.register_blueprint(visualization.visualization_bp, url_prefix='/visualization')
     app.register_blueprint(task_manager.task_manager_bp, url_prefix='/task-manager')
     app.register_blueprint(global_settings.settings_bp)
+    app.register_blueprint(workflow_builder.workflow_bp,
+                           url_prefix='/workflow-builder')
     # app.register_blueprint(processing_bp, url_prefix='/processing')
 
 

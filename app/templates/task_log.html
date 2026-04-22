@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Task Log{% endblock %}
+
+{% block content %}
+<h2>Task {{ task.id }} ({{ task.tool.name }}) </h2>
+
+<div style="margin-bottom: 10px;">
+    <strong>Status:</strong> {{ task.status }}
+</div>
+
+<h3>Log:</h3>
+<pre class="log-box">{{ log_content }}</pre>
+
+<h3>Error:</h3>
+<pre class="log-box">{{ error_content }}</pre>
+
+<a href="{{ url_for('processing.dashboard') }}">← Back</a>
+
+<style>
+.log-box {
+    background: var(--card);
+    color: var(--text);
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(127,127,127,0.2);
+    overflow-x: auto;
+    white-space: pre-wrap;
+    font-family: monospace;
+}
+</style>
+{% endblock %}

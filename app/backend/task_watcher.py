@@ -3,7 +3,7 @@ from threading import Thread
 import time
 from datetime import datetime
 from flask_sock import Sock
-from .models import db, Task, Workflow, GlobalSetting
+from .models import db, Task, Workflow, GlobalSetting, Tool
 
 
 
@@ -11,7 +11,6 @@ class TaskWatcher:
 
     def __init__(self, app):
         self.app = app
-        self.socket = Sock(app)
         self.clients = set()
 
         worker_thread = Thread(target=self.task_watcher_worker, daemon=True)
@@ -37,44 +36,50 @@ class TaskWatcher:
     def check_task_status(self, task):
         """Checks a specific PID and updates the DB if the process ended."""
         try:
-            # os.waitpid with WNOHANG checks status without blocking
-            # But for tasks we didn't spawn in THIS specific thread, 
-            # checking if the process exists is safer.
             pid, status = os.waitpid(task.pid, os.WNOHANG)
             
             if pid != 0:
-                # Process has finished
                 exit_code = os.waitstatus_to_exitcode(status)
                 self.finalize_task(task, exit_code)
                 
         except ChildProcessError:
-            # This happens if the process finished and was already reaped
-            # or if this thread isn't the parent. Fallback: check /proc
             if not os.path.exists(f"/proc/{task.pid}"):
-                # We don't have an exit code, so we assume failure/unknown
                 self.finalize_task(task, -1) 
         except Exception as e:
             print(f"[!] Watcher error on Task {task.id}: {e}")
 
     def finalize_task(self, task, exit_code):
         """Updates the task and checks if the workflow is complete."""
-        task.status = 'Completed' if exit_code == 0 else 'Failed'
+        task.status = 'Finished' if exit_code == 0 else 'Failed'
         task.exit_code = exit_code
         task.completed_at = datetime.now()
         task.pid = None
         
-        self.socket.emit("task_udpate", {"task_id": task.id})
         print(f"[*] Task {task.id} finished (Exit: {exit_code})")
         
         # Check if this was the last task in the workflow
         all_tasks = Task.query.filter_by(workflow_id=task.workflow_id).all()
-        if all(t.status in ['Completed', 'Failed'] for t in all_tasks):
-            workflow = Workflow.query.get(task.workflow_id)
-            if workflow is None:
-                raise KeyError(f"Could not find workflow with id {task.workflow_id} in database.")
-            workflow.status = 'Finished'
-            print(f"[!] Workflow '{workflow.name}' fully processed.")
-            self.socket.emit("workflow_udpate", {"workflow_id": workflow.id})
+
+        workflow = Workflow.query.get(task.workflow_id)
+        if workflow is None:
+            raise KeyError(f"Could not find workflow with id {task.workflow_id} in database.")
+
+        if all(t.status in ['Finished', 'Failed'] for t in all_tasks):
+            # check if a task failed:
+            if any(t.status == 'Failed' for t in all_tasks):
+                workflow.status = 'Failed'
+                print(f"[!] Workflow '{workflow.name}' failed.")
+            else:
+                workflow.status = 'Finished'
+                print(f"[!] Workflow '{workflow.name}' fully processed.")
+        else:
+            tool = Tool.query.filter_by(id=task.tool_id).first()
+            if not isinstance(tool, Tool):
+                raise KeyError(f"Could not find tool with id {task.tool_id} in database.")
+            if task.status == 'Failed' and not tool.failed_ok:
+                workflow.status = 'Failed'
+            else:
+                workflow.status = 'Pending'
 
         db.session.commit()
 

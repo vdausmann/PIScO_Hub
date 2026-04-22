@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-6xl mx-auto mt-8 px-4">
+    <div style="display: flex; justify-content: space-between; margin-bottom: 2rem;">
+        <h1>Workflow Designer</h1>
+        <input id="wf-name" type="text" placeholder="Mission Name">
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+        <div style="background: var(--panel); padding: 1rem; border-radius: 8px;">
+            <h3>Tools</h3>
+            {% for tool in tools %}
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px; background: var(--bg); padding: 10px; border: 1px solid var(--border);">
+                <span>{{ tool.name }}</span>
+                <button onclick="addTool('{{ tool.name }}')">ADD +</button>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div id="sequence-list" style="background: var(--panel); padding: 1rem; border-radius: 8px;">
+            <h3>Execution Order</h3>
+            </div>
+    </div>
+</div>
+
+<script>
+    let sequence = [];
+
+    function addTool(name) {
+        sequence.push({ name: name });
+        render();
+    }
+
+    function render() {
+        const container = document.getElementById('sequence-list');
+        container.innerHTML = '<h3>Execution Order</h3>' + sequence.map((item, idx) => `
+            <div style="display:flex; justify-content:space-between; margin-bottom:5px; background:var(--bg); padding:10px;">
+                <span>#${idx+1} ${item.name}</span>
+                <a href="/processing/edit-settings?idx=${idx}&tool_name=${item.name}" style="color:blue;">[CFG]</a>
+            </div>
+        `).join('');
+    }
+</script>
+{% endblock %}

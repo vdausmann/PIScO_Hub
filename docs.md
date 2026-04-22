@@ -12,7 +12,8 @@ A tool is defined by a config.json file following the template:
     "settings_template_path": "",
     "description": "This is a short description of this tool",
     "default_priority": 1,
-    "defalt_weight": 8
+    "defalt_weight": 8,
+    "failed_ok": true
 }
 ```
 

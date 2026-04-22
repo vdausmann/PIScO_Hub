@@ -1,0 +1,49 @@
+{% macro status_class(status) %}
+    {% if status == "Running" %}status-running
+    {% elif status == "Finished" %}status-done
+    {% elif status == "Failed" %}status-failed
+    {% else %}status-pending
+    {% endif %}
+{% endmacro %}
+
+<div class="workflow-list">
+
+{% for wf in workflows %}
+<div class="workflow-card">
+
+    <!-- Workflow row -->
+    <div class="workflow-header" onclick="toggle(this)" data-id="wf-{{ wf.id }}">
+        <span class="workflow-name">{{ wf.name }}</span>
+        <span class="workflow-status">({{ wf.status }})</span>
+        <span class="status-dot {{ status_class(wf.status) }}"></span>
+		<!-- delete button -->
+		<form action="{{ url_for('task_manager.delete_workflow', workflow_id=wf.id) }}" method="POST">
+			<button type="submit" class="btn btn-delete">DELETE</button>
+		</form>
+    </div>
+
+    <!-- Tasks -->
+    <div class="task-list">
+        {% for task in wf.tasks %}
+        <div class="task-row">
+			<span class="task-name">{{ task.workflow_position }} {{ task.tool.name }}</span>
+
+			<span class="task-name">(Priority: {{ task.priority }})</span>
+
+			<a 
+				href="{{ url_for('processing.view_log', task_id=task.id) }}"
+				class="log-button"
+			>
+				View Log
+			</a>
+
+            <span class="task-status">({{ task.status }})</span>
+            <span class="status-dot {{ status_class(task.status) }}"></span>
+        </div>
+        {% endfor %}
+    </div>
+
+</div>
+{% endfor %}
+
+</div>
