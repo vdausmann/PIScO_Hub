@@ -1,6 +1,7 @@
 {
 	"name": "test_load",
-	"program_path": "/home/tim/Documents/Arbeit/PiscoWebApp/tools/test_load/load_test.py",
+	"program_path": "/home/tim/Documents/Arbeit/PIScO_Hub/tools/test_load/load_test.py",
+    "working_directory": "./",
 	"program_type": "python",
     "settings_template_path": "",
     "description": "This is a short description of this tool",

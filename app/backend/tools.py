@@ -26,6 +26,7 @@ def register_tools(app):
                 name = config["name"]
                 program_path = config["program_path"]
                 program_type = config["program_type"]
+                working_directory = config["working_directory"]
                 description = config["description"]
                 priority = config["default_priority"]
                 weight = config["default_weight"]
@@ -48,6 +49,7 @@ def register_tools(app):
                 tool.name = name
                 tool.program_path = program_path
                 tool.program_type = program_type
+                tool.working_directory = working_directory
                 tool.settings_template = settings_template
                 tool.description = description
                 tool.default_priority = priority

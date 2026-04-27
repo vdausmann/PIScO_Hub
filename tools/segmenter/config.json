@@ -1,0 +1,11 @@
+{
+	"name": "Segmenter",
+	"program_path": "/home/tim/Documents/Arbeit/PIScO_Control_Center/PISCO_Modules/FullSegmenter/run.sh",
+    "working_directory": "/home/tim/Documents/Arbeit/PIScO_Control_Center/PISCO_Modules/FullSegmenter",
+	"program_type": "binary",
+    "settings_template_path": "./settings.cfg",
+    "description": "PIScO C++ Segmenter",
+    "default_priority": 3,
+    "default_weight": 8,
+	"failed_ok": false
+}

@@ -2,10 +2,8 @@ from .models import db, Workflow, Task, Tool, GlobalSetting
 import time
 import subprocess
 import os
-import uuid
 import threading
 from datetime import datetime
-
 
 def create_new_workflow(workflow_name: str, tools: list[str], settings:
                         list[str]):
@@ -123,10 +121,14 @@ class TaskManager:
             raise KeyError(f"Could not find tool with id {task.tool_id} in database.")
         try:
             # create settings file:
-            ...
-            settings_file_path = ""
+            settings_dir = os.path.join(os.getcwd(), "settings", tool.name) 
+            os.makedirs(settings_dir, exist_ok=True)
+            settings_file_path = os.path.join(settings_dir, task.id + ".cfg")
 
-            res = self._run_tool(tool, settings_file_path)
+            with open(settings_file_path, "w") as f:
+                f.write(task.settings)
+
+            res = self._run_tool(tool, task, settings_file_path)
             if res == None:
                 return
 
@@ -146,17 +148,16 @@ class TaskManager:
             print(f"[!] Failed to dispatch {tool.name}: {e}")
 
 
-    def _run_tool(self, tool: Tool, settings_file_path: str):
+    def _run_tool(self, tool: Tool, task: Task, settings_file_path: str):
         if tool.program_type == "python":
             execution_call = ["python3",  tool.program_path]
         else:
             execution_call = [tool.program_path]
 
-
         log_dir = os.path.join("logs", tool.name)
         os.makedirs(log_dir, exist_ok=True)
 
-        prefix = os.path.join(log_dir, str(uuid.uuid4()))
+        prefix = os.path.join(log_dir, task.id)
         log_path = prefix + ".log"
         error_path = prefix + ".err"
 
@@ -164,6 +165,7 @@ class TaskManager:
             with open(log_path, "w") as f, open(error_path, "w") as e:
                 process = subprocess.Popen(
                     execution_call + [settings_file_path],
+                    cwd=tool.working_directory,
                     stdout=f,
                     stderr=e,
                     start_new_session=True

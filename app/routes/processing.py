@@ -20,7 +20,7 @@ def workflows_partial():
 
     return render_template("workflows.html", workflows=workflows)
 
-@processing_bp.route('/task/<int:task_id>/log')
+@processing_bp.route('/task/<string:task_id>/log')
 @login_required
 def view_log(task_id):
     task = Task.query.get_or_404(task_id)

@@ -29,7 +29,7 @@ class Workflow(db.Model):
 
 
 class Task(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     workflow_id = db.Column(db.Integer, db.ForeignKey('workflow.id'), nullable=False)
     workflow_position = db.Column(db.Integer, nullable=False)
     tool_id = db.Column(db.Integer, db.ForeignKey('tool.id'), nullable=False)
@@ -72,7 +72,8 @@ class Tool(db.Model):
     name = db.Column(db.String(50), unique=True, nullable=False)
     default_priority = db.Column(db.Integer, default=1)
     default_weight = db.Column(db.Integer, default=1)
-    program_path = db.Column(db.String(100), nullable=False)
+    program_path = db.Column(db.String(256), nullable=False)
+    working_directory = db.Column(db.String(256), nullable=False)
     program_type = db.Column(db.String(50), nullable=False) # python, binary
     settings_template = db.Column(db.Text, default="")
     failed_ok = db.Column(db.Boolean, default=False)

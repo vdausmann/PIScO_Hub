@@ -1,4 +1,4 @@
-from math import log
+from ..utils import clean_string
 from flask import Blueprint, redirect, render_template, request, url_for
 from flask_login import login_required, current_user
 from ..backend.models import TemporaryWorkflow, Workflow, db, Tool, TemporaryTask, Task
@@ -128,7 +128,8 @@ def edit_settings(task_id):
         # 2. Update the task with form data
         task.priority = request.form.get('priority', type=int)
         task.weight = request.form.get('weight', type=int)
-        task.settings = request.form.get('settings_string')
+        settings = request.form.get('settings_string')
+        task.settings = clean_string(settings)
         
         db.session.commit()
         

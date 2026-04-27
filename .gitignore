@@ -3,6 +3,7 @@
 instance/
 testing/
 logs/
+settings/
 __pycache__/
 .direnv
 *.pyc
