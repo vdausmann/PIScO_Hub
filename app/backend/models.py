@@ -101,3 +101,15 @@ class TemporaryTask(db.Model):
     priority = db.Column(db.Integer, default=1)
     weight = db.Column(db.Integer, default=1)
     tool = db.relationship('Tool')
+
+
+
+class Viewer(db.Model):
+
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    description = db.Column(db.Text)
+    extensions = db.Column(db.Text)
+    path = db.Column(db.String(255), nullable=False, unique=True)
+    type = db.Column(db.String(50), nullable=False)
+    url = db.Column(db.String(255)) 

@@ -1,0 +1,78 @@
+import importlib
+from pathlib import Path
+from .models import db, Viewer
+
+
+class ViewerManager:
+
+
+    def __init__(self, app, folder):
+
+        self.app = app
+        self.folder = Path(folder)
+
+
+
+    def load_viewers(self):
+
+        for viewer in self.folder.iterdir():
+
+            config_file = (
+                viewer /
+                "config.json"
+            )
+
+
+            if not config_file.exists():
+                continue
+
+
+            with open(config_file) as f:
+                import json
+                config = json.load(f)
+
+
+            module_name = (
+                "viewers" 
+                + "."
+                + viewer.name
+                + "."
+                + config["module"]
+            )
+
+
+
+            module = importlib.import_module(
+                module_name
+            )
+
+
+            blueprint = getattr(
+                module,
+                config["blueprint"]
+            )
+
+
+            self.app.register_blueprint(
+                blueprint
+            )
+
+
+            existing_tool = Viewer.query.filter_by(name=config["name"]).first()
+            if existing_tool:
+                return
+
+
+            viewer_object = Viewer()
+            viewer_object.name = config["name"]
+            viewer_object.extensions = json.dumps(config["extensions"])
+            viewer_object.description = config["description"]
+            viewer_object.path = viewer.name
+            viewer_object.type = config["type"]
+            viewer_object.url = "/viewer/" + config["name"].lower().replace("_", "-").replace(" ", "-")
+
+
+            db.session.add(viewer_object)
+
+        db.session.commit()
+

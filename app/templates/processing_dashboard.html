@@ -4,6 +4,10 @@
 
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
 <h1>Workflows</h1>
+<a href="{{ url_for('index') }}" style="color: var(--accent); text-decoration: none;">&larr; Dashboard</a>
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
 	<form action="{{ url_for('workflow.init_workflow') }}" method="POST">
 		<button type="submit" class="btn btn-primary">
 			+ Create New Workflow

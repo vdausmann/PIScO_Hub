@@ -1,7 +1,8 @@
 from flask import Flask
 from .routes import (auth, processing, visualization, task_manager, global_settings,
-    workflow_builder)
+    workflow_builder, file_explorer)
 from .backend.models import db, login_manager
+from .backend.viewers import ViewerManager
 from .backend.global_settings import seed_settings
 from .backend.tools import register_tools
 from dotenv import load_dotenv
@@ -35,6 +36,8 @@ def create_app(create_worker=True):
     app.register_blueprint(auth.auth_bp)
     app.register_blueprint(processing.processing_bp, url_prefix="/processing")
     app.register_blueprint(visualization.visualization_bp, url_prefix='/visualization')
+    app.register_blueprint(file_explorer.file_explorer_bp,
+                           url_prefix='/file-explorer')
     app.register_blueprint(task_manager.task_manager_bp, url_prefix='/task-manager')
     app.register_blueprint(global_settings.settings_bp)
     app.register_blueprint(workflow_builder.workflow_bp,
@@ -43,9 +46,20 @@ def create_app(create_worker=True):
 
 
     # Register tools:
-    register_tools(app)
+    with app.app_context():
+        register_tools(app)
 
+        ViewerManager(
+            app,
+            "viewers"
+        ).load_viewers()
+
+    # Register visualization modules:
+    # ...
+
+    # Create objects:
     if create_worker:
+        # TaskManager:
         from .backend.task_manager import TaskManager
         from .backend.task_watcher import TaskWatcher
         TaskManager(app)

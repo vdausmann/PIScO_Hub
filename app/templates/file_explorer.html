@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+
+{% block head %}
+
+<link rel="stylesheet"
+      href="{{ url_for(
+          'static',
+          filename='css/file_explorer.css'
+      ) }}">
+
+{% endblock %}
+
+{% block title %}File Explorer{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+    <h1>File Explorer</h1>
+    <a href="{{ url_for('index') }}" style="color: var(--accent); text-decoration: none;">&larr; Dashboard</a>
+</div>
+
+
+<div id="breadcrumbs"></div>
+
+<div class="explorer">
+
+	<div class="file-list">
+		<table id="file-table">
+			<thead>
+				<tr>
+					<th>Name</th>
+					<th>Size</th>
+					<th>Modified</th>
+				</tr>
+			</thead>
+			<tbody></tbody>
+		</table>
+	</div>
+
+	 <div class="file-info">
+
+		<h3>File information</h3>
+
+		<div id="info-content">
+			Select a file
+		</div>
+
+	</div>
+</div>
+
+
+
+<div id="context-menu" class="context-menu">
+
+    <div data-action="open">
+        Open
+    </div>
+
+    <div data-action="download">
+        Download
+    </div>
+
+    <div data-action="copy-path">
+        Copy Path
+    </div>
+
+
+</div>
+
+<div id="viewer-menu" class="viewer-menu">
+
+</div>
+
+
+<script src="{{ url_for('static',
+						filename='js/file_explorer.js') }}">
+</script>
+
+
+
+{% endblock %}

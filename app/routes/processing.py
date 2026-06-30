@@ -1,6 +1,6 @@
-from flask import Blueprint, redirect, render_template, url_for
+from flask import Blueprint, render_template
 from flask_login import login_required
-from ..backend.models import TemporaryWorkflow, Workflow, db, Task, Tool
+from ..backend.models import Workflow, db, Task, Tool
 
 processing_bp = Blueprint('processing', __name__)
 

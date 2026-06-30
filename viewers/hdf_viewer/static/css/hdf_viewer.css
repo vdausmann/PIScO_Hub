@@ -1,0 +1,95 @@
+.hdf-viewer {
+	display: flex;
+	gap: 20px;
+	height: 80vh;
+}
+
+
+.hdf-tree {
+	flex: 1;
+	overflow: auto;
+	border-right: 1px solid #555;
+}
+
+
+.hdf-info {
+	flex: 1;
+	padding: 20px;
+}
+
+#dataset-preview {
+	overflow: auto;
+
+	max-height: 500px;
+
+	max-width: 100%;
+
+	border: 1px solid #444;
+
+	padding: 5px;
+
+	font-family: monospace;
+
+	box-sizing: border-box;
+}
+
+
+.data-row {
+	display: flex;
+
+	flex-wrap: wrap;
+
+	width: fit-content;
+}
+
+
+.data-cell {
+	width: 60px;
+
+	min-width: 60px;
+
+	height: 25px;
+
+	display: flex;
+
+	align-items: center;
+
+	justify-content: center;
+
+	border: 1px solid #222;
+
+	font-size: 12px;
+
+	box-sizing: border-box;
+
+	color: white;
+}
+
+
+#colorbar-container {
+	margin-bottom: 10px;
+}
+
+
+#colorbar {
+	height: 20px;
+
+	border: 1px solid #444;
+
+	background:
+		linear-gradient(to right,
+			rgb(68, 1, 84),
+			rgb(59, 82, 139),
+			rgb(33, 145, 140),
+			rgb(94, 201, 98),
+			rgb(253, 231, 37));
+}
+
+
+#colorbar-labels {
+	display: flex;
+
+	justify-content: space-between;
+
+	font-size: 12px;
+}

@@ -1,0 +1,86 @@
+.explorer {
+	display: flex;
+	height: 100%;
+}
+
+
+.file-list {
+	flex: 3;
+}
+
+
+.file-info {
+	flex: 1;
+	padding: 20px;
+}
+
+
+#file-table tbody tr:hover {
+	background-color: #e6f2ff;
+	cursor: pointer;
+}
+
+
+#file-table tbody tr.selected {
+	background-color: #b3d7ff;
+}
+
+.context-menu {
+	position: absolute;
+
+	display: none;
+
+	background: white;
+
+	border: 1px solid #aaa;
+
+	padding: 5px;
+
+	width: 150px;
+
+	z-index: 1000;
+
+	box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+
+.context-menu div {
+	padding: 6px 10px;
+
+	cursor: pointer;
+}
+
+
+.context-menu div:hover {
+	background: #b3d7ff;
+}
+
+.viewer-menu {
+	position: absolute;
+
+	display: none;
+
+	background: white;
+
+	border: 1px solid #aaa;
+
+	padding: 5px;
+
+	width: 150px;
+
+	z-index: 1000;
+
+	box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+
+.viewer-menu div {
+	padding: 5px 20px;
+
+	cursor: pointer;
+}
+
+
+.viewer-menu div:hover {
+	background: #b3d7ff;
+}

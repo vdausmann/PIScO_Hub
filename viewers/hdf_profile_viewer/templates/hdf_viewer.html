@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for( 'hdf-viewer.static' , filename='css/hdf_viewer.css') }}">
+{% endblock %}
+
+
+{% block title %}
+HDF Viewer
+{% endblock %}
+
+
+{% block content %}
+
+<h1>
+    HDF Viewer
+</h1>
+
+
+<p>
+    File:
+</p>
+
+
+<pre>
+{{ file_path }}
+</pre>
+
+<div class="hdf-viewer">
+
+    <div class="hdf-tree">
+
+        <h3>
+            File structure
+        </h3>
+
+        <ul id="tree-root">
+        </ul>
+
+    </div>
+
+
+    <div class="hdf-info">
+
+        <h3>
+            Dataset information
+        </h3>
+
+        <div id="dataset-info">
+
+            Select a dataset
+
+        </div>
+
+		<h3>
+			Data Preview
+		</h3>
+
+		<div id="colorbar-container">
+
+			<div id="colorbar"></div>
+
+			<div id="colorbar-labels">
+
+				<span id="min-value"></span>
+
+				<span id="max-value"></span>
+
+			</div>
+
+		</div>
+
+
+		<div id="dataset-preview">
+
+		</div>
+
+    </div>
+
+</div>
+
+<script>
+
+const filePath =
+    {{ file_path|tojson }};
+
+</script>
+
+<script src="{{ url_for( 'hdf-profile-viewer.static', filename='js/hdf_viewer.js') }}"></script>
+
+{% endblock %}

@@ -1,4 +1,4 @@
-from flask import Blueprint, redirect, render_template, request, jsonify, url_for
+from flask import Blueprint, redirect, request, jsonify, url_for
 from flask_login import login_required
 
 from app.backend.models import Workflow, db

@@ -1,9 +1,0 @@
-{
-	"name": "Example workflow",
-	"tasks": 
-	[
-		"download",
-		"segment"
-	],
-    "description": "This is a short description of this workflow"
-}

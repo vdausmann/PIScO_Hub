@@ -1,0 +1,10 @@
+{
+    "name": "HDF Profile Viewer",
+    "extensions": [
+        "h5"
+    ],
+    "description": "HDF File Viewer for PIScO profile files",
+    "type": "flask_blueprint",
+    "module": "routes",
+    "blueprint": "hdf_profile_viewer_bp"
+}

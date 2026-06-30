@@ -5,6 +5,7 @@ def seed_settings(app):
         'MAX_WEIGHT': {'value': '10', 'type': 'int', 'desc': 'Maximum concurrent resource weight.'},
         'POLL_INTERVAL': {'value': '5', 'type': 'int', 'desc': 'Seconds between worker cycles.'},
         'LOG_RETENTION_DAYS': {'value': '30', 'type': 'int', 'desc': 'How long to keep log files.'},
+        'FILE_EXPLORER_ROOT': {'value': '/home/tim/', 'type': 'str', 'desc': 'Root of file explorer.'},
     }
 
     with app.app_context():

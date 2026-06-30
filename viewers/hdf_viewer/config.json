@@ -1,0 +1,10 @@
+{
+    "name": "HDF Viewer",
+    "extensions": [
+        "h5"
+    ],
+    "description": "HDF File Viewer",
+    "type": "flask_blueprint",
+    "module": "routes",
+    "blueprint": "hdf_viewer_bp"
+}
