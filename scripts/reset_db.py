@@ -4,14 +4,10 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.factory import create_app
-from app.backend.models import TemporaryTask, TemporaryWorkflow, Viewer, db, Task, Workflow, Tool
+from app.backend.models import (TemporaryTask, TemporaryWorkflow, Viewer, db, Task,
+                                Workflow, Tool, TemplateTask, TemplateWorkflow)
 
 app = create_app(False)
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from app.factory import create_app
-from app.backend.models import db, Task, Workflow, Tool
 
 app = create_app(False)
 
@@ -25,6 +21,8 @@ def reset_tasks_only():
         db.session.query(TemporaryTask).delete()
         db.session.query(TemporaryWorkflow).delete()
         db.session.query(Viewer).delete()
+        db.session.query(TemplateTask).delete()
+        db.session.query(TemplateWorkflow).delete()
 
         db.session.commit()
         
