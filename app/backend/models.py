@@ -102,6 +102,28 @@ class TemporaryTask(db.Model):
     weight = db.Column(db.Integer, default=1)
     tool = db.relationship('Tool')
 
+class TemplateWorkflow(db.Model):
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=db.func.now())
+    tasks = db.relationship('TemplateTask', backref='workflow',
+                            cascade="all, delete-orphan",
+                            order_by="TemplateTask.workflow_position")
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+
+
+class TemplateTask(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    workflow_id = db.Column(db.String(36), db.ForeignKey('template_workflow.id'), nullable=False)
+    tool_id = db.Column(db.Integer, db.ForeignKey('tool.id'), nullable=False)
+    workflow_position = db.Column(db.Integer, nullable=False)
+
+    settings = db.Column(db.Text, default="")
+    priority = db.Column(db.Integer, default=1)
+    weight = db.Column(db.Integer, default=1)
+    tool = db.relationship('Tool')
+
+
 
 
 class Viewer(db.Model):

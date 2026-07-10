@@ -1,7 +1,8 @@
 from ..utils import clean_string
 from flask import Blueprint, redirect, render_template, request, url_for
 from flask_login import login_required, current_user
-from ..backend.models import TemporaryWorkflow, Workflow, db, Tool, TemporaryTask, Task
+from ..backend.models import (TemporaryWorkflow, Workflow, db, Tool, TemporaryTask, Task,
+                              TemplateTask, TemplateWorkflow)
 
 workflow_bp = Blueprint('workflow', __name__)
 
@@ -31,10 +32,13 @@ def builder(workflow_id):
     draft = TemporaryWorkflow.query.get_or_404(workflow_id)
     
     all_tools = Tool.query.all()
+    # Pull all templates so the user can select them inside the UI
+    all_templates = TemplateWorkflow.query.all()
     
     return render_template('workflow_builder.html', 
                            workflow=draft, 
-                           tools=all_tools)
+                           tools=all_tools,
+                           templates=all_templates)
 
 @workflow_bp.route('/workflow/<workflow_id>/add-tool/<int:tool_id>', methods=['POST'])
 @login_required
@@ -174,3 +178,121 @@ def finalize_workflow(workflow_id):
         db.session.rollback()
         print(f"Finalization Error: {e}")
         return "Failed to finalize workflow", 500
+
+
+@workflow_bp.route('/workflow/save-template/<workflow_id>', methods=['POST'])
+@login_required
+def save_as_template(workflow_id):
+    """
+    Takes the current TemporaryWorkflow state and copies it into 
+    the Template tables without destroying the draft.
+    """
+    temporary_workflow = TemporaryWorkflow.query.get_or_404(workflow_id)
+    template_name = request.form.get('template_name', 'Unnamed Template')
+
+    try:
+        # Create the top-level template
+        template_wf = TemplateWorkflow()
+        template_wf.name = template_name
+        template_wf.user_id = current_user.id
+        
+        db.session.add(template_wf)
+        db.session.flush()  # Aquire template_wf.id
+
+        # Copy over the sequence
+        for temp_task in temporary_workflow.tasks:
+            tpl_task = TemplateTask()
+            tpl_task.workflow_id = template_wf.id
+            tpl_task.tool_id = temp_task.tool_id
+            tpl_task.workflow_position = temp_task.workflow_position
+            tpl_task.priority = temp_task.priority
+            tpl_task.weight = temp_task.weight
+            tpl_task.settings = temp_task.settings
+            
+            db.session.add(tpl_task)
+
+        db.session.commit()
+        return redirect(url_for('workflow.builder', workflow_id=workflow_id))
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Template Saving Error: {e}")
+        return "Failed to save template", 500
+
+
+@workflow_bp.route('/workflow/load-template/<template_id>', methods=['POST'])
+@login_required
+def load_template(template_id):
+    """
+    Initializes a completely new workspace draft populated 
+    with configuration components pulled straight from a saved template.
+    """
+    template = TemplateWorkflow.query.get_or_404(template_id)
+    
+    # Optional: Clear existing temporary workflows first if your application rules limit users to 1 sandbox 
+    TemporaryWorkflow.query.filter_by(user_id=current_user.id).delete()
+
+    try:
+        new_workflow = TemporaryWorkflow()
+        new_workflow.name = f"Draft from {template.name}"
+        new_workflow.user_id = current_user.id
+        
+        db.session.add(new_workflow)
+        db.session.flush()
+
+        for tpl_task in template.tasks:
+            temp_task = TemporaryTask()
+            temp_task.workflow_id = new_workflow.id
+            temp_task.tool_id = tpl_task.tool_id
+            temp_task.workflow_position = tpl_task.workflow_position
+            temp_task.priority = tpl_task.priority
+            temp_task.weight = tpl_task.weight
+            temp_task.settings = tpl_task.settings
+            
+            db.session.add(temp_task)
+
+        db.session.commit()
+        return redirect(url_for('workflow.builder', workflow_id=new_workflow.id))
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Template Loading Error: {e}")
+        return "Failed to load template into workspace", 500
+
+
+@workflow_bp.route('/workflow/<workflow_id>/apply-template/<template_id>', methods=['POST'])
+@login_required
+def apply_template_to_draft(workflow_id, template_id):
+    """
+    Clears out the tasks in the active workspace and appends 
+    all structural steps directly out of an existing system template preset.
+    """
+    draft = TemporaryWorkflow.query.get_or_404(workflow_id)
+    template = TemplateWorkflow.query.get_or_404(template_id)
+    
+    try:
+        # 1. Purge all existing tasks in this workspace to start clean
+        TemporaryTask.query.filter_by(workflow_id=workflow_id).delete()
+        
+        # 2. Update the default draft title text to reference your structural preset
+        draft.name = f"Draft from {template.name}"
+        
+        # 3. Duplicate individual components from the template array to your active workspace 
+        for tpl_task in template.tasks:
+            temp_task = TemporaryTask()
+            temp_task.workflow_id = draft.id
+            temp_task.tool_id = tpl_task.tool_id
+            temp_task.workflow_position = tpl_task.workflow_position
+            temp_task.priority = tpl_task.priority
+            temp_task.weight = tpl_task.weight
+            temp_task.settings = tpl_task.settings
+            
+            db.session.add(temp_task)
+            
+        db.session.commit()
+        return redirect(url_for('workflow.builder', workflow_id=workflow_id))
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error applying template configuration payload: {e}")
+        return "Failed to import structural configurations into layout workspace", 500

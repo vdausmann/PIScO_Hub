@@ -18,7 +18,7 @@ def create_app(create_worker=True):
     
     app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY")
     if not app.config["SECRET_KEY"]:
-        raise ValueError("No secret key set")
+        raise ValueError("No secret key set, run the 'setup_env.py' script")
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
 
     db.init_app(app)
