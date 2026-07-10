@@ -3,7 +3,7 @@ from flask_login import login_required
 import pathlib
 import h5py
 
-from .backend.hdf import build_tree, get_dataset_info, get_dataset_data
+from .backend.hdf import build_tree, get_dataset_info, get_dataset_data, get_attributes
 
 config_path = pathlib.Path(__file__).parent.resolve()
 with open(config_path / "config.json") as f:
@@ -28,9 +28,19 @@ hdf_viewer_bp = Blueprint(
 def index():
     path = request.args.get("path")
 
+    if path is None:
+        return jsonify({"error": "No path provided"}), 400
+
+    attrs = get_attributes(path, "/")
+    attrs_str = ""
+    if not attrs is None:
+        for key, val in attrs.items():
+            attrs_str += f"{key}: {val}\n"
+
     return render_template(
         "hdf_viewer.html",
-        file_path=path
+        file_path=path,
+        root_level_attributes=attrs_str
     )
 
 

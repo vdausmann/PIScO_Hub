@@ -51,7 +51,7 @@ outputs = { self, nixpkgs, flake-utils, ... }:
                     pkg-config
                     (pkgs.python312.withPackages(ps: with ps;[
                         numpy
-						#(opencv4.override {enableGtk3 = true;})
+						(opencv4.override {enableGtk3 = true;})
 						werkzeug
 						pandas
 						flask
@@ -63,6 +63,7 @@ outputs = { self, nixpkgs, flake-utils, ... }:
 						requests
 						gunicorn
 						gevent
+						matplotlib
                     ]))
 					tailwindcss
 					sqlite

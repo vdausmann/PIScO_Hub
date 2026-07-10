@@ -26,19 +26,22 @@ def get_files(_path: str, show_hidden: bool = False):
 
     for item in sorted(path.iterdir()):
 
-        stat = item.stat()
+        try: 
+            stat = item.stat()
 
-        if not show_hidden and item.name.startswith("."):
-            continue
+            if not show_hidden and item.name.startswith("."):
+                continue
 
-        entries.append({
-            "name": item.name,
-            "type": ("directory" if item.is_dir() else "file"),
-            "extension": (item.suffix if item.is_file() else None),
-            "size": (stat.st_size if item.is_file() else None),
-            "last_modified": stat.st_mtime,
-            "path": str(item)
-        })
+            entries.append({
+                "name": item.name,
+                "type": ("directory" if item.is_dir() else "file"),
+                "extension": (item.suffix if item.is_file() else None),
+                "size": (stat.st_size if item.is_file() else None),
+                "last_modified": stat.st_mtime,
+                "path": str(item)
+            })
+        except:
+            ...
 
 
     # folders first:

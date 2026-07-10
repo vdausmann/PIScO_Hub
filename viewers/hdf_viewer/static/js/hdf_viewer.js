@@ -93,6 +93,16 @@ async function loadDatasetInfo(datasetPath)
     .innerHTML = `
 
         <p>
+            <b>Group Attributes:</b>
+            ${info.group_attrs}
+        </p>
+
+        <p>
+            <b>Dataset Attributes:</b>
+            ${info.dataset_attrs}
+        </p>
+
+        <p>
             <b>Name:</b>
             ${info.name}
         </p>
@@ -120,87 +130,65 @@ async function loadDatasetInfo(datasetPath)
 
 function renderDataset(response)
 {
-    const container =
-        document.getElementById(
-            "dataset-preview"
-        );
+    // 1. Manually force the loader to display immediately
+    const loader = document.getElementById('global-loader');
+    if (loader) loader.style.display = 'flex';
 
-    container.innerHTML = "";
+    // 2. Use setTimeout to yield control to the browser.
+    // This gives the browser a frame to actually render the loader overlay on screen.
+    setTimeout(() => {
+        const container = document.getElementById("dataset-preview");
+        container.innerHTML = "";
 
-    let values =
-        response.data;
+        let values = response.data;
 
-    // Convert scalar -> [[scalar]]
-    if (!Array.isArray(values))
-    {
-        values = [[values]];
-    }
+        // Convert scalar -> [[scalar]]
+        if (!Array.isArray(values)) {
+            values = [[values]];
+        }
+        // Convert 1D -> [1D]
+        else if (values.length > 0 && !Array.isArray(values[0])) {
+            values = [values];
+        }
 
-    // Convert 1D -> [1D]
-    else if (
-        values.length > 0 &&
-        !Array.isArray(values[0])
-    )
-    {
-        values = [values];
-    }
+        const flat = values.flat();
 
-    const flat =
-        values.flat();
+        // NOTE: Math.min(...flat) will crash with a Call Stack Max Range Error 
+        // if the dataset has > 100,000 elements. Using a basic loop is safer and faster.
+        let min = Infinity;
+        let max = -Infinity;
+        for (let i = 0; i < flat.length; i++) {
+            if (flat[i] < min) min = flat[i];
+            if (flat[i] > max) max = flat[i];
+        }
 
-    const min =
-        Math.min(...flat);
+        document.getElementById("min-value").textContent = min;
+        document.getElementById("max-value").textContent = max;
 
-    const max =
-        Math.max(...flat);
+        // Optimize DOM manipulation by using a Fragment instead of appending one by one
+        const fragment = document.createDocumentFragment();
 
-    document.getElementById(
-        "min-value"
-    ).textContent = min;
+        values.forEach(row => {
+            const rowDiv = document.createElement("div");
+            rowDiv.className = "data-row";
 
-    document.getElementById(
-        "max-value"
-    ).textContent = max;
+            row.forEach(value => {
+                const cell = document.createElement("div");
+                cell.className = "data-cell";
+                cell.textContent = value;
+                cell.style.backgroundColor = getColor(value, min, max);
+                rowDiv.appendChild(cell);
+            });
 
-    values.forEach(row =>
-    {
-        const rowDiv =
-            document.createElement(
-                "div"
-            );
-
-        rowDiv.className =
-            "data-row";
-
-        row.forEach(value =>
-        {
-            const cell =
-                document.createElement(
-                    "div"
-                );
-
-            cell.className =
-                "data-cell";
-
-            cell.textContent =
-                value;
-
-            cell.style.backgroundColor =
-                getColor(
-                    value,
-                    min,
-                    max
-                );
-
-            rowDiv.appendChild(
-                cell
-            );
+            fragment.appendChild(rowDiv);
         });
 
-        container.appendChild(
-            rowDiv
-        );
-    });
+        // Batch append everything at once to minimize browser reflow layout hits
+        container.appendChild(fragment);
+
+        // 3. Hide the loader now that all heavy elements have been drawn
+        if (loader) loader.style.display = 'none';
+    }, 50); // Small 50ms delay gives the UI thread breathing room to draw the loader
 }
 
 

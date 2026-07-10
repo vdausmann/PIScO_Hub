@@ -24,6 +24,65 @@
     {% endblock %}
 </head>
 <body>
+	<div id="global-loader" class="loader-overlay" style="display: none;">
+		<div class="loader-box">
+			<div class="spinner"></div>
+			<p class="loader-text">PROCESSING_REQUEST...</p>
+		</div>
+	</div>
+
+	<style>
+		/* Full-screen darkening overlay */
+		.loader-overlay {
+			position: fixed;
+			top: 0;
+			left: 0;
+			width: 100vw;
+			height: 100vh;
+			background: rgba(15, 23, 42, 0.7); /* Translucent dark tint matching your theme */
+			backdrop-filter: blur(4px); /* Slight blur for a premium look */
+			z-index: 9999; /* Stay on top of everything */
+			display: flex;
+			justify-content: center;
+			align-items: center;
+		}
+
+		/* Container block for the spinner and text */
+		.loader-box {
+			background: #1e293b;
+			border: 1px solid #334155;
+			padding: 2rem;
+			border-radius: 8px;
+			text-align: center;
+			font-family: monospace;
+			box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+		}
+
+		/* The rotating CSS spinner */
+		.spinner {
+			width: 40px;
+			height: 40px;
+			border: 4px solid #334155;
+			border-top-color: #3b82f6; /* Your accent blue color */
+			border-radius: 50%;
+			animation: spin 0.8s linear infinite;
+			margin: 0 auto 1rem;
+		}
+
+		.loader-text {
+			color: #f1f5f9;
+			font-size: 0.8rem;
+			font-weight: bold;
+			letter-spacing: 1px;
+			margin: 0;
+		}
+
+		@keyframes spin {
+			to { transform: rotate(360deg); }
+		}
+	</style>
+
+
     <nav class="nav">
 		<a href="{{ url_for('index') }}" style="text-decoration: none; color: inherit;">
 			<span><c>PIScOHub</c></span>
@@ -38,6 +97,8 @@
     <div class="container">
         {% block content %}{% endblock %}
     </div>
+
+
     <script>
         const btn = document.getElementById('theme-toggle');
         const setTheme = (t) => {
@@ -50,6 +111,42 @@
             setTheme(t);
         };
     </script>
+
+	<script>
+		const loader = document.getElementById('global-loader');
+
+		// --- 1. Standard HTML Forms & Links (From Previous Step) ---
+		document.addEventListener('submit', () => loader.style.display = 'flex');
+		document.addEventListener('click', (e) => {
+			const target = e.target.closest('a');
+			if (target && target.href && !target.target && !target.href.startsWith('javascript:') && !target.getAttribute('href').startsWith('#')) {
+				loader.style.display = 'flex';
+			}
+		});
+		window.addEventListener('pageshow', (e) => { if (e.persisted) loader.style.display = 'none'; });
+
+		// --- 2. UNIVERSAL BACKGROUND INTERCEPTOR (Fetch API) ---
+		const { fetch: originalFetch } = window;
+		window.fetch = async (...args) => {
+			console.log("Fetch intercepted");
+			loader.style.display = 'flex'; // Show loader when any fetch starts
+			try {
+				const response = await originalFetch(...args);
+				return response;
+			} finally {
+				loader.style.display = 'none'; // Fixed: removed the duplicate '.style'
+			}
+		};
+
+		// --- 3. UNIVERSAL BACKGROUND INTERCEPTOR (Older AJAX / XMLHttpRequest) ---
+		// Just in case your HDF5 viewer plugin uses older jQuery or raw XHR calls
+		const open = XMLHttpRequest.prototype.open;
+		XMLHttpRequest.prototype.open = function(...args) {
+			this.addEventListener('loadstart', () => loader.style.display = 'flex');
+			this.addEventListener('loadend', () => loader.style.display = 'none');
+			return open.apply(this, args);
+		};
+	</script>
 
 
 {% block scripts %}{% endblock %}</body>

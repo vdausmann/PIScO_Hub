@@ -1,19 +1,19 @@
 {% extends "base.html" %}
 
 {% block head %}
-<link rel="stylesheet" href="{{ url_for( 'hdf-viewer.static' , filename='css/hdf_viewer.css') }}">
+<link rel="stylesheet" href="{{ url_for( 'hdf-profile-viewer.static' , filename='css/hdf_profile_viewer.css') }}">
 {% endblock %}
 
 
 {% block title %}
-HDF Viewer
+HDF Profile Viewer
 {% endblock %}
 
 
 {% block content %}
 
 <h1>
-    HDF Viewer
+    HDF Profile Viewer
 </h1>
 
 
@@ -26,7 +26,15 @@ HDF Viewer
 {{ file_path }}
 </pre>
 
-<div class="hdf-viewer">
+<p>
+    Root level attributes:
+</p>
+
+<pre>
+{{ root_level_attributes }}
+</pre>
+
+<div class="hdf-profile-viewer">
 
     <div class="hdf-tree">
 
@@ -56,21 +64,6 @@ HDF Viewer
 			Data Preview
 		</h3>
 
-		<div id="colorbar-container">
-
-			<div id="colorbar"></div>
-
-			<div id="colorbar-labels">
-
-				<span id="min-value"></span>
-
-				<span id="max-value"></span>
-
-			</div>
-
-		</div>
-
-
 		<div id="dataset-preview">
 
 		</div>
@@ -86,6 +79,6 @@ const filePath =
 
 </script>
 
-<script src="{{ url_for( 'hdf-profile-viewer.static', filename='js/hdf_viewer.js') }}"></script>
+<script src="{{ url_for( 'hdf-profile-viewer.static', filename='js/hdf_profile_viewer.js') }}"></script>
 
 {% endblock %}

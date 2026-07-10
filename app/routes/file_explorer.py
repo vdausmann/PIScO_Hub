@@ -75,6 +75,8 @@ def find_viewers():
 
     for viewer in viewers:
 
+        print(viewer.name)
+
         extensions = json.loads(
             viewer.extensions
         )

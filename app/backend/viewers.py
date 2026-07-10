@@ -24,6 +24,7 @@ class ViewerManager:
 
 
             if not config_file.exists():
+                print("No config file found for viewer", viewer.name)
                 continue
 
 
@@ -60,7 +61,7 @@ class ViewerManager:
 
             existing_tool = Viewer.query.filter_by(name=config["name"]).first()
             if existing_tool:
-                return
+                continue
 
 
             viewer_object = Viewer()

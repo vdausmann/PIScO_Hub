@@ -1,4 +1,4 @@
-.hdf-viewer {
+.hdf-profile-viewer {
 	display: flex;
 	gap: 20px;
 	height: 80vh;
@@ -20,7 +20,7 @@
 #dataset-preview {
 	overflow: auto;
 
-	max-height: 500px;
+	max-height: 100%;
 
 	max-width: 100%;
 
@@ -63,33 +63,4 @@
 	box-sizing: border-box;
 
 	color: white;
-}
-
-
-#colorbar-container {
-	margin-bottom: 10px;
-}
-
-
-#colorbar {
-	height: 20px;
-
-	border: 1px solid #444;
-
-	background:
-		linear-gradient(to right,
-			rgb(68, 1, 84),
-			rgb(59, 82, 139),
-			rgb(33, 145, 140),
-			rgb(94, 201, 98),
-			rgb(253, 231, 37));
-}
-
-
-#colorbar-labels {
-	display: flex;
-
-	justify-content: space-between;
-
-	font-size: 12px;
 }

@@ -1,0 +1,21 @@
+<div style="margin-bottom: 15px;">
+	<strong>Min Value:</strong> {{ min_val }} | <strong>Max Value:</strong> {{ max_val }}
+	<p style="font-size: 0.8rem; color: #666; font-style: italic;">* Click an entry below to see its reconstructed
+		target image.</p>
+</div>
+
+<div style="overflow-x: auto; background: white; padding: 15px; border: 1px solid #ddd;">
+	{% set counter = namespace(value=0) %}
+	{% for row in matrix %}
+	<div class="data-row" style="display: flex;">
+		{% for value in row %}
+		{% set pct = (value - min_val) / (max_val - min_val if max_val != min_val else 1) %}
+		<div class="data-cell" onclick="loadElementReconstruction('{{ dataset_path }}', {{ counter.value }})"
+			style="width: 60px; height: 40px; line-height: 40px; text-align: center; border: 1px solid #ccc; font-size: 0.8rem; cursor: pointer; background-color: rgba(59, 130, 246, {{ pct }});">
+			{{ value }}
+		</div>
+		{% set counter.value = counter.value + 1 %}
+		{% endfor %}
+	</div>
+	{% endfor %}
+</div>
