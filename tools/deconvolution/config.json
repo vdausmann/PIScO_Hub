@@ -1,0 +1,11 @@
+{
+	"name": "Deconvolution",
+	"program_path": "/home/tim/Documents/Arbeit/pisco_deconvolution/run.sh",
+    "working_directory": "/home/tim/Documents/Arbeit/pisco_deconvolution",
+	"program_type": "binary",
+    "settings_template_path": "./settings.cfg",
+    "description": "PIScO Deconvolution",
+    "default_priority": 3,
+    "default_weight": 2,
+	"failed_ok": false
+}
