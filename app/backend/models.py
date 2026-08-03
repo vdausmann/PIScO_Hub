@@ -67,6 +67,18 @@ class GlobalSetting(db.Model):
         return setting.value
 
 
+class ToolProvider(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+    path = db.Column(db.String(255), unique=True, nullable=False)
+    description = db.Column(db.Text)
+    version = db.Column(db.String(50))
+    # builtin providers use the legacy tools/<name>/config.json layout
+    builtin = db.Column(db.Boolean, default=False)
+    last_scanned_at = db.Column(db.DateTime, nullable=True)
+    tools = db.relationship('Tool', backref='provider', lazy=True)
+
+
 class Tool(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), unique=True, nullable=False)
@@ -78,6 +90,26 @@ class Tool(db.Model):
     settings_template = db.Column(db.Text, default="")
     failed_ok = db.Column(db.Boolean, default=False)
     description = db.Column(db.Text) # Use Text for longer scientific docs
+
+    provider_id = db.Column(db.Integer, db.ForeignKey('tool_provider.id'), nullable=True)
+    settings_format = db.Column(db.String(20), default="opaque")  # opaque, json, ini
+    settings_schema = db.Column(db.Text, nullable=True)  # JSON Schema (JSON text)
+    inputs = db.Column(db.Text, nullable=True)   # JSON list
+    outputs = db.Column(db.Text, nullable=True)  # JSON list
+    tags = db.Column(db.Text, nullable=True)     # JSON list of strings
+    version = db.Column(db.String(50), nullable=True)
+    available = db.Column(db.Boolean, default=True)
+    config_hash = db.Column(db.String(64), nullable=True)
+
+
+class ApiToken(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    token_hash = db.Column(db.String(64), unique=True, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=db.func.now())
+    last_used_at = db.Column(db.DateTime, nullable=True)
+    user = db.relationship('User')
 
 
 

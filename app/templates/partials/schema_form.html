@@ -1,0 +1,52 @@
+{# Renders form fields for a tool's settings JSON Schema.
+   Field names: "f_<key>" for top-level properties, "f_<section>__<key>"
+   for one level of nesting (INI sections). #}
+
+{% macro schema_field(name, prop, value) %}
+<div class="input-group">
+    <label for="{{ name }}">
+        {{ prop.get('title', name.replace('f_', '', 1).replace('__', ' / ')) }}
+        {% if prop.get('description') %}
+        <span style="font-weight: normal; color: #94a3b8;"> — {{ prop['description'] }}</span>
+        {% endif %}
+    </label>
+    {% if prop.get('enum') %}
+    <select id="{{ name }}" name="{{ name }}">
+        {% for option in prop['enum'] %}
+        <option value="{{ option }}" {% if value == option %}selected{% endif %}>{{ option }}</option>
+        {% endfor %}
+    </select>
+    {% elif prop.get('type') == 'boolean' %}
+    <input type="checkbox" id="{{ name }}" name="{{ name }}" {% if value %}checked{% endif %}>
+    {% elif prop.get('type') in ('integer', 'number') %}
+    <input type="number" id="{{ name }}" name="{{ name }}"
+           {% if prop.get('type') == 'number' %}step="any"{% endif %}
+           {% if prop.get('minimum') is defined %}min="{{ prop['minimum'] }}"{% endif %}
+           {% if prop.get('maximum') is defined %}max="{{ prop['maximum'] }}"{% endif %}
+           value="{{ value if value is not none else '' }}">
+    {% elif prop.get('type') == 'array' %}
+    <input type="text" id="{{ name }}" name="{{ name }}"
+           placeholder="comma-separated"
+           value="{{ value | join(', ') if value else '' }}">
+    {% else %}
+    <input type="text" id="{{ name }}" name="{{ name }}" style="width: 100%;"
+           value="{{ value if value is not none else '' }}">
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro schema_form(schema, values) %}
+{% for key, prop in schema.get('properties', {}).items() %}
+    {% if prop.get('type') == 'object' %}
+    <fieldset style="border: 1px solid #cbd5e1; border-radius: 4px; padding: 1rem; margin-bottom: 1.5rem;">
+        <legend style="font-weight: bold; color: #475569;">[{{ key }}]</legend>
+        {% for inner_key, inner_prop in prop.get('properties', {}).items() %}
+            {{ schema_field('f_' + key + '__' + inner_key, inner_prop,
+                            values.get(key, {}).get(inner_key)) }}
+        {% endfor %}
+    </fieldset>
+    {% else %}
+        {{ schema_field('f_' + key, prop, values.get(key)) }}
+    {% endif %}
+{% endfor %}
+{% endmacro %}

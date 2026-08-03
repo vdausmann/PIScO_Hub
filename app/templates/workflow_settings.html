@@ -38,10 +38,25 @@
             </div>
         </div>
 
+        {% if schema %}
+        {% from "partials/schema_form.html" import schema_form %}
+        {% if errors %}
+        <div style="background: #fef2f2; border: 1px solid #fca5a5; color: #b91c1c;
+                    padding: 1rem; border-radius: 4px; margin-bottom: 1.5rem;">
+            <strong>Invalid settings:</strong>
+            <ul style="margin: 0.5rem 0 0 1rem;">
+                {% for error in errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        <input type="hidden" name="form_mode" value="schema">
+        {{ schema_form(schema, values) }}
+        {% else %}
         <div class="input-group">
             <label for="settings_string">Configuration</label>
             <textarea id="settings_string" name="settings_string">{{ task.settings }}</textarea>
         </div>
+        {% endif %}
 
         <div class="actions">
             <a href="{{ url_for('workflow.builder', workflow_id=task.workflow_id) }}" class="btn btn-cancel">CANCEL</a>

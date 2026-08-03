@@ -1,11 +1,14 @@
 from flask import Flask
 from .routes import (auth, processing, visualization, task_manager, global_settings,
     workflow_builder, file_explorer)
+from .routes.api_v1 import api_v1_bp
 from .backend.models import db, login_manager
 from .backend.viewers import ViewerManager
 from .backend.global_settings import seed_settings
-from .backend.tools import register_tools
+from .backend.migrations import migrate
+from .backend.tools import ToolRegistry
 from dotenv import load_dotenv
+from pathlib import Path
 import os
 
 def create_app(create_worker=True):
@@ -13,26 +16,30 @@ def create_app(create_worker=True):
     Creates the app
     """
 
-    load_dotenv()
+    # Anchor all runtime directories to the repo root so the server (and
+    # scripts) work from any CWD.
+    hub_root = str(Path(__file__).resolve().parent.parent)
+    load_dotenv(os.path.join(hub_root, ".env"))
     app = Flask(__name__)
-    
+
     app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY")
     if not app.config["SECRET_KEY"]:
         raise ValueError("No secret key set, run the 'setup_env.py' script")
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+    app.config["HUB_ROOT"] = hub_root
+    app.config["LOGS_DIR"] = os.path.join(hub_root, "logs")
+    app.config["SETTINGS_DIR"] = os.path.join(hub_root, "settings")
 
     db.init_app(app)
     login_manager.init_app(app)
 
     with app.app_context():
         db.create_all()
+        migrate(db)
 
     seed_settings(app)
 
-    # Register Blueprints 
-    # from .modules.processing.routes import processing_bp
-    # from .modules.visualization.routes import visualization_bp
-    
+    # Register Blueprints
     app.register_blueprint(auth.auth_bp)
     app.register_blueprint(processing.processing_bp, url_prefix="/processing")
     app.register_blueprint(visualization.visualization_bp, url_prefix='/visualization')
@@ -42,20 +49,18 @@ def create_app(create_worker=True):
     app.register_blueprint(global_settings.settings_bp)
     app.register_blueprint(workflow_builder.workflow_bp,
                            url_prefix='/workflow-builder')
-    # app.register_blueprint(processing_bp, url_prefix='/processing')
+    app.register_blueprint(api_v1_bp, url_prefix='/api/v1')
 
-
-    # Register tools:
+    # Register tools and viewers:
     with app.app_context():
-        register_tools(app)
+        registry = ToolRegistry(app)
+        registry.ensure_builtin_provider()
+        registry.scan_all()
 
         ViewerManager(
             app,
-            "viewers"
+            os.path.join(hub_root, "viewers")
         ).load_viewers()
-
-    # Register visualization modules:
-    # ...
 
     # Create objects:
     if create_worker:

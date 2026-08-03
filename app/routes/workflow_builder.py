@@ -1,10 +1,58 @@
 from ..utils import clean_string
 from flask import Blueprint, redirect, render_template, request, url_for
 from flask_login import login_required, current_user
+from ..backend import settings_engine
 from ..backend.models import (TemporaryWorkflow, Workflow, db, Tool, TemporaryTask, Task,
                               TemplateTask, TemplateWorkflow)
+import json
 
 workflow_bp = Blueprint('workflow', __name__)
+
+
+def _coerce_field(prop, raw):
+    """Convert a form string into the type the schema property declares."""
+    prop_type = prop.get("type")
+    if raw is None or raw == "":
+        return None
+    if prop_type == "integer":
+        return int(raw)
+    if prop_type == "number":
+        return float(raw)
+    if prop_type == "array":
+        items = [s.strip() for s in raw.split(",") if s.strip()]
+        item_type = prop.get("items", {}).get("type")
+        if item_type == "integer":
+            return [int(x) for x in items]
+        if item_type == "number":
+            return [float(x) for x in items]
+        return items
+    return raw
+
+
+def _settings_from_form(schema, form):
+    """Rebuild the settings object from schema-form fields (f_<key> /
+    f_<section>__<key>). Checkboxes only submit when checked, so booleans
+    are derived from presence."""
+    obj = {}
+    for key, prop in schema.get("properties", {}).items():
+        if prop.get("type") == "object":
+            section = {}
+            for inner_key, inner_prop in prop.get("properties", {}).items():
+                field = f"f_{key}__{inner_key}"
+                if inner_prop.get("type") == "boolean":
+                    section[inner_key] = field in form
+                else:
+                    value = _coerce_field(inner_prop, form.get(field))
+                    if value is not None:
+                        section[inner_key] = value
+            obj[key] = section
+        elif prop.get("type") == "boolean":
+            obj[key] = f"f_{key}" in form
+        else:
+            value = _coerce_field(prop, form.get(f"f_{key}"))
+            if value is not None:
+                obj[key] = value
+    return obj
 
 
 @workflow_bp.route('/workflow/init', methods=["POST"])
@@ -30,8 +78,8 @@ def init_workflow():
 @login_required
 def builder(workflow_id):
     draft = TemporaryWorkflow.query.get_or_404(workflow_id)
-    
-    all_tools = Tool.query.all()
+
+    all_tools = Tool.query.filter(Tool.available != False).order_by(Tool.name).all()
     # Pull all templates so the user can select them inside the UI
     all_templates = TemplateWorkflow.query.all()
     
@@ -58,7 +106,7 @@ def add_tool_to_workflow(workflow_id, tool_id):
     new_task.workflow_id = workflow_id
     new_task.tool_id = tool_id
     new_task.workflow_position = next_index
-    new_task.settings = tool.settings_template
+    new_task.settings = settings_engine.default_settings(tool)
     new_task.priority = tool.default_priority
     new_task.weight = tool.default_weight
 
@@ -124,24 +172,46 @@ def move_task(task_id, direction):
 def edit_settings(task_id):
     # 1. Get the specific task from the temporary table
     task = TemporaryTask.query.get_or_404(task_id)
-    
+
     if not isinstance(task, TemporaryTask):
         return "Task not found", 404
-    
+
+    tool = task.tool
+    schema = None
+    if tool.settings_schema and (tool.settings_format or "opaque") != "opaque":
+        schema = json.loads(tool.settings_schema)
+
     if request.method == 'POST':
         # 2. Update the task with form data
         task.priority = request.form.get('priority', type=int)
         task.weight = request.form.get('weight', type=int)
-        settings = request.form.get('settings_string')
-        task.settings = clean_string(settings)
-        
+
+        if schema is not None and request.form.get('form_mode') == 'schema':
+            values = _settings_from_form(schema, request.form)
+            errors = settings_engine.validate(tool, values)
+            if errors:
+                db.session.rollback()
+                return render_template('workflow_settings.html', task=task,
+                                       schema=schema, values=values, errors=errors)
+            task.settings = json.dumps(values, indent=2)
+        else:
+            settings = request.form.get('settings_string')
+            task.settings = clean_string(settings)
+
         db.session.commit()
-        
+
         # 3. Redirect back to the builder for the parent workflow
         return redirect(url_for('workflow.builder', workflow_id=task.workflow_id))
-    
+
     # GET request: Show the editing page
-    return render_template('workflow_settings.html', task=task)
+    values = {}
+    if schema is not None:
+        try:
+            values = json.loads(task.settings) if task.settings else {}
+        except ValueError:
+            values = {}
+    return render_template('workflow_settings.html', task=task,
+                           schema=schema, values=values, errors=None)
 
 
 @workflow_bp.route('/workflow/finalize/<workflow_id>', methods=['POST'])

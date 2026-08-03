@@ -30,7 +30,7 @@ class TaskWatcher:
                     if task.pid:
                         self.check_task_status(task)
                 
-                sleep_time = GlobalSetting.get("WORKER_SLEEP_TIME", default=5)
+                sleep_time = GlobalSetting.get("POLL_INTERVAL", default=5)
                 time.sleep(sleep_time)
 
     def check_task_status(self, task):

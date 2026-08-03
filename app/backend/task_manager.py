@@ -1,35 +1,56 @@
 from .models import db, Workflow, Task, Tool, GlobalSetting
+from . import settings_engine
+import json
 import time
 import subprocess
 import os
 import threading
 from datetime import datetime
 
-def create_new_workflow(workflow_name: str, tools: list[str], settings:
-                        list[str]):
-    # Load workflow config and create tasks from tools
-    # 1. Create workflow in db
-    # 2. Create a task in the db for each tool
+def create_new_workflow(workflow_name: str, task_specs: list[dict]):
+    """Create a workflow from task specs.
+
+    Each spec: {"tool": <name>, "settings": <object or text, optional>,
+    "priority": <int, optional>, "weight": <int, optional>}.
+    Settings are stored as text (JSON text for structured formats) and
+    validated against the tool's schema when one exists.
+    Raises KeyError for unknown/unavailable tools and ValueError for
+    invalid settings.
+    """
     new_workflow = Workflow()
     new_workflow.name = workflow_name
 
     db.session.add(new_workflow)
-    db.session.flush() # This gets us the task.id before committing
+    db.session.flush() # This gets us the workflow.id before committing
 
-    for i, tool_name in enumerate(tools):
+    for i, spec in enumerate(task_specs):
+        tool_name = spec.get("tool")
         tool = Tool.query.filter_by(name=tool_name).first()
 
         if tool is None:
             raise KeyError(f"Tool '{tool_name}' not registered.")
+        if tool.available is False:
+            raise KeyError(f"Tool '{tool_name}' is not available anymore.")
 
+        settings = spec.get("settings")
+        if settings is None:
+            settings_text = settings_engine.default_settings(tool)
+        elif isinstance(settings, str):
+            settings_text = settings
+        else:
+            errors = settings_engine.validate(tool, settings)
+            if errors:
+                raise ValueError(
+                    f"Invalid settings for tool '{tool_name}': " + "; ".join(errors))
+            settings_text = json.dumps(settings, indent=2)
 
         task = Task()
         task.workflow_id = new_workflow.id
         task.tool_id = tool.id
         task.workflow_position = i
-        task.priority = tool.default_priority
-        task.weight = tool.default_weight
-        task.settings_file_path = settings[i]
+        task.priority = spec.get("priority", tool.default_priority)
+        task.weight = spec.get("weight", tool.default_weight)
+        task.settings = settings_text
         task.started_at = None
         task.completed_at = None
 
@@ -37,7 +58,7 @@ def create_new_workflow(workflow_name: str, tools: list[str], settings:
 
     db.session.commit()
 
-    print(f"[*] Created workflow '{workflow_name}' with {len(tools)} tasks.")
+    print(f"[*] Created workflow '{workflow_name}' with {len(task_specs)} tasks.")
 
     return new_workflow.id
 
@@ -69,8 +90,8 @@ class TaskManager:
                     self._process_next_step()
                 except Exception as e:
                     print(f"[!] Worker Error: {e}")
-                
-                sleep_time = GlobalSetting.get("WORKER_SLEEP_TIME", default=5)
+
+                sleep_time = GlobalSetting.get("POLL_INTERVAL", default=5)
                 time.sleep(sleep_time)
 
 
@@ -121,12 +142,13 @@ class TaskManager:
             raise KeyError(f"Could not find tool with id {task.tool_id} in database.")
         try:
             # create settings file:
-            settings_dir = os.path.join(os.getcwd(), "settings", tool.name) 
+            settings_dir = os.path.join(self.app.config["SETTINGS_DIR"], tool.name)
             os.makedirs(settings_dir, exist_ok=True)
-            settings_file_path = os.path.join(settings_dir, task.id + ".cfg")
+            extension = settings_engine.settings_file_extension(tool)
+            settings_file_path = os.path.join(settings_dir, task.id + extension)
 
             with open(settings_file_path, "w") as f:
-                f.write(task.settings)
+                f.write(settings_engine.render_settings_file(tool, task.settings))
 
             res = self._run_tool(tool, task, settings_file_path)
             if res == None:
@@ -154,7 +176,7 @@ class TaskManager:
         else:
             execution_call = [tool.program_path]
 
-        log_dir = os.path.join("logs", tool.name)
+        log_dir = os.path.join(self.app.config["LOGS_DIR"], tool.name)
         os.makedirs(log_dir, exist_ok=True)
 
         prefix = os.path.join(log_dir, task.id)

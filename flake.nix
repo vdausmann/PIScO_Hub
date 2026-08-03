@@ -37,9 +37,14 @@ outputs = { self, nixpkgs, flake-utils, ... }:
         #   -i "$PROJECT_ROOT/app/static/css/input.css" \
         #   -o "$PROJECT_ROOT/app/static/css/main.css" --watch &
 		run_server = pkgs.writeShellScriptBin "run_server" ''
-			PROJECT_ROOT=$(pwd)
+			PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 			echo "[*] Starting Flask server..."
-			${pkgs.python3}/bin/python -u "$PROJECT_ROOT/main.py"
+			python3 -u "$PROJECT_ROOT/main.py"
+		'';
+
+		hub_cli = pkgs.writeShellScriptBin "hub" ''
+			PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+			PYTHONPATH="$PROJECT_ROOT''${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m hub_cli "$@"
 		'';
 
     in
@@ -64,6 +69,7 @@ outputs = { self, nixpkgs, flake-utils, ... }:
 						gunicorn
 						gevent
 						matplotlib
+						jsonschema
                     ]))
 					tailwindcss
 					sqlite
@@ -72,6 +78,7 @@ outputs = { self, nixpkgs, flake-utils, ... }:
                 ];
                 buildInputs = with pkgs; [
 					run_server
+					hub_cli
                 ];
                 shellHook = ''
 					echo "PIScOHub"

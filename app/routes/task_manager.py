@@ -8,48 +8,56 @@ from app.backend.task_manager import create_new_workflow, get_current_load
 task_manager_bp = Blueprint('task_manager', __name__)
 
 @task_manager_bp.route('/workflow/create', methods=['POST'])
-# @login_required
 def api_create_workflow():
     """
+    Deprecated: use POST /api/v1/workflows instead.
+
     Expects JSON:
     {
         "name": "Gamma Ray Analysis",
         "tools": ["tool1", "tool2"],
-        "settings": ["/path/to/config1.json", "/path/to/config2.json"]
+        "settings": ["<settings content 1>", "<settings content 2>"]
     }
+    Settings entries are the settings *content* (not file paths).
     """
-    data = request.get_json()
+    from .api_v1.auth import api_auth
 
-    if not data:
-        return jsonify({"error": "No data provided"}), 400
+    @api_auth
+    def _create():
+        data = request.get_json()
 
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
 
-    workflow_name = data.get('name')
-    tools = data.get('tools', [])
-    settings = data.get('settings', [])
+        workflow_name = data.get('name')
+        tools = data.get('tools', [])
+        settings = data.get('settings', [])
 
-    if not workflow_name or not tools:
-        return jsonify({"error": "Workflow name and tools are required"}), 400
+        if not workflow_name or not tools:
+            return jsonify({"error": "Workflow name and tools are required"}), 400
 
-    if len(tools) != len(settings):
-        return jsonify({"error": "Each tool must have a corresponding settings file path"}), 400
+        if len(tools) != len(settings):
+            return jsonify({"error": "Each tool must have corresponding settings"}), 400
 
-    # for path in settings:
-    #     if not os.path.exists(path):
-    #         return jsonify({"error": f"Settings file not found at: {path}"}), 400
+        task_specs = [{"tool": tool, "settings": setting}
+                      for tool, setting in zip(tools, settings)]
 
-    try:
-        workflow_id = create_new_workflow(workflow_name, tools, settings)
+        try:
+            workflow_id = create_new_workflow(workflow_name, task_specs)
 
-        return jsonify({
-            "status": "success",
-            "workflow_id": workflow_id,
-            "message": f"Workflow '{workflow_name}' queued with {len(tools)} tasks."
-        }), 201
+            return jsonify({
+                "status": "success",
+                "workflow_id": workflow_id,
+                "message": f"Workflow '{workflow_name}' queued with {len(tools)} tasks.",
+                "deprecated": "Use POST /api/v1/workflows instead."
+            }), 201
 
-    except Exception as e:
-        print(f"[!] Error in create_new_workflow: {e}")
-        return jsonify({"error": str(e)}), 500
+        except Exception as e:
+            db.session.rollback()
+            print(f"[!] Error in create_new_workflow: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    return _create()
 
 
 
