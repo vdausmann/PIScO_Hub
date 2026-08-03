@@ -8,6 +8,8 @@ manifest — the Hub contains no processing code of its own.
 
 Detailed API + toolbox-authoring contract: [AGENTS.md](AGENTS.md)
 (also served at `/api/v1/docs`). OpenAPI spec: `/api/v1/openapi.json`.
+Procedure and pitfalls for wiring up a new toolbox:
+[docs/toolbox-integration.md](docs/toolbox-integration.md).
 
 ## How a run works
 
@@ -73,14 +75,13 @@ hub system load
 | `Segmenter` | PIScO C++ segmenter |
 | `test_load` / `test_segmenter` | test fixtures |
 
-**diplo** provider (`~/PIScO_dev/DIPLO/toolbox.json`, JSON-schema settings,
-runs headless via `diplo_run.py` inside DIPLO's own Python env):
-
-| Tool | Purpose |
-|---|---|
-| `diplo_run_workflow` | run *any* DIPLO node-graph workflow JSON on an image dir / video |
-| `diplo_max_bg_calc` | background estimate = per-pixel max over frames |
-| `diplo_pisco_full` | full pipeline: background → threshold → deconvolution → contours → crops → classification (downloads LUCYD + ViT models on first use) |
+**diplo** provider — *prototype, not yet committed to DIPLO*. A manifest
+exposing three tools (`diplo_run_workflow`, `diplo_max_bg_calc`,
+`diplo_pisco_full`) was validated end-to-end against this Hub, but the
+DIPLO-side entry point still has to be switched from the scratch runner
+to DIPLO's own headless loader. See
+[docs/toolbox-integration.md](docs/toolbox-integration.md) for the status
+and the plan.
 
 ## Setup / running
 
