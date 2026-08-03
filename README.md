@@ -6,6 +6,7 @@ tools as subprocesses. The tools themselves come from **toolbox
 repositories** (first one: [DIPLO](../DIPLO)) that plug into the Hub via a
 manifest — the Hub contains no processing code of its own.
 
+What this is for and how the pieces divide up: [MANIFEST.md](MANIFEST.md).
 Detailed API + toolbox-authoring contract: [AGENTS.md](AGENTS.md)
 (also served at `/api/v1/docs`). OpenAPI spec: `/api/v1/openapi.json`.
 Procedure and pitfalls for wiring up a new toolbox:
