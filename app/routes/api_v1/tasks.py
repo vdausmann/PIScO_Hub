@@ -5,7 +5,7 @@ from flask import jsonify, request
 from ...backend.models import Task
 from . import api_v1_bp
 from .auth import api_auth
-from .serializers import task_dict
+from .serializers import artifact_dict, task_dict
 
 
 @api_v1_bp.route("/tasks/<string:task_id>", methods=["GET"])
@@ -17,6 +17,16 @@ def get_task(task_id):
     data = task_dict(task)
     data["settings"] = task.settings
     return jsonify(data)
+
+
+@api_v1_bp.route("/tasks/<string:task_id>/artifacts", methods=["GET"])
+@api_auth
+def get_task_artifacts(task_id):
+    task = Task.query.get(task_id)
+    if task is None:
+        return jsonify({"error": "Task not found"}), 404
+    return jsonify({"task_id": task.id,
+                    "artifacts": [artifact_dict(a) for a in task.artifacts]})
 
 
 @api_v1_bp.route("/tasks/<string:task_id>/logs", methods=["GET"])

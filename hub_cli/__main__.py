@@ -174,6 +174,11 @@ def _print_workflow(data):
         ("POS", "workflow_position"), ("TOOL", "tool"), ("STATUS", "status"),
         ("EXIT", "exit_code"), ("TASK ID", "id"),
     ])
+    for task in data["tasks"]:
+        for artifact in task.get("artifacts", []):
+            flag = "" if artifact.get("exists") is not False else "  (MISSING)"
+            print(f"  {task['tool']} -> {artifact['name']}: "
+                  f"{artifact['path']}{flag}")
 
 
 def _watch(client, workflow_id, as_json=False, interval=3):
@@ -217,6 +222,17 @@ def cmd_task_status(client, args):
     for key in ("id", "workflow_id", "tool", "status", "exit_code",
                 "started_at", "completed_at"):
         print(f"{key:14} {data.get(key)}")
+
+
+def cmd_task_artifacts(client, args):
+    data = client.get(f"/tasks/{args.id}/artifacts")
+    if args.json:
+        print_json(data)
+        return
+    print_table(data["artifacts"], [
+        ("NAME", "name"), ("KIND", "kind"), ("EXISTS", "exists"),
+        ("SIZE", "size_bytes"), ("PATH", "path"),
+    ])
 
 
 def cmd_task_logs(client, args):
@@ -317,6 +333,9 @@ def build_parser():
     p = task.add_parser("status")
     p.add_argument("id")
     p.set_defaults(func=cmd_task_status)
+    p = task.add_parser("artifacts", help="Outputs this task declared")
+    p.add_argument("id")
+    p.set_defaults(func=cmd_task_artifacts)
     p = task.add_parser("logs")
     p.add_argument("id")
     p.add_argument("--stderr", action="store_true")

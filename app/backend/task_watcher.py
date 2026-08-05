@@ -3,6 +3,7 @@ from threading import Thread
 import time
 from datetime import datetime
 from flask_sock import Sock
+from . import artifacts
 from .models import db, Task, Workflow, GlobalSetting, Tool
 
 
@@ -54,7 +55,10 @@ class TaskWatcher:
         task.exit_code = exit_code
         task.completed_at = datetime.now()
         task.pid = None
-        
+
+        if task.status == 'Finished':
+            artifacts.finalize_artifacts(task)
+
         print(f"[*] Task {task.id} finished (Exit: {exit_code})")
         
         # Check if this was the last task in the workflow

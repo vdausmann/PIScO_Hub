@@ -51,6 +51,17 @@ def provider_dict(provider):
     }
 
 
+def artifact_dict(artifact):
+    return {
+        "name": artifact.name,
+        "kind": artifact.kind,
+        "path": artifact.path,
+        "exists": artifact.exists,
+        "size_bytes": artifact.size_bytes,
+        "created_at": artifact.created_at.isoformat() if artifact.created_at else None,
+    }
+
+
 def task_dict(task):
     return {
         "id": task.id,
@@ -63,6 +74,7 @@ def task_dict(task):
         "exit_code": task.exit_code,
         "started_at": task.started_at.isoformat() if task.started_at else None,
         "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+        "artifacts": [artifact_dict(a) for a in task.artifacts],
     }
 
 

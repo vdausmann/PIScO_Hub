@@ -47,6 +47,21 @@ class Task(db.Model):
     tool = db.relationship("Tool", backref="tasks")
 
 
+class Artifact(db.Model):
+    """A path a task declared as an output, and whether it appeared."""
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.String(36), db.ForeignKey('task.id'), nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    kind = db.Column(db.String(20), default='directory')
+    path = db.Column(db.String(512), nullable=False)
+    exists = db.Column(db.Boolean, nullable=True)  # None until the task finishes
+    size_bytes = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime, default=db.func.now())
+
+    task = db.relationship('Task', backref=db.backref(
+        'artifacts', cascade="all, delete-orphan"))
+
+
 class GlobalSetting(db.Model):
     key = db.Column(db.String(50), primary_key=True)
     value = db.Column(db.String(255))

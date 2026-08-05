@@ -1,3 +1,5 @@
+import os
+
 from .models import db, GlobalSetting
 
 def seed_settings(app):
@@ -6,6 +8,8 @@ def seed_settings(app):
         'POLL_INTERVAL': {'value': '5', 'type': 'int', 'desc': 'Seconds between worker cycles.'},
         'LOG_RETENTION_DAYS': {'value': '30', 'type': 'int', 'desc': 'How long to keep log files.'},
         'FILE_EXPLORER_ROOT': {'value': '/home/tim/', 'type': 'str', 'desc': 'Root of file explorer.'},
+        'DATA_ROOT': {'value': os.path.join(app.config["HUB_ROOT"], "data"), 'type': 'str',
+                      'desc': 'Root for Hub-allocated task outputs. Must be on shared storage when tasks run on other machines.'},
     }
 
     with app.app_context():

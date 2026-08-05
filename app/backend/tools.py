@@ -59,6 +59,72 @@ def load_toolbox_manifest(path):
     return provider_info, descriptors
 
 
+def _schema_has_key(schema, dotted_key):
+    """Does a dotted settings key resolve through the schema's properties?
+
+    A plain key addresses a top-level property; "section.key" walks one
+    level of nesting, which is how ini sections are described.
+    """
+    node = schema
+    for part in dotted_key.split("."):
+        properties = node.get("properties")
+        if not isinstance(properties, dict) or part not in properties:
+            return False
+        node = properties[part]
+    return True
+
+
+def _validate_io(entry, field, schema, settings_format):
+    """Validate an inputs/outputs declaration and return it normalized.
+
+    `settings_key` is what makes a declaration orchestratable: it names the
+    settings property carrying the path, so the Hub can allocate outputs
+    and resolve references to them.
+    """
+    declarations = entry.get(field, [])
+    if not isinstance(declarations, list):
+        raise ManifestError(f"Tool {entry['name']!r}: '{field}' must be a list")
+
+    seen = set()
+    normalized = []
+    for declaration in declarations:
+        if not isinstance(declaration, dict) or not declaration.get("name"):
+            raise ManifestError(
+                f"Tool {entry['name']!r}: every {field} entry needs a 'name'")
+
+        name = declaration["name"]
+        if name in seen:
+            raise ManifestError(
+                f"Tool {entry['name']!r}: duplicate {field} name '{name}'")
+        seen.add(name)
+
+        kind = declaration.get("kind", "directory")
+        if kind not in ("directory", "file"):
+            raise ManifestError(
+                f"Tool {entry['name']!r}: {field} '{name}' has unknown kind "
+                f"'{kind}' (expected 'directory' or 'file')")
+
+        settings_key = declaration.get("settings_key")
+        if settings_key is not None:
+            if settings_format == "opaque":
+                raise ManifestError(
+                    f"Tool {entry['name']!r}: {field} '{name}' declares a "
+                    "settings_key, which needs settings_format 'json' or 'ini'")
+            if schema is not None and not _schema_has_key(schema, settings_key):
+                raise ManifestError(
+                    f"Tool {entry['name']!r}: {field} '{name}' binds to settings "
+                    f"key '{settings_key}', which the settings_schema does not define")
+
+        normalized.append({
+            "name": name,
+            "kind": kind,
+            "description": declaration.get("description"),
+            "settings_key": settings_key,
+            "pattern": declaration.get("pattern"),
+        })
+    return normalized
+
+
 def _normalize_entry(entry, root):
     """Validate a manifest tool entry and resolve it into a flat descriptor.
 
@@ -92,6 +158,9 @@ def _normalize_entry(entry, root):
     if schema is not None and not isinstance(schema, dict):
         raise ManifestError(f"Tool {entry['name']!r}: settings_schema must be an object")
 
+    inputs = _validate_io(entry, "inputs", schema, settings_format)
+    outputs = _validate_io(entry, "outputs", schema, settings_format)
+
     return {
         "name": entry["name"],
         "description": entry["description"],
@@ -104,8 +173,8 @@ def _normalize_entry(entry, root):
         "settings_format": settings_format,
         "settings_schema": json.dumps(schema) if schema is not None else None,
         "settings_template": settings_template,
-        "inputs": json.dumps(entry.get("inputs", [])),
-        "outputs": json.dumps(entry.get("outputs", [])),
+        "inputs": json.dumps(inputs),
+        "outputs": json.dumps(outputs),
         "tags": json.dumps(entry.get("tags", [])),
         "version": entry.get("version"),
     }

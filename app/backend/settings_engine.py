@@ -42,6 +42,48 @@ def parse_settings(tool, settings_text):
         raise ValueError(f"Settings are not valid JSON: {e}")
 
 
+FROM_KEY = "$from"
+_PLACEHOLDER = "__hub_pending__"
+
+
+def _is_ref(value):
+    return isinstance(value, dict) and set(value.keys()) == {FROM_KEY}
+
+
+def extract_from_refs(obj, prefix=""):
+    """Find every {"$from": {...}} reference in a settings object.
+
+    Returns [(dotted_path, ref)] so callers can validate the references
+    up front and substitute resolved paths later.
+    """
+    found = []
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            path = f"{prefix}.{key}" if prefix else key
+            if _is_ref(value):
+                found.append((path, value[FROM_KEY]))
+            else:
+                found.extend(extract_from_refs(value, path))
+    return found
+
+
+def substitute_from_refs(obj):
+    """Copy of the settings with references replaced by a placeholder.
+
+    References point at paths that only exist once an upstream task has
+    run, so schema validation at creation time checks the shape around
+    them rather than the value itself. Bound path properties should
+    therefore be plain strings, without pattern/enum constraints.
+    """
+    if isinstance(obj, dict):
+        if _is_ref(obj):
+            return _PLACEHOLDER
+        return {key: substitute_from_refs(value) for key, value in obj.items()}
+    if isinstance(obj, list):
+        return [substitute_from_refs(value) for value in obj]
+    return obj
+
+
 def validate(tool, settings_obj):
     """Validate a settings object against the tool's schema.
 

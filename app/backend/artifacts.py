@@ -1,0 +1,111 @@
+"""Output locations and the artifacts tasks produce.
+
+A tool declares its outputs in the manifest and binds each one to a
+settings key. That lets the Hub decide *where* results go instead of
+making the user invent paths, record what was produced, and hand those
+paths to a later task in the same workflow.
+
+Paths are deterministic: the same task always maps to the same location,
+so a reference can be resolved even if the artifact row is missing.
+"""
+
+import json
+import os
+
+from .models import Artifact, GlobalSetting, db
+
+
+def data_root(app):
+    """Root for Hub-allocated outputs.
+
+    Must live on shared storage when tasks run on other machines, since
+    the path is handed to the tool verbatim.
+    """
+    return GlobalSetting.get(
+        "DATA_ROOT", default=os.path.join(app.config["HUB_ROOT"], "data"))
+
+
+def declarations(tool, field):
+    """Parse a tool's inputs/outputs declarations."""
+    try:
+        return json.loads(getattr(tool, field) or "[]")
+    except (ValueError, TypeError):
+        return []
+
+
+def find_declaration(tool, field, name):
+    for declaration in declarations(tool, field):
+        if declaration.get("name") == name:
+            return declaration
+    return None
+
+
+def allocated_output_path(app, task, output):
+    """Where an output goes when the user did not name a location."""
+    return os.path.join(
+        data_root(app),
+        "workflows",
+        str(task.workflow_id),
+        f"{task.workflow_position}_{task.tool.name}",
+        output["name"],
+    )
+
+
+def get_setting(obj, dotted_key):
+    """Read a value from parsed settings; 'section.key' walks one level."""
+    node = obj
+    for part in dotted_key.split("."):
+        if not isinstance(node, dict) or part not in node:
+            return None
+        node = node[part]
+    return node
+
+
+def set_setting(obj, dotted_key, value):
+    """Write a value into parsed settings, creating intermediate dicts."""
+    parts = dotted_key.split(".")
+    node = obj
+    for part in parts[:-1]:
+        if not isinstance(node.get(part), dict):
+            node[part] = {}
+        node = node[part]
+    node[parts[-1]] = value
+
+
+def record_artifact(task, output, path):
+    """Register (or update) an artifact row for a task's declared output.
+
+    Called at dispatch, when the path is finally known, so that a later
+    task can resolve a reference to it by lookup instead of guesswork.
+    """
+    artifact = Artifact.query.filter_by(task_id=task.id,
+                                        name=output["name"]).first()
+    if artifact is None:
+        artifact = Artifact()
+        artifact.task_id = task.id
+        artifact.name = output["name"]
+        db.session.add(artifact)
+
+    artifact.kind = output.get("kind", "directory")
+    artifact.path = path
+    artifact.exists = None
+    artifact.size_bytes = None
+    return artifact
+
+
+def finalize_artifacts(task):
+    """After a task finishes, check whether its declared outputs appeared.
+
+    A missing output is recorded rather than hidden: a downstream task
+    referencing it should fail with a precise reason.
+    """
+    for artifact in task.artifacts:
+        artifact.exists = os.path.exists(artifact.path)
+        if artifact.exists and artifact.kind == "file":
+            try:
+                artifact.size_bytes = os.path.getsize(artifact.path)
+            except OSError:
+                artifact.size_bytes = None
+        if not artifact.exists:
+            print(f"[!] Task {task.id}: declared output '{artifact.name}' "
+                  f"was not produced at {artifact.path}")
