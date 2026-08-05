@@ -144,6 +144,10 @@ def render_settings_file(tool, settings_text):
 
     # ini: top-level keys are sections; scalar top-level values go to [DEFAULT]
     parser = configparser.ConfigParser()
+    # Tools look their keys up verbatim, and configparser lowercases option
+    # names by default - which would turn sourcePath into sourcepath and
+    # leave the tool silently using its own defaults.
+    parser.optionxform = str
     for key, value in obj.items():
         if isinstance(value, dict):
             parser[key] = {k: _ini_value(v) for k, v in value.items()}
@@ -156,7 +160,10 @@ def render_settings_file(tool, settings_text):
 
 def _ini_value(value):
     if isinstance(value, bool):
-        return "true" if value else "false"
+        # 1/0 rather than true/false: C and C++ readers parse booleans with
+        # stream extraction, which only understands 1/0 unless they opt into
+        # boolalpha, while python's configparser accepts both.
+        return "1" if value else "0"
     if isinstance(value, (list, dict)):
         return json.dumps(value)
     return str(value)
