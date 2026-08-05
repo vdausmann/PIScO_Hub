@@ -40,8 +40,8 @@ def _parse_task_arg(raw):
                 spec["settings"] = value
         elif key in ("priority", "weight"):
             spec[key] = int(value)
-        elif key == "tool":
-            spec["tool"] = value
+        elif key in ("tool", "machine"):
+            spec[key] = value
         else:
             raise SystemExit(f"Unknown --task key '{key}'")
     if "tool" not in spec:
@@ -172,7 +172,7 @@ def _print_workflow(data):
     print(f"{data['name']} ({data['id']}): {data['status']}")
     print_table(data["tasks"], [
         ("POS", "workflow_position"), ("TOOL", "tool"), ("STATUS", "status"),
-        ("EXIT", "exit_code"), ("TASK ID", "id"),
+        ("MACHINE", "machine"), ("EXIT", "exit_code"), ("TASK ID", "id"),
     ])
     for task in data["tasks"]:
         for artifact in task.get("artifacts", []):
@@ -205,6 +205,16 @@ def cmd_workflow_status(client, args):
         print_json(data)
         return
     _print_workflow(data)
+
+
+def cmd_workflow_retry(client, args):
+    data = client.post(f"/workflows/{args.id}/retry")
+    if args.json and not args.watch:
+        print_json(data)
+        return
+    print(f"Requeued '{data['name']}' ({data['id']}).")
+    if args.watch:
+        _watch(client, data["id"], as_json=args.json)
 
 
 def cmd_workflow_delete(client, args):
@@ -268,9 +278,57 @@ def cmd_system_load(client, args):
     data = client.get("/system/load")
     if args.json:
         print_json(data)
-    else:
-        print(f"load {data['load']}/{data['max_weight']} "
-              f"(remaining {data['remaining_capacity']})")
+        return
+    print(f"total load {data['load']}/{data['max_weight']} "
+          f"(remaining {data['remaining_capacity']})")
+    print_table(data.get("machines", []), [
+        ("MACHINE", "name"), ("STATUS", "status"), ("ENABLED", "enabled"),
+        ("LOAD", "load"), ("CAPACITY", "max_weight"), ("TAGS", "tags"),
+    ])
+
+
+# ---- machines --------------------------------------------------------------
+
+def cmd_machines_list(client, args):
+    data = client.get("/machines")
+    if args.json:
+        print_json(data)
+        return
+    print_table(data["machines"], [
+        ("ID", "id"), ("NAME", "name"), ("HOST", "host"), ("STATUS", "status"),
+        ("ENABLED", "enabled"), ("LOAD", "load"), ("CAPACITY", "max_weight"),
+        ("TAGS", "tags"),
+    ])
+
+
+def cmd_machines_add(client, args):
+    payload = {"name": args.name, "host": args.host}
+    if args.user:
+        payload["ssh_user"] = args.user
+    if args.max_weight is not None:
+        payload["max_weight"] = args.max_weight
+    if args.tag:
+        payload["tags"] = args.tag
+    data = client.post("/machines", payload)
+    if args.json:
+        print_json(data)
+        return
+    print(f"Registered '{data['name']}' ({data['host']}) - {data['status']}")
+
+
+def cmd_machines_remove(client, args):
+    data = client.delete(f"/machines/{args.id}")
+    print_json(data) if args.json else print("Removed.")
+
+
+def cmd_machines_set(client, args):
+    payload = {"enabled": args.cmd == "enable"}
+    data = client.request("PATCH", f"/machines/{args.id}", json=payload)
+    if args.json:
+        print_json(data)
+        return
+    print(f"'{data['name']}' is now "
+          f"{'enabled' if data['enabled'] else 'disabled'}.")
 
 
 def build_parser():
@@ -312,8 +370,8 @@ def build_parser():
     p.add_argument("--file", help="JSON file with {name, tasks:[...]}")
     p.add_argument("--name")
     p.add_argument("--task", action="append", nargs="+", metavar="KEY=VALUE",
-                   help="tool=NAME [settings=@file|json|text] [priority=N] [weight=N]; "
-                        "repeat for multiple tasks")
+                   help="tool=NAME [settings=@file|json|text] [priority=N] "
+                        "[weight=N] [machine=NAME]; repeat for multiple tasks")
     p.add_argument("--watch", action="store_true",
                    help="Wait until the workflow finishes")
     p.set_defaults(func=cmd_workflow_create)
@@ -324,6 +382,10 @@ def build_parser():
     p.add_argument("id")
     p.add_argument("--watch", action="store_true")
     p.set_defaults(func=cmd_workflow_status)
+    p = workflow.add_parser("retry", help="Requeue from the first failed task")
+    p.add_argument("id")
+    p.add_argument("--watch", action="store_true")
+    p.set_defaults(func=cmd_workflow_retry)
     p = workflow.add_parser("delete")
     p.add_argument("id")
     p.set_defaults(func=cmd_workflow_delete)
@@ -342,6 +404,26 @@ def build_parser():
     p.add_argument("--tail", type=int)
     p.add_argument("--follow", action="store_true")
     p.set_defaults(func=cmd_task_logs)
+
+    machines = sub.add_parser("machines", help="Machines tasks can run on")\
+        .add_subparsers(dest="cmd", required=True)
+    p = machines.add_parser("list")
+    p.set_defaults(func=cmd_machines_list)
+    p = machines.add_parser("add", help="Register a worker reachable over SSH")
+    p.add_argument("name")
+    p.add_argument("--host", required=True)
+    p.add_argument("--user", help="SSH user")
+    p.add_argument("--max-weight", type=int, dest="max_weight")
+    p.add_argument("--tag", action="append",
+                   help="Capability tag, e.g. gpu; repeat for several")
+    p.set_defaults(func=cmd_machines_add)
+    p = machines.add_parser("remove")
+    p.add_argument("id", type=int)
+    p.set_defaults(func=cmd_machines_remove)
+    for action in ("enable", "disable"):
+        p = machines.add_parser(action)
+        p.add_argument("id", type=int)
+        p.set_defaults(func=cmd_machines_set)
 
     system = sub.add_parser("system", help="Server status").add_subparsers(
         dest="cmd", required=True)

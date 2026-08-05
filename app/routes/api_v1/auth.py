@@ -23,19 +23,38 @@ def _token_from_request():
     return ApiToken.query.filter_by(token_hash=token_hash).first()
 
 
-def api_auth(f):
-    """Allow the request if the user has a session or a valid API token."""
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        if current_user.is_authenticated:
-            return f(*args, **kwargs)
-        api_token = _token_from_request()
-        if api_token is not None:
+SCOPES = ("read", "operate", "full")
+_RANK = {scope: rank for rank, scope in enumerate(SCOPES)}
+
+
+def api_auth(required="read"):
+    """Require a session or an API token with at least `required` scope.
+
+    Scopes let a monitoring agent watch and requeue work without also
+    being able to reconfigure the Hub. A browser session is always full
+    access, since it belongs to a logged-in person.
+    """
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            if current_user.is_authenticated:
+                return f(*args, **kwargs)
+
+            api_token = _token_from_request()
+            if api_token is None:
+                return jsonify({"error": "Authentication required"}), 401
+
+            granted = api_token.scope or "full"
+            if _RANK.get(granted, -1) < _RANK[required]:
+                return jsonify({
+                    "error": f"This token has '{granted}' access but the "
+                             f"request needs '{required}'."}), 403
+
             api_token.last_used_at = datetime.now()
             db.session.commit()
             return f(*args, **kwargs)
-        return jsonify({"error": "Authentication required"}), 401
-    return wrapper
+        return wrapper
+    return decorator
 
 
 def session_auth(f):
@@ -48,13 +67,17 @@ def session_auth(f):
     return wrapper
 
 
-def create_token(user_id, name):
+def create_token(user_id, name, scope="full"):
     """Create a token for a user; returns (row, plaintext). The plaintext
     is shown exactly once and only its hash is stored."""
+    if scope not in SCOPES:
+        raise ValueError(f"Unknown scope '{scope}' (expected one of "
+                         f"{', '.join(SCOPES)})")
     plaintext = secrets.token_urlsafe(32)
     row = ApiToken()
     row.name = name
     row.user_id = user_id
+    row.scope = scope
     row.token_hash = hashlib.sha256(plaintext.encode()).hexdigest()
     db.session.add(row)
     db.session.commit()
@@ -69,6 +92,7 @@ def list_tokens():
         {
             "id": t.id,
             "name": t.name,
+            "scope": t.scope or "full",
             "created_at": t.created_at.isoformat() if t.created_at else None,
             "last_used_at": t.last_used_at.isoformat() if t.last_used_at else None,
         } for t in tokens
@@ -82,8 +106,13 @@ def mint_token():
     name = data.get("name")
     if not name:
         return jsonify({"error": "'name' is required"}), 400
-    row, plaintext = create_token(current_user.id, name)
-    return jsonify({"id": row.id, "name": row.name, "token": plaintext,
+    try:
+        row, plaintext = create_token(current_user.id, name,
+                                      data.get("scope", "full"))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify({"id": row.id, "name": row.name, "scope": row.scope,
+                    "token": plaintext,
                     "note": "Store this token now; it cannot be retrieved again."}), 201
 
 

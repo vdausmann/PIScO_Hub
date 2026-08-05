@@ -1,6 +1,7 @@
-from .models import db, Workflow, Task, Tool, GlobalSetting
-from . import artifacts, settings_engine
+from .models import db, Workflow, Task, Tool, GlobalSetting, Machine
+from . import artifacts, machines, settings_engine
 import json
+import shlex
 import time
 import subprocess
 import os
@@ -103,12 +104,22 @@ def create_new_workflow(workflow_name: str, task_specs: list[dict]):
                     f"Invalid settings for tool '{tool_name}': " + "; ".join(errors))
             settings_text = json.dumps(settings, indent=2)
 
+        machine_name = spec.get("machine")
+        machine = None
+        if machine_name:
+            machine = Machine.query.filter_by(name=machine_name).first()
+            if machine is None:
+                raise KeyError(f"Machine '{machine_name}' is not registered.")
+            if not machine.enabled:
+                raise KeyError(f"Machine '{machine_name}' is disabled.")
+
         task = Task()
         task.workflow_id = new_workflow.id
         task.tool_id = tool.id
         task.workflow_position = i
         task.priority = spec.get("priority", tool.default_priority)
         task.weight = spec.get("weight", tool.default_weight)
+        task.machine_id = machine.id if machine else None
         task.settings = settings_text
         task.started_at = None
         task.completed_at = None
@@ -154,17 +165,32 @@ class TaskManager:
                 time.sleep(sleep_time)
 
 
+    def _candidate_machines(self, task):
+        """Machines that could run this task right now.
+
+        A task pinned to a machine waits for that one; otherwise any
+        enabled, reachable machine whose tags cover the tool's
+        requirements and that still has capacity will do.
+        """
+        if task.machine_id is not None:
+            candidates = [Machine.query.get(task.machine_id)]
+            candidates = [m for m in candidates if m is not None and m.enabled]
+        else:
+            required = machines.tool_requirements(task.tool)
+            candidates = [
+                m for m in Machine.query.filter_by(enabled=True).all()
+                if required <= machines.machine_tags(m)
+            ]
+
+        return [
+            m for m in candidates
+            if (m.is_local or m.status == "online")
+            and task.weight <= (m.max_weight or 0) - machines.machine_load(m.id)
+        ]
+
+
     def _process_next_step(self):
-        # scan database for pending tasks
-        current_load = get_current_load()
-
-        max_weight = GlobalSetting.get("MAX_WEIGHT", default=10)
-        remaining_capacity = max_weight - current_load
-
-        if remaining_capacity <= 0:
-            return
-
-       # Get a list of all pending workflows:
+        # Get a list of all pending workflows:
         pending_workflows = Workflow.query.filter_by(status='Pending').all()
         if len(pending_workflows) == 0:
             return
@@ -181,18 +207,19 @@ class TaskManager:
         if len(next_tasks) == 0:
             return
 
-        # filter out tasks which have a higher weight than the remaining capacity
-        next_tasks = [task for task in next_tasks if task.weight <= remaining_capacity]
-
-        if len(next_tasks) == 0:
-            return
-
         # sort tasks by priority and workflow creation date
         next_tasks.sort(key=lambda t: (t.priority, t.workflow.created_at))
 
-        # dispatch the task with the highest priority
-        next_task = next_tasks[0]
-        self._dispatch_task(next_task)
+        # Dispatch the most important task that some machine can take. A
+        # task nobody can host yet simply waits for the next cycle.
+        for task in next_tasks:
+            candidates = self._candidate_machines(task)
+            if not candidates:
+                continue
+            machine = min(candidates, key=lambda m: machines.machine_load(m.id))
+            task.machine_id = machine.id
+            self._dispatch_task(task, machine)
+            return
 
 
     def _resolve_settings(self, tool, task):
@@ -265,7 +292,7 @@ class TaskManager:
         return artifact.path
 
 
-    def _dispatch_task(self, task: Task):
+    def _dispatch_task(self, task: Task, machine=None):
         tool = Tool.query.filter_by(id=task.tool_id).first()
         if tool is None:
             raise KeyError(f"Could not find tool with id {task.tool_id} in database.")
@@ -281,7 +308,7 @@ class TaskManager:
             with open(settings_file_path, "w") as f:
                 f.write(settings_engine.render_settings_file(tool, resolved_settings))
 
-            res = self._run_tool(tool, task, settings_file_path)
+            res = self._run_tool(tool, task, settings_file_path, machine)
             if res == None:
                 raise RuntimeError("could not start the program")
 
@@ -293,7 +320,9 @@ class TaskManager:
             task.workflow.status = "Running"
             task.started_at = datetime.now()
             db.session.commit()
-            print(f"[*] Dispatched {tool.name} (PID: {task.pid}, Weight: {task.weight})")
+            where = machine.name if machine else "local"
+            print(f"[*] Dispatched {tool.name} on {where} "
+                  f"(PID: {task.pid}, Weight: {task.weight})")
 
         except Exception as e:
             # A task that never started must stop its workflow the same way
@@ -310,7 +339,8 @@ class TaskManager:
             print(f"[!] Failed to dispatch {tool.name}: {e}")
 
 
-    def _run_tool(self, tool: Tool, task: Task, settings_file_path: str):
+    def _run_tool(self, tool: Tool, task: Task, settings_file_path: str,
+                  machine=None):
         if tool.program_type == "python":
             execution_call = ["python3",  tool.program_path]
         else:
@@ -323,14 +353,33 @@ class TaskManager:
         log_path = prefix + ".log"
         error_path = prefix + ".err"
 
+        remote = machine is not None and not machine.is_local
+        if remote:
+            # ssh is the child process we track: it forwards the remote
+            # program's output to these same log files and exits with its
+            # exit code, so nothing downstream needs to know the
+            # difference. Paths are valid remotely because storage is
+            # shared. Note that killing this ssh would leave the remote
+            # program running; the Hub has no cancel feature today, and a
+            # worker daemon is the proper fix when it does.
+            remote_command = "cd {} && exec {}".format(
+                shlex.quote(tool.working_directory),
+                " ".join(shlex.quote(part) for part
+                         in execution_call + [settings_file_path]))
+            popen_args = machines.ssh_command(machine, remote_command)
+            popen_kwargs = {}
+        else:
+            popen_args = execution_call + [settings_file_path]
+            popen_kwargs = {"cwd": tool.working_directory}
+
         try:
             with open(log_path, "w") as f, open(error_path, "w") as e:
                 process = subprocess.Popen(
-                    execution_call + [settings_file_path],
-                    cwd=tool.working_directory,
+                    popen_args,
                     stdout=f,
                     stderr=e,
-                    start_new_session=True
+                    start_new_session=True,
+                    **popen_kwargs
                 )
             print(f"[*] Started {tool.name} (PID: {process.pid})")
             return (process.pid, prefix)

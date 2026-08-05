@@ -33,6 +33,7 @@ def tool_detail(tool):
         "settings_template": tool.settings_template,
         "inputs": _json_or_default(tool.inputs, []),
         "outputs": _json_or_default(tool.outputs, []),
+        "requires": _json_or_default(tool.requires, []),
     })
     return data
 
@@ -48,6 +49,27 @@ def provider_dict(provider):
         "last_scanned_at": provider.last_scanned_at.isoformat()
             if provider.last_scanned_at else None,
         "tool_count": len(provider.tools),
+    }
+
+
+def machine_dict(machine):
+    from ...backend.machines import machine_load
+    load = machine_load(machine.id)
+    return {
+        "id": machine.id,
+        "name": machine.name,
+        "host": machine.host,
+        "ssh_user": machine.ssh_user,
+        "is_local": bool(machine.is_local),
+        "enabled": bool(machine.enabled),
+        "status": "online" if machine.is_local else machine.status,
+        "tags": _json_or_default(machine.tags, []),
+        "max_weight": machine.max_weight,
+        "load": load,
+        "remaining_capacity": (machine.max_weight or 0) - load,
+        "last_seen_at": machine.last_seen_at.isoformat()
+            if machine.last_seen_at else None,
+        "note": machine.note,
     }
 
 
@@ -74,6 +96,7 @@ def task_dict(task):
         "exit_code": task.exit_code,
         "started_at": task.started_at.isoformat() if task.started_at else None,
         "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+        "machine": task.machine.name if task.machine else None,
         "artifacts": [artifact_dict(a) for a in task.artifacts],
     }
 

@@ -4,7 +4,8 @@ from .models import db, GlobalSetting
 
 def seed_settings(app):
     defaults = {
-        'MAX_WEIGHT': {'value': '10', 'type': 'int', 'desc': 'Maximum concurrent resource weight.'},
+        'MAX_WEIGHT': {'value': '10', 'type': 'int', 'desc': 'Capacity used to seed the local machine. Per-machine limits are set on the machines themselves.'},
+        'MACHINE_PROBE_INTERVAL': {'value': '30', 'type': 'int', 'desc': 'Seconds between machine reachability checks.'},
         'POLL_INTERVAL': {'value': '5', 'type': 'int', 'desc': 'Seconds between worker cycles.'},
         'LOG_RETENTION_DAYS': {'value': '30', 'type': 'int', 'desc': 'How long to keep log files.'},
         'FILE_EXPLORER_ROOT': {'value': '/home/tim/', 'type': 'str', 'desc': 'Root of file explorer.'},

@@ -161,6 +161,12 @@ def _normalize_entry(entry, root):
     inputs = _validate_io(entry, "inputs", schema, settings_format)
     outputs = _validate_io(entry, "outputs", schema, settings_format)
 
+    requires = entry.get("requires", [])
+    if not isinstance(requires, list) or \
+            not all(isinstance(tag, str) for tag in requires):
+        raise ManifestError(
+            f"Tool {entry['name']!r}: 'requires' must be a list of machine tags")
+
     return {
         "name": entry["name"],
         "description": entry["description"],
@@ -176,6 +182,7 @@ def _normalize_entry(entry, root):
         "inputs": json.dumps(inputs),
         "outputs": json.dumps(outputs),
         "tags": json.dumps(entry.get("tags", [])),
+        "requires": json.dumps(requires),
         "version": entry.get("version"),
     }
 
@@ -211,7 +218,7 @@ def _legacy_descriptors(provider_path):
 
         # Newer optional keys work in legacy configs too.
         for key in ("settings_format", "settings_schema", "inputs", "outputs",
-                    "tags", "version"):
+                    "tags", "requires", "version"):
             if key in config:
                 entry[key] = config[key]
 
@@ -328,6 +335,7 @@ class ToolRegistry:
         tool.inputs = desc["inputs"]
         tool.outputs = desc["outputs"]
         tool.tags = desc["tags"]
+        tool.requires = desc["requires"]
         tool.version = desc["version"]
         tool.available = True
         tool.config_hash = config_hash

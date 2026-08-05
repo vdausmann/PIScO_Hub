@@ -10,7 +10,14 @@ from sqlalchemy import text
 
 # table -> [(column_name, column_ddl)]
 _MIGRATIONS = {
+    "task": [
+        ("machine_id", "INTEGER REFERENCES machine(id)"),
+    ],
+    "api_token": [
+        ("scope", "VARCHAR(20) DEFAULT 'full'"),
+    ],
     "tool": [
+        ("requires", "TEXT"),
         ("provider_id", "INTEGER REFERENCES tool_provider(id)"),
         ("settings_format", "VARCHAR(20) DEFAULT 'opaque'"),
         ("settings_schema", "TEXT"),

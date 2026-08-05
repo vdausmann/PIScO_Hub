@@ -23,11 +23,21 @@ Machine-readable API description: `GET /api/v1/openapi.json`.
     with configparser to `.ini`.
 - **Workflow** — a named, ordered list of tasks. Execution is linear per
   workflow; tasks from different workflows run in parallel subject to
-  capacity. Data flows between steps only through paths named in settings.
-- **Scheduling** — each task has a `weight`; the sum of running weights
-  stays below the `MAX_WEIGHT` global setting. Lower `priority` numbers are
-  scheduled first. A failed task aborts its workflow unless the tool is
-  marked `failed_ok`.
+  capacity.
+- **Outputs and artifacts** — a tool declares its `inputs`/`outputs` and
+  binds each to the settings key carrying its path. The Hub allocates a
+  location for any declared output the caller leaves blank, records what
+  was produced as an *artifact*, and can hand that path to a later task
+  (see `$from` below). Outputs without a `settings_key` are not tracked.
+- **Machine** — where a task runs. The `local` machine is the Hub's own
+  host; others are reached over SSH and require shared storage mounted at
+  identical paths. A tool may declare `requires` tags (e.g. `["gpu"]`)
+  that a machine's `tags` must cover.
+- **Scheduling** — each task has a `weight`; the running weights on a
+  machine stay below that machine's `max_weight`. Lower `priority` numbers
+  are scheduled first. A task waits until some enabled, reachable machine
+  satisfies its requirements and has room. A failed task aborts its
+  workflow unless the tool is marked `failed_ok`.
 - **Provider** — a directory registered with the Hub that supplies tools:
   either the builtin `tools/` directory (one `config.json` per subdirectory)
   or an external toolbox repo with a `toolbox.json` manifest.
@@ -42,9 +52,21 @@ Authorization: Bearer <token>
 
 Mint a token with `POST /api/v1/tokens` (session required, plaintext is
 returned once) or bootstrap one on the server:
-`python scripts/create_api_token.py <username> <token-name>`.
+`python scripts/create_api_token.py <username> <token-name> [scope]`.
 Tokens travel unencrypted over plain HTTP — the Hub is designed for
 trusted-LAN deployments.
+
+Tokens carry a **scope**, and a request with too little access gets a
+`403` naming what it needed:
+
+| Scope | Can do |
+|---|---|
+| `read` | list and inspect everything: tools, workflows, tasks, logs, artifacts, machines |
+| `operate` | also create, retry and delete workflows, and refresh tools |
+| `full` | also register providers and machines (default for new tokens) |
+
+A browser session always has full access. Give dashboards `read` and
+monitoring agents `operate`, so neither can reconfigure the Hub.
 
 ## The agent loop
 
@@ -69,7 +91,40 @@ trusted-LAN deployments.
    omitting `settings` uses the tool's defaults.
 4. Poll `GET /api/v1/workflows/<id>` until `status` is `Finished` or
    `Failed`.
-5. `GET /api/v1/tasks/<id>/logs?stream=stderr&tail=100` for diagnostics.
+5. `GET /api/v1/tasks/<id>/logs?stream=stderr&tail=100` for diagnostics,
+   and `GET /api/v1/tasks/<id>/artifacts` for what it produced.
+
+### Chaining tasks
+
+Instead of naming the same path twice, a settings value may reference an
+earlier task's output:
+
+```json
+{"tool": "eval_compare",
+ "settings": {"input_dir": {"$from": {"task": "prev", "output": "results"}}}}
+```
+
+`task` is a workflow position or `"prev"`, and must point *backwards*;
+`output` must be an output that tool declares with a `settings_key`.
+References are checked when the workflow is created and resolved to real
+paths at dispatch, so the stored settings keep the reference and a retry
+re-resolves it. Leave a declared output out of your settings entirely and
+the Hub allocates a location for it under `DATA_ROOT`.
+
+Because the value is filled in later, a schema property bound to a path
+should be a plain `"type": "string"` without `pattern`/`enum` constraints.
+
+### Monitoring agents
+
+Give a monitoring agent an `operate` token. A reasonable loop: poll the
+workflow; on `Failed`, fetch the failed task's `stderr` tail; decide
+whether the cause is transient (an SSH connection failure, exit code 255,
+a timeout) or deterministic (a traceback, invalid settings). Retry once
+with `POST /api/v1/workflows/<id>/retry` for the transient case, and
+otherwise report the failure with its logs rather than retrying. Retry
+requeues from the first failed task and discards the artifacts recorded
+from that point on, so downstream tasks cannot consume results of a run
+that did not complete.
 
 Equivalent CLI: `hub tools list`, `hub tools describe <name> --json`,
 `hub workflow create --file wf.json --watch`, `hub task logs <id>`.
@@ -103,6 +158,7 @@ update in place, removed tools become unavailable (history is preserved).
       "default_weight": 2,
       "failed_ok": false,
       "settings_format": "json",
+      "requires": [],
       "settings_schema": {
         "type": "object",
         "required": ["input_dir", "output_dir"],
@@ -112,8 +168,8 @@ update in place, removed tools become unavailable (history is preserved).
           "n_frames":   {"type": "integer", "minimum": 1, "default": 4}
         }
       },
-      "inputs":  [{"name": "input_dir", "kind": "directory"}],
-      "outputs": [{"name": "output_dir", "kind": "directory"}]
+      "inputs":  [{"name": "frames", "kind": "directory", "settings_key": "input_dir"}],
+      "outputs": [{"name": "results", "kind": "directory", "settings_key": "output_dir"}]
     }
   ]
 }
@@ -136,22 +192,56 @@ Rules:
 - `settings_schema` is optional but strongly recommended: it gives you
   server-side validation, auto-generated web forms, and lets agents
   construct valid settings without reading your source.
+- Give every input and output a `settings_key`. That is what lets the Hub
+  place your results, record them, and feed them to the next tool; a
+  declaration without one is documentation only. It requires structured
+  settings (`json` or `ini`), and the key must exist in your schema.
+- `requires` lists machine tags your tool needs (e.g. `["gpu"]`). It is
+  matched against each machine's `tags`; an empty list runs anywhere.
+
+## Running on other machines
+
+The Hub can dispatch tasks to other machines over SSH. This assumes
+**shared storage mounted at identical paths** on the Hub and every
+worker: the Hub writes the settings file locally and passes that path to
+the remote tool, and nothing is copied. Key-based, non-interactive SSH
+from the Hub's account to each worker is required.
+
+Register one with `POST /api/v1/machines` or
+`hub machines add gpu-box --host 10.0.0.5 --user pisco --tag gpu`. The
+Hub probes reachability periodically; an unreachable machine is skipped
+rather than failing the tasks queued for it. Pin a task to a machine with
+`"machine": "<name>"` in its task spec, or leave it out and let the
+scheduler pick the least-loaded machine that fits.
+
+Known limitation: cancelling a remote task would leave the remote program
+running, because the Hub only controls its local SSH process. The Hub has
+no cancel operation today; kill such a process manually over SSH.
 
 ## Endpoint summary
 
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/api/v1/health` | liveness (no auth) |
-| GET | `/api/v1/tools` | list tools (`?available=`, `?tag=`) |
-| GET | `/api/v1/tools/<name>` | full descriptor incl. schema |
-| POST | `/api/v1/tools/refresh` | rescan providers (upsert) |
-| GET/POST | `/api/v1/providers` | list / register a toolbox |
-| DELETE | `/api/v1/providers/<id>` | remove (tools become unavailable) |
-| GET/POST | `/api/v1/workflows` | list / create+queue |
-| GET/DELETE | `/api/v1/workflows/<id>` | status detail / delete (409 while Running) |
-| GET | `/api/v1/tasks/<id>` | task detail incl. stored settings |
-| GET | `/api/v1/tasks/<id>/logs` | `?stream=stdout|stderr&tail=N` |
-| GET | `/api/v1/system/load` | scheduler load vs capacity |
-| GET/POST | `/api/v1/tokens` | list / mint API tokens (session only) |
-| GET | `/api/v1/openapi.json` | OpenAPI 3.1 spec |
-| GET | `/api/v1/docs` | this document |
+| Method | Path | Scope | Purpose |
+|---|---|---|---|
+| GET | `/api/v1/health` | — | liveness (no auth) |
+| GET | `/api/v1/tools` | read | list tools (`?available=`, `?tag=`) |
+| GET | `/api/v1/tools/<name>` | read | full descriptor incl. schema |
+| POST | `/api/v1/tools/refresh` | operate | rescan providers (upsert) |
+| GET | `/api/v1/providers` | read | list toolboxes |
+| POST | `/api/v1/providers` | full | register a toolbox |
+| DELETE | `/api/v1/providers/<id>` | full | remove (tools become unavailable) |
+| GET | `/api/v1/workflows` | read | list |
+| POST | `/api/v1/workflows` | operate | create + queue |
+| GET | `/api/v1/workflows/<id>` | read | status detail incl. artifacts |
+| POST | `/api/v1/workflows/<id>/retry` | operate | requeue from the first failed task |
+| DELETE | `/api/v1/workflows/<id>` | operate | delete (409 while Running) |
+| GET | `/api/v1/tasks/<id>` | read | task detail incl. stored settings |
+| GET | `/api/v1/tasks/<id>/artifacts` | read | what the task produced |
+| GET | `/api/v1/tasks/<id>/logs` | read | `?stream=stdout|stderr&tail=N` |
+| GET | `/api/v1/machines` | read | machines, load and reachability |
+| POST | `/api/v1/machines` | full | register a worker |
+| PATCH | `/api/v1/machines/<id>` | full | update, enable or disable |
+| DELETE | `/api/v1/machines/<id>` | full | remove (409 with running tasks) |
+| GET | `/api/v1/system/load` | read | load vs capacity, per machine |
+| GET/POST | `/api/v1/tokens` | session | list / mint API tokens |
+| GET | `/api/v1/openapi.json` | — | OpenAPI 3.1 spec |
+| GET | `/api/v1/docs` | — | this document |

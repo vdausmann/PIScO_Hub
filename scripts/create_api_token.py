@@ -1,7 +1,8 @@
 """Bootstrap an API token from the command line.
 
-Usage: python scripts/create_api_token.py <username> <token-name>
-Prints the plaintext token once; only its hash is stored.
+Usage: python scripts/create_api_token.py <username> <token-name> [scope]
+Scope is read, operate or full (default full). Prints the plaintext
+token once; only its hash is stored.
 """
 
 import sys
@@ -14,11 +15,12 @@ from app.backend.models import User
 
 
 def main():
-    if len(sys.argv) != 3:
+    if len(sys.argv) not in (3, 4):
         print(__doc__)
         sys.exit(2)
 
     username, token_name = sys.argv[1], sys.argv[2]
+    scope = sys.argv[3] if len(sys.argv) == 4 else "full"
     app = create_app(create_worker=False)
 
     with app.app_context():
@@ -29,8 +31,12 @@ def main():
             print(f"[!] User '{username}' not found.")
             sys.exit(1)
 
-        row, plaintext = create_token(user.id, token_name)
-        print(f"[*] Token '{row.name}' created for user '{username}'.")
+        try:
+            row, plaintext = create_token(user.id, token_name, scope)
+        except ValueError as e:
+            print(f"[!] {e}")
+            sys.exit(2)
+        print(f"[*] Token '{row.name}' ({row.scope}) created for user '{username}'.")
         print("[*] Store it now; it cannot be retrieved again:")
         print(plaintext)
 

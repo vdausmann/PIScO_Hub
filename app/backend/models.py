@@ -43,8 +43,27 @@ class Task(db.Model):
 
     started_at = db.Column(db.DateTime, nullable=True)
     completed_at = db.Column(db.DateTime, nullable=True)
+    # Null while pending means the scheduler still has to choose one.
+    machine_id = db.Column(db.Integer, db.ForeignKey('machine.id'), nullable=True)
 
     tool = db.relationship("Tool", backref="tasks")
+    machine = db.relationship("Machine")
+
+
+class Machine(db.Model):
+    """A machine tasks can run on. The local machine has no host and is
+    executed directly; others are reached over SSH."""
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+    host = db.Column(db.String(255), nullable=True)
+    ssh_user = db.Column(db.String(100), nullable=True)
+    max_weight = db.Column(db.Integer, default=10)
+    tags = db.Column(db.Text, default="[]")  # JSON list, matched against Tool.requires
+    enabled = db.Column(db.Boolean, default=True)
+    status = db.Column(db.String(20), default='unknown')  # online, offline, unknown
+    last_seen_at = db.Column(db.DateTime, nullable=True)
+    note = db.Column(db.Text, nullable=True)
+    is_local = db.Column(db.Boolean, default=False)
 
 
 class Artifact(db.Model):
@@ -115,12 +134,15 @@ class Tool(db.Model):
     version = db.Column(db.String(50), nullable=True)
     available = db.Column(db.Boolean, default=True)
     config_hash = db.Column(db.String(64), nullable=True)
+    requires = db.Column(db.Text, nullable=True)  # JSON list of machine tags
 
 
 class ApiToken(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     token_hash = db.Column(db.String(64), unique=True, nullable=False)
+    # read < operate < full; tokens predating scopes read as full
+    scope = db.Column(db.String(20), default='full')
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=db.func.now())
     last_used_at = db.Column(db.DateTime, nullable=True)

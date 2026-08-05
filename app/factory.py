@@ -6,6 +6,7 @@ from .backend.models import db, login_manager
 from .backend.viewers import ViewerManager
 from .backend.global_settings import seed_settings
 from .backend.migrations import migrate
+from .backend.machines import ensure_local_machine
 from .backend.tools import ToolRegistry
 from dotenv import load_dotenv
 from pathlib import Path
@@ -53,6 +54,8 @@ def create_app(create_worker=True):
 
     # Register tools and viewers:
     with app.app_context():
+        ensure_local_machine(app)
+
         registry = ToolRegistry(app)
         registry.ensure_builtin_provider()
         registry.scan_all()
@@ -65,10 +68,12 @@ def create_app(create_worker=True):
     # Create objects:
     if create_worker:
         # TaskManager:
+        from .backend.machines import MachineMonitor
         from .backend.task_manager import TaskManager
         from .backend.task_watcher import TaskWatcher
         TaskManager(app)
         TaskWatcher(app)
+        MachineMonitor(app)
 
 
     return app

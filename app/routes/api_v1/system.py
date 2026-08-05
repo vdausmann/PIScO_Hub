@@ -1,9 +1,10 @@
 from flask import jsonify
 
-from ...backend.models import GlobalSetting
+from ...backend.models import Machine
 from ...backend.task_manager import get_current_load
 from . import api_v1_bp
 from .auth import api_auth
+from .serializers import machine_dict
 
 API_VERSION = "1.0"
 
@@ -14,9 +15,15 @@ def health():
 
 
 @api_v1_bp.route("/system/load", methods=["GET"])
-@api_auth
+@api_auth()
 def system_load():
+    machines = [machine_dict(m) for m
+                in Machine.query.order_by(Machine.name).all()]
+    total_capacity = sum(m["max_weight"] or 0 for m in machines if m["enabled"])
     load = get_current_load()
-    max_weight = GlobalSetting.get("MAX_WEIGHT", default=10)
-    return jsonify({"load": load, "max_weight": max_weight,
-                    "remaining_capacity": max_weight - load})
+    return jsonify({
+        "load": load,
+        "max_weight": total_capacity,
+        "remaining_capacity": total_capacity - load,
+        "machines": machines,
+    })

@@ -10,14 +10,14 @@ from .serializers import provider_dict
 
 
 @api_v1_bp.route("/providers", methods=["GET"])
-@api_auth
+@api_auth()
 def list_providers():
     providers = ToolProvider.query.order_by(ToolProvider.name).all()
     return jsonify({"providers": [provider_dict(p) for p in providers]})
 
 
 @api_v1_bp.route("/providers", methods=["POST"])
-@api_auth
+@api_auth("full")
 def register_provider():
     data = request.get_json(silent=True) or {}
     path = data.get("path")
@@ -53,7 +53,7 @@ def register_provider():
 
 
 @api_v1_bp.route("/providers/<int:provider_id>", methods=["DELETE"])
-@api_auth
+@api_auth("full")
 def delete_provider(provider_id):
     provider = ToolProvider.query.get(provider_id)
     if provider is None:

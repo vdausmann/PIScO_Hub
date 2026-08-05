@@ -25,4 +25,5 @@ def _server_error(e):
     return jsonify({"error": "Internal server error"}), 500
 
 
-from . import auth, tools, providers, workflows, tasks, system, docs  # noqa: E402,F401
+from . import (auth, tools, providers, workflows, tasks, machines, system,  # noqa: E402,F401
+               docs)

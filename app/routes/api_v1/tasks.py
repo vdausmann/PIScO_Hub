@@ -9,7 +9,7 @@ from .serializers import artifact_dict, task_dict
 
 
 @api_v1_bp.route("/tasks/<string:task_id>", methods=["GET"])
-@api_auth
+@api_auth()
 def get_task(task_id):
     task = Task.query.get(task_id)
     if task is None:
@@ -20,7 +20,7 @@ def get_task(task_id):
 
 
 @api_v1_bp.route("/tasks/<string:task_id>/artifacts", methods=["GET"])
-@api_auth
+@api_auth()
 def get_task_artifacts(task_id):
     task = Task.query.get(task_id)
     if task is None:
@@ -30,7 +30,7 @@ def get_task_artifacts(task_id):
 
 
 @api_v1_bp.route("/tasks/<string:task_id>/logs", methods=["GET"])
-@api_auth
+@api_auth()
 def get_task_logs(task_id):
     task = Task.query.get(task_id)
     if task is None:

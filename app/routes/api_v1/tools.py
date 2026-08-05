@@ -10,7 +10,7 @@ from .serializers import tool_detail, tool_summary
 
 
 @api_v1_bp.route("/tools", methods=["GET"])
-@api_auth
+@api_auth()
 def list_tools():
     query = Tool.query
     available = request.args.get("available")
@@ -26,7 +26,7 @@ def list_tools():
 
 
 @api_v1_bp.route("/tools/<string:name>", methods=["GET"])
-@api_auth
+@api_auth()
 def describe_tool(name):
     tool = Tool.query.filter_by(name=name).first()
     if tool is None:
@@ -35,7 +35,7 @@ def describe_tool(name):
 
 
 @api_v1_bp.route("/tools/refresh", methods=["POST"])
-@api_auth
+@api_auth("operate")
 def refresh_tools():
     registry = ToolRegistry(current_app._get_current_object())
     report = registry.scan_all()

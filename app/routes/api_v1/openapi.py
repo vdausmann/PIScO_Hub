@@ -21,6 +21,20 @@ _TOOL_SUMMARY = {
     },
 }
 
+_IO_DECLARATION = {
+    "type": "object",
+    "description": "A path the tool reads or writes. 'settings_key' binds it "
+                   "to the settings property carrying that path, which is "
+                   "what lets the Hub allocate, record and chain it.",
+    "properties": {
+        "name": {"type": "string"},
+        "kind": {"type": "string", "enum": ["directory", "file"]},
+        "description": {"type": ["string", "null"]},
+        "settings_key": {"type": ["string", "null"]},
+        "pattern": {"type": ["string", "null"]},
+    },
+}
+
 _TOOL_DETAIL = {
     "allOf": [_TOOL_SUMMARY, {
         "type": "object",
@@ -34,10 +48,46 @@ _TOOL_DETAIL = {
                 "description": "JSON Schema for this tool's settings object",
             },
             "settings_template": {"type": ["string", "null"]},
-            "inputs": {"type": "array"},
-            "outputs": {"type": "array"},
+            "inputs": {"type": "array", "items": _IO_DECLARATION},
+            "outputs": {"type": "array", "items": _IO_DECLARATION},
+            "requires": {"type": "array", "items": {"type": "string"},
+                         "description": "Machine tags this tool needs"},
         },
     }],
+}
+
+_ARTIFACT = {
+    "type": "object",
+    "description": "A path a task declared as an output.",
+    "properties": {
+        "name": {"type": "string"},
+        "kind": {"type": "string", "enum": ["directory", "file"]},
+        "path": {"type": "string"},
+        "exists": {"type": ["boolean", "null"],
+                   "description": "Checked once the task finishes; null before that"},
+        "size_bytes": {"type": ["integer", "null"]},
+        "created_at": {"type": ["string", "null"]},
+    },
+}
+
+_MACHINE = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "integer"},
+        "name": {"type": "string"},
+        "host": {"type": ["string", "null"], "description": "null on the local machine"},
+        "ssh_user": {"type": ["string", "null"]},
+        "is_local": {"type": "boolean"},
+        "enabled": {"type": "boolean"},
+        "status": {"type": "string", "enum": ["online", "offline", "unknown"]},
+        "tags": {"type": "array", "items": {"type": "string"},
+                 "description": "Capabilities a tool's 'requires' is matched against"},
+        "max_weight": {"type": "integer"},
+        "load": {"type": "integer"},
+        "remaining_capacity": {"type": "integer"},
+        "last_seen_at": {"type": ["string", "null"]},
+        "note": {"type": ["string", "null"]},
+    },
 }
 
 _TASK = {
@@ -51,9 +101,11 @@ _TASK = {
                    "enum": ["Pending", "Running", "Finished", "Failed"]},
         "priority": {"type": "integer"},
         "weight": {"type": "integer"},
+        "machine": {"type": ["string", "null"]},
         "exit_code": {"type": ["integer", "null"]},
         "started_at": {"type": ["string", "null"]},
         "completed_at": {"type": ["string", "null"]},
+        "artifacts": {"type": "array", "items": _ARTIFACT},
     },
 }
 
@@ -67,6 +119,24 @@ _WORKFLOW = {
         "created_at": {"type": ["string", "null"]},
         "task_count": {"type": "integer"},
         "tasks": {"type": "array", "items": _TASK},
+    },
+}
+
+_FROM_REF = {
+    "type": "object",
+    "description": "Consume an earlier task's output. Resolved to a real "
+                   "path at dispatch; must reference an earlier position "
+                   "and an output that tool declares with a settings_key.",
+    "required": ["$from"],
+    "properties": {
+        "$from": {
+            "type": "object",
+            "required": ["task", "output"],
+            "properties": {
+                "task": {"description": "Workflow position, or \"prev\""},
+                "output": {"type": "string"},
+            },
+        },
     },
 }
 
@@ -85,10 +155,15 @@ _WORKFLOW_CREATE = {
                     "tool": {"type": "string"},
                     "settings": {
                         "description": "Object for schema'd tools (validated), "
-                                       "string for opaque tools, omit for defaults",
+                                       "string for opaque tools, omit for defaults. "
+                                       "Any value may be a $from reference; declared "
+                                       "outputs left blank get an allocated path.",
                     },
                     "priority": {"type": "integer"},
                     "weight": {"type": "integer"},
+                    "machine": {"type": "string",
+                                "description": "Pin to a machine by name; "
+                                               "omit to let the scheduler choose"},
                 },
             },
         },
@@ -96,8 +171,10 @@ _WORKFLOW_CREATE = {
 }
 
 
-def _op(summary, responses=None, body=None, params=None, no_auth=False):
-    op = {"summary": summary, "responses": responses or {"200": {"description": "OK"}}}
+def _op(summary, responses=None, body=None, params=None, no_auth=False,
+        scope="read"):
+    responses = dict(responses or {"200": {"description": "OK"}})
+    op = {"summary": summary, "responses": responses}
     if body is not None:
         op["requestBody"] = {"required": True, "content": {
             "application/json": {"schema": body}}}
@@ -105,6 +182,9 @@ def _op(summary, responses=None, body=None, params=None, no_auth=False):
         op["parameters"] = params
     if not no_auth:
         op["security"] = [{"bearerToken": []}, {"session": []}]
+        op["description"] = f"Requires token scope '{scope}' or a session."
+        responses.setdefault("401", _json_resp(_ERROR, "Authentication required"))
+        responses.setdefault("403", _json_resp(_ERROR, "Token scope insufficient"))
     return op
 
 
@@ -146,8 +226,11 @@ def build_spec(server_url):
                 "ToolSummary": _TOOL_SUMMARY,
                 "ToolDetail": _TOOL_DETAIL,
                 "Task": _TASK,
+                "Artifact": _ARTIFACT,
+                "Machine": _MACHINE,
                 "Workflow": _WORKFLOW,
                 "WorkflowCreate": _WORKFLOW_CREATE,
+                "FromRef": _FROM_REF,
             },
         },
         "paths": {
@@ -166,11 +249,13 @@ def build_spec(server_url):
                 responses={"200": _json_resp(_TOOL_DETAIL),
                            "404": _json_resp(_ERROR, "Unknown tool")})},
             "/tools/refresh": {"post": _op(
-                "Rescan all providers and sync tools (upsert)")},
+                "Rescan all providers and sync tools (upsert)",
+                scope="operate")},
             "/providers": {
                 "get": _op("List tool providers"),
                 "post": _op(
                     "Register a toolbox directory (validates toolbox.json first)",
+                    scope="full",
                     body={"type": "object", "required": ["path"],
                           "properties": {"path": {"type": "string"},
                                          "name": {"type": "string"}}},
@@ -180,39 +265,96 @@ def build_spec(server_url):
             },
             "/providers/{id}": {"delete": _op(
                 "Remove a provider; its tools become unavailable",
-                params=[_p("id")])},
+                scope="full", params=[_p("id")])},
+            "/machines": {
+                "get": _op("List machines with live load and reachability",
+                           responses={"200": _json_resp({
+                               "type": "object",
+                               "properties": {"machines": {
+                                   "type": "array", "items": _MACHINE}}})}),
+                "post": _op(
+                    "Register a worker reachable over SSH (shared storage assumed)",
+                    scope="full",
+                    body={"type": "object", "required": ["name", "host"],
+                          "properties": {
+                              "name": {"type": "string"},
+                              "host": {"type": "string"},
+                              "ssh_user": {"type": "string"},
+                              "max_weight": {"type": "integer"},
+                              "tags": {"type": "array", "items": {"type": "string"}},
+                              "note": {"type": "string"}}},
+                    responses={"201": _json_resp(_MACHINE, "Registered and probed"),
+                               "409": _json_resp(_ERROR, "Name already used")}),
+            },
+            "/machines/{id}": {
+                "patch": _op("Update a machine, or enable/disable it",
+                             scope="full", params=[_p("id")],
+                             body={"type": "object", "properties": {
+                                 "host": {"type": "string"},
+                                 "ssh_user": {"type": "string"},
+                                 "max_weight": {"type": "integer"},
+                                 "enabled": {"type": "boolean"},
+                                 "tags": {"type": "array",
+                                          "items": {"type": "string"}},
+                                 "note": {"type": "string"}}},
+                             responses={"200": _json_resp(_MACHINE)}),
+                "delete": _op("Remove a machine", scope="full", params=[_p("id")],
+                              responses={"200": {"description": "Deleted"},
+                                         "400": _json_resp(_ERROR, "Local machine"),
+                                         "409": _json_resp(_ERROR, "Tasks running")}),
+            },
             "/workflows": {
                 "get": _op("List workflows",
                            params=[_q("status", "Pending|Running|Finished|Failed")]),
                 "post": _op(
                     "Create and queue a workflow",
+                    scope="operate",
                     body=_WORKFLOW_CREATE,
                     responses={"201": _json_resp(_WORKFLOW, "Created"),
                                "400": _json_resp(_ERROR, "Validation failed"),
-                               "404": _json_resp(_ERROR, "Unknown tool")}),
+                               "404": _json_resp(_ERROR, "Unknown tool or machine")}),
             },
             "/workflows/{id}": {
-                "get": _op("Workflow status incl. per-task detail",
+                "get": _op("Workflow status incl. per-task detail and artifacts",
                            params=[_p("id")],
                            responses={"200": _json_resp(_WORKFLOW)}),
                 "delete": _op("Delete a workflow (409 while Running)",
-                              params=[_p("id")]),
+                              scope="operate", params=[_p("id")]),
             },
+            "/workflows/{id}/retry": {"post": _op(
+                "Requeue from the first failed task, discarding the artifacts "
+                "recorded from that point on",
+                scope="operate", params=[_p("id")],
+                responses={"200": _json_resp(_WORKFLOW, "Requeued"),
+                           "409": _json_resp(_ERROR, "Nothing to retry")})},
             "/tasks/{id}": {"get": _op("Task detail incl. stored settings",
                                        params=[_p("id")])},
+            "/tasks/{id}/artifacts": {"get": _op(
+                "Paths this task declared as outputs, and whether they appeared",
+                params=[_p("id")],
+                responses={"200": _json_resp({
+                    "type": "object",
+                    "properties": {"task_id": {"type": "string"},
+                                   "artifacts": {"type": "array",
+                                                 "items": _ARTIFACT}}})})},
             "/tasks/{id}/logs": {"get": _op(
                 "Task log content",
                 params=[_p("id"),
                         _q("stream", "stdout (default) or stderr"),
                         _q("tail", "Return only the last N lines",
                            {"type": "integer"})])},
-            "/system/load": {"get": _op("Current scheduler load vs capacity")},
+            "/system/load": {"get": _op(
+                "Scheduler load vs capacity, broken down per machine")},
             "/tokens": {
                 "get": _op("List your API tokens (session auth only)"),
                 "post": _op("Mint an API token; plaintext returned once "
                             "(session auth only)",
                             body={"type": "object", "required": ["name"],
-                                  "properties": {"name": {"type": "string"}}}),
+                                  "properties": {
+                                      "name": {"type": "string"},
+                                      "scope": {"type": "string",
+                                                "enum": ["read", "operate", "full"],
+                                                "default": "full"}}}),
             },
             "/tokens/{id}": {"delete": _op("Revoke an API token",
                                            params=[_p("id")])},

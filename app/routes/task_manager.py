@@ -22,7 +22,7 @@ def api_create_workflow():
     """
     from .api_v1.auth import api_auth
 
-    @api_auth
+    @api_auth("operate")
     def _create():
         data = request.get_json()
 
