@@ -72,6 +72,24 @@ def set_setting(obj, dotted_key, value):
     node[parts[-1]] = value
 
 
+def validation_candidate(tool, settings_obj):
+    """A copy of the settings with everything the Hub fills in later stubbed.
+
+    Validation happens when a workflow is built, but references have no
+    path until their upstream task runs, and outputs left blank are only
+    assigned a location at dispatch. Both would otherwise fail a schema
+    that marks them required.
+    """
+    from . import settings_engine
+
+    candidate = settings_engine.substitute_from_refs(settings_obj)
+    for output in declarations(tool, "outputs"):
+        key = output.get("settings_key")
+        if key and not get_setting(candidate, key):
+            set_setting(candidate, key, "__hub_allocated__")
+    return candidate
+
+
 def record_artifact(task, output, path):
     """Register (or update) an artifact row for a task's declared output.
 

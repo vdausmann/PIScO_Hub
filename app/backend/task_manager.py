@@ -89,16 +89,8 @@ def create_new_workflow(workflow_name: str, task_specs: list[dict]):
         else:
             _validate_refs(tool, settings, i, tools_so_far)
 
-            # Values the Hub fills in later must not fail validation now:
-            # references have no path yet, and outputs left blank get an
-            # allocated location at dispatch.
-            candidate = settings_engine.substitute_from_refs(settings)
-            for output in artifacts.declarations(tool, "outputs"):
-                key = output.get("settings_key")
-                if key and not artifacts.get_setting(candidate, key):
-                    artifacts.set_setting(candidate, key, "__hub_allocated__")
-
-            errors = settings_engine.validate(tool, candidate)
+            errors = settings_engine.validate(
+                tool, artifacts.validation_candidate(tool, settings))
             if errors:
                 raise ValueError(
                     f"Invalid settings for tool '{tool_name}': " + "; ".join(errors))

@@ -1,0 +1,79 @@
+{
+    "manifest_version": 1,
+    "provider": {
+        "name": "chain_demo",
+        "description": "Two toy tools that demonstrate chaining: one writes a directory, the other reads it.",
+        "version": "1.0"
+    },
+    "tools": [
+        {
+            "name": "demo_produce",
+            "description": "Writes result.txt into its output directory. Leave 'output_dir' empty and the Hub allocates one.",
+            "tags": ["demo"],
+            "program_path": "produce.py",
+            "program_type": "python",
+            "working_directory": ".",
+            "default_priority": 1,
+            "default_weight": 1,
+            "failed_ok": false,
+            "settings_format": "json",
+            "settings_schema": {
+                "type": "object",
+                "required": ["output_dir"],
+                "properties": {
+                    "output_dir": {
+                        "type": "string",
+                        "description": "Where to write results. Leave empty to let the Hub choose."
+                    },
+                    "label": {
+                        "type": "string",
+                        "default": "demo",
+                        "description": "Text written into the result file"
+                    },
+                    "fail": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Exit non-zero, to try out failure handling and retry"
+                    }
+                }
+            },
+            "outputs": [
+                {"name": "results", "kind": "directory", "settings_key": "output_dir",
+                 "description": "Directory containing result.txt"}
+            ]
+        },
+        {
+            "name": "demo_consume",
+            "description": "Reads result.txt from an upstream directory and writes a report. Point 'input_dir' at another task's output with a $from reference.",
+            "tags": ["demo"],
+            "program_path": "consume.py",
+            "program_type": "python",
+            "working_directory": ".",
+            "default_priority": 1,
+            "default_weight": 1,
+            "failed_ok": false,
+            "settings_format": "json",
+            "settings_schema": {
+                "type": "object",
+                "required": ["input_dir", "report_dir"],
+                "properties": {
+                    "input_dir": {
+                        "type": "string",
+                        "description": "Directory produced by an earlier task"
+                    },
+                    "report_dir": {
+                        "type": "string",
+                        "description": "Where to write the report. Leave empty to let the Hub choose."
+                    }
+                }
+            },
+            "inputs": [
+                {"name": "source", "kind": "directory", "settings_key": "input_dir",
+                 "description": "An upstream results directory"}
+            ],
+            "outputs": [
+                {"name": "report", "kind": "directory", "settings_key": "report_dir"}
+            ]
+        }
+    ]
+}

@@ -1,7 +1,7 @@
 from ..utils import clean_string
 from flask import Blueprint, redirect, render_template, request, url_for
 from flask_login import login_required, current_user
-from ..backend import settings_engine
+from ..backend import artifacts, settings_engine
 from ..backend.models import (TemporaryWorkflow, Workflow, db, Tool, TemporaryTask, Task,
                               TemplateTask, TemplateWorkflow)
 import json
@@ -188,7 +188,10 @@ def edit_settings(task_id):
 
         if schema is not None and request.form.get('form_mode') == 'schema':
             values = _settings_from_form(schema, request.form)
-            errors = settings_engine.validate(tool, values)
+            # An output left blank is a request for the Hub to choose the
+            # location, not a missing value.
+            errors = settings_engine.validate(
+                tool, artifacts.validation_candidate(tool, values))
             if errors:
                 db.session.rollback()
                 return render_template('workflow_settings.html', task=task,

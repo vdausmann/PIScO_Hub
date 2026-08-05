@@ -81,7 +81,8 @@ outputs = { self, nixpkgs, flake-utils, ... }:
 					hub_cli
                 ];
                 shellHook = ''
-					echo "PIScOHub"
+					# stderr, so `nix develop -c ...` keeps stdout clean for piping
+					echo "PIScOHub" >&2
 					export FLASK_APP=app.py
 					export FLASK_ENV=development
                 '';
