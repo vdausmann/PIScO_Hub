@@ -115,6 +115,16 @@
 	<script>
 		const loader = document.getElementById('global-loader');
 
+		// htmx polls in the background (the dashboard refreshes every 2s).
+		// Those requests must not blank the screen, so they are counted and
+		// skipped by the interceptors below.
+		let backgroundRequests = 0;
+		document.addEventListener('htmx:beforeRequest', () => backgroundRequests++);
+		document.addEventListener('htmx:afterRequest', () => backgroundRequests--);
+
+		const showLoader = () => { if (backgroundRequests === 0) loader.style.display = 'flex'; };
+		const hideLoader = () => { if (backgroundRequests === 0) loader.style.display = 'none'; };
+
 		// --- 1. Standard HTML Forms & Links (From Previous Step) ---
 		document.addEventListener('submit', () => loader.style.display = 'flex');
 		document.addEventListener('click', (e) => {
@@ -128,13 +138,12 @@
 		// --- 2. UNIVERSAL BACKGROUND INTERCEPTOR (Fetch API) ---
 		const { fetch: originalFetch } = window;
 		window.fetch = async (...args) => {
-			console.log("Fetch intercepted");
-			loader.style.display = 'flex'; // Show loader when any fetch starts
+			showLoader();
 			try {
 				const response = await originalFetch(...args);
 				return response;
 			} finally {
-				loader.style.display = 'none'; // Fixed: removed the duplicate '.style'
+				hideLoader();
 			}
 		};
 
@@ -142,8 +151,8 @@
 		// Just in case your HDF5 viewer plugin uses older jQuery or raw XHR calls
 		const open = XMLHttpRequest.prototype.open;
 		XMLHttpRequest.prototype.open = function(...args) {
-			this.addEventListener('loadstart', () => loader.style.display = 'flex');
-			this.addEventListener('loadend', () => loader.style.display = 'none');
+			this.addEventListener('loadstart', showLoader);
+			this.addEventListener('loadend', hideLoader);
 			return open.apply(this, args);
 		};
 	</script>
