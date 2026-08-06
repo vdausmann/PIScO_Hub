@@ -1,0 +1,20 @@
+# Runtime dependencies for the Hub server.
+# The nix flake is the development environment; this file is for deployments
+# (an LXC, a VM) where a plain virtualenv is simpler. See docs/deployment.md.
+
+flask
+flask-login
+flask-sock
+flask-sqlalchemy
+werkzeug
+python-dotenv
+requests
+jsonschema
+gunicorn
+
+# Used by the bundled file viewers, which load at startup.
+# headless: the GUI build of opencv needs libGL, which servers rarely have.
+h5py
+numpy
+Pillow
+opencv-python-headless
