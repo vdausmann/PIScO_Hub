@@ -247,18 +247,35 @@ hub providers add /mnt/pisco/tools/pisco_segmenter_cpp
 
 Registering a key per container gets old quickly, so avoid needing to.
 
-A worker never clones this repository — it runs tools, not the Hub. And
-the tool repositories belong on the share rather than on each machine,
-which is what makes their `program_path` resolve identically everywhere:
+A worker never clones this repository — it runs tools, not the Hub.
+
+For the tool repositories, note what the Hub actually requires: it reads
+`toolbox.json` and any settings templates, and passes `program_path`
+through to the worker without ever looking at it. So what must match
+across machines is the **path**, not the storage behind it. Both of these
+work:
 
 ```bash
-git clone git@git.geomar.de:team-optics/plankton/pisco_segmenter_cpp.git \
-    /srv/pisco/tools/pisco_segmenter_cpp
+# same path on every machine, each with its own copy
+git clone <tool repo> /opt/pisco/tools/pisco_segmenter_cpp
+
+# or one copy on the share, mounted at that path everywhere
+git clone <tool repo> /srv/pisco/tools/pisco_segmenter_cpp
 ```
 
-So credentials are needed once for this container and once per tool
-repository, not once per machine. What stays per-machine is the runtime a
-tool needs — nix, conda, a GPU driver — since only the code is shared.
+Prefer local copies. A tool's runtime — nix, conda, drivers — is
+per-machine regardless, so sharing the code saves a clone rather than any
+real work; a build directory inside the repo means two machines can
+collide building or entering it; and running a binary across a VPN-mounted
+share, as a remote worker would, is slow and fragile in a way that data
+access is not.
+
+The cost is that copies drift. Nothing stops one worker running an older
+tool than another, giving different results for the same workflow
+depending on where it ran, and the Hub cannot see it — it trusts the path.
+Bump `version` in the manifest when a tool changes and check
+`hub tools describe <tool>` against what you believe is deployed. That is
+a convention, not an enforcement.
 
 For repeat container builds, make this one a template once it works
 (`pct stop 110 && pct template 110`, then `pct clone`). Clones inherit the
