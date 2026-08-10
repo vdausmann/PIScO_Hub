@@ -113,7 +113,7 @@ apt install -y python3 python3-venv git openssh-client
 
 adduser --system --group --home /opt/pisco-hub pisco
 install -d -o pisco -g pisco /opt/pisco-hub/.ssh
-sudo -u pisco ssh-keygen -t ed25519 -N '' -f /opt/pisco-hub/.ssh/id_ed25519
+runuser -u pisco -- ssh-keygen -t ed25519 -N '' -f /opt/pisco-hub/.ssh/id_ed25519
 cat /opt/pisco-hub/.ssh/id_ed25519.pub
 ```
 
@@ -125,7 +125,7 @@ HTTPS works too, but a private project will then ask for a personal
 access token on every fetch.
 
 ```bash
-sudo -u pisco git clone -b toolbox-framework \
+runuser -u pisco -- git clone -b toolbox-framework \
     git@git.geomar.de:team-optics/plankton/PIScO_Hub.git /opt/pisco-hub/app
 cd /opt/pisco-hub/app
 
