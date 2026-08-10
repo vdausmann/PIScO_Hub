@@ -112,8 +112,21 @@ apt update
 apt install -y python3 python3-venv git openssh-client
 
 adduser --system --group --home /opt/pisco-hub pisco
-git clone -b toolbox-framework \
-    https://git.geomar.de/team-optics/plankton/PIScO_Hub.git /opt/pisco-hub/app
+install -d -o pisco -g pisco /opt/pisco-hub/.ssh
+sudo -u pisco ssh-keygen -t ed25519 -N '' -f /opt/pisco-hub/.ssh/id_ed25519
+cat /opt/pisco-hub/.ssh/id_ed25519.pub
+```
+
+A fresh container has no credentials, so cloning fails with "Permission
+denied (publickey)". Add that public key to the project in GitLab under
+Settings → Repository → Deploy keys, with read access. The same key is
+what reaches the workers later, so it earns its keep twice. Cloning over
+HTTPS works too, but a private project will then ask for a personal
+access token on every fetch.
+
+```bash
+sudo -u pisco git clone -b toolbox-framework \
+    git@git.geomar.de:team-optics/plankton/PIScO_Hub.git /opt/pisco-hub/app
 cd /opt/pisco-hub/app
 
 python3 -m venv .venv
@@ -122,8 +135,6 @@ python3 -m venv .venv
 
 The branch matters until this work is merged: `main` predates the tool
 registry, the API and the CLI, and has no `requirements.txt` at all.
-Cloning over HTTPS avoids putting a deploy key on the container; switch to
-SSH if you would rather pull without a password.
 
 No `python3-tk`, and no headed OpenCV: `requirements.txt` pins
 `opencv-python-headless` because the GUI build needs libGL, which a
@@ -157,8 +168,9 @@ anywhere works; the moment a worker joins, it must be on the share.
 
 ## 5. SSH key for reaching workers
 
+The key generated in step 3 is the one the Hub uses:
+
 ```bash
-sudo -u pisco ssh-keygen -t ed25519 -N '' -f /opt/pisco-hub/.ssh/id_ed25519
 cat /opt/pisco-hub/.ssh/id_ed25519.pub
 ```
 
