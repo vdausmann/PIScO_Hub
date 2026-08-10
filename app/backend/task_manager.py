@@ -289,11 +289,14 @@ class TaskManager:
         if tool is None:
             raise KeyError(f"Could not find tool with id {task.tool_id} in database.")
         try:
-            # create settings file:
-            settings_dir = os.path.join(self.app.config["SETTINGS_DIR"], tool.name)
-            os.makedirs(settings_dir, exist_ok=True)
+            # The settings file goes in the task's workspace on shared
+            # storage, not beside the Hub's own files: a task running on
+            # another machine is handed this path verbatim and has to be
+            # able to read it.
+            workspace = artifacts.task_workspace(self.app, task)
+            os.makedirs(workspace, exist_ok=True)
             extension = settings_engine.settings_file_extension(tool)
-            settings_file_path = os.path.join(settings_dir, task.id + extension)
+            settings_file_path = os.path.join(workspace, "settings" + extension)
 
             resolved_settings = self._resolve_settings(tool, task)
 

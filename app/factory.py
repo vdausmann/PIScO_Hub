@@ -28,8 +28,10 @@ def create_app(create_worker=True):
         raise ValueError("No secret key set, run the 'setup_env.py' script")
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
     app.config["HUB_ROOT"] = hub_root
+    # Logs stay local to the Hub, which serves them through the API; task
+    # settings live on shared storage with the task's outputs, since a
+    # remote worker has to read them.
     app.config["LOGS_DIR"] = os.path.join(hub_root, "logs")
-    app.config["SETTINGS_DIR"] = os.path.join(hub_root, "settings")
 
     db.init_app(app)
     login_manager.init_app(app)

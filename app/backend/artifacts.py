@@ -40,15 +40,25 @@ def find_declaration(tool, field, name):
     return None
 
 
-def allocated_output_path(app, task, output):
-    """Where an output goes when the user did not name a location."""
+def task_workspace(app, task):
+    """Everything belonging to one task: its settings file and any output
+    the Hub placed for it.
+
+    This lives under DATA_ROOT rather than beside the Hub's own files
+    because a task may run on another machine, which reaches it through
+    the shared storage at the same path.
+    """
     return os.path.join(
         data_root(app),
         "workflows",
         str(task.workflow_id),
         f"{task.workflow_position}_{task.tool.name}",
-        output["name"],
     )
+
+
+def allocated_output_path(app, task, output):
+    """Where an output goes when the user did not name a location."""
+    return os.path.join(task_workspace(app, task), output["name"])
 
 
 def get_setting(obj, dotted_key):

@@ -1,4 +1,4 @@
-# Deploying the Hub on a Proxmox LXC
+# Deploying the Hub and its workers
 
 The Hub is a small Flask server plus three background threads. It needs no
 GPU and very little CPU — it schedules work, it does not do the work — so
@@ -6,13 +6,14 @@ a modest container is enough. What it *does* need is to see the shared
 storage at the same paths its workers see, and to reach those workers over
 SSH.
 
-This describes the Hub container. Workers are a separate step.
+Part one sets up the Hub. Part two adds a machine it can dispatch to.
 
 ## Sizing
 
 2 cores, 2 GB RAM, 8 GB disk is comfortable. The database is SQLite and
-stays small; logs and per-task settings files live in the container, while
-results go to shared storage.
+stays small, and logs live in the container. Each task's settings file and
+its results go to shared storage, in one directory per task, because a
+task may run on another machine and has to be able to read them.
 
 ## 1. Create the container
 
@@ -267,7 +268,7 @@ manifest resolves identically from every machine:
 hub providers add /mnt/pisco/tools/pisco_segmenter_cpp
 ```
 
-## Doing this more than once
+# Doing this more than once
 
 Registering a key per container gets old quickly, so avoid needing to.
 
@@ -311,11 +312,127 @@ If you would rather not exchange keys at all, a GitLab **deploy token**
 username/password usable over HTTPS from any number of machines and
 revocable in one place. The cost is a secret in the clone URL.
 
-## What comes next
+# Part two: adding a worker
 
-Adding a worker is: give it the runtime the tools need, mount the same
-share at the same path, authorise the Hub's SSH key, then
-`hub machines add <name> --host <ip> --user <user> --tag gpu`. The Hub
-probes it, and from then on the scheduler will place work there whenever a
-tool's requirements and weight fit. Nothing about the tools or workflows
-changes.
+A worker is any machine the Hub can SSH into. It runs no Hub code and
+holds no state — the Hub writes a settings file, runs one command, and
+reads the exit code. Concretely it needs four things:
+
+1. **SSH access** for the Hub's key, non-interactive.
+2. **The shared storage at the same path** as on the Hub, writable by the
+   account the Hub logs in as. Each task's settings file and its outputs
+   live there; this is how the worker receives its input and hands back
+   its results.
+3. **The tools at the same paths** the manifest resolved to on the Hub.
+4. **Whatever those tools need to run** — nix, conda, drivers. This is
+   per-machine and is the bulk of the work.
+
+## Keep tools out of the Hub's checkout
+
+Before adding a worker, move any toolbox that lives inside the Hub's
+directory. A provider registered at `/opt/pisco-hub/app/examples/...`
+would force every worker to have the Hub's checkout at that path. Give
+toolboxes a home of their own, identical on every machine:
+
+```bash
+mkdir -p /opt/pisco/tools
+cp -r /opt/pisco-hub/app/examples/chain_demo /opt/pisco/tools/
+chown -R pisco:pisco /opt/pisco
+```
+
+Register the new location and drop the old provider (`hub providers list`
+for its id, then `hub providers remove <id>`). Tools keep their identity
+across the move — the registry re-points them rather than replacing them,
+so existing workflows still resolve.
+
+## Prepare the machine
+
+For a second container on the same host, create it exactly like the Hub
+and give it the same mount:
+
+```bash
+pct create 111 local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst \
+    --hostname pisco-worker1 \
+    --cores 4 --memory 4096 --swap 512 \
+    --rootfs local-lvm:16 \
+    --net0 name=eth0,bridge=vmbr0,ip=dhcp \
+    --unprivileged 1 --features nesting=1 --onboot 1
+pct set 111 -mp0 /srv/pisco,mp=/mnt/pisco
+pct start 111
+```
+
+Inside it, create the account the Hub will log in as, authorise the Hub's
+key, and give it the share:
+
+```bash
+apt update && apt install -y openssh-server python3
+
+adduser --system --group --home /home/pisco --shell /bin/bash pisco
+install -d -o pisco -g pisco -m 700 /home/pisco/.ssh
+# paste the Hub's /opt/pisco-hub/.ssh/id_ed25519.pub here:
+editor /home/pisco/.ssh/authorized_keys
+chown pisco:pisco /home/pisco/.ssh/authorized_keys
+chmod 600 /home/pisco/.ssh/authorized_keys
+
+chown -R pisco:pisco /mnt/pisco
+```
+
+Note the `--shell /bin/bash`: the Hub runs its command through the login
+shell, and the `nologin` shell that `adduser --system` defaults to would
+refuse it.
+
+Then place the tools at the same path the Hub uses, and install their
+runtimes. For the demo toolbox that is a copy and nothing else; for the
+segmenter it is nix plus a built `bin/Segmenter`.
+
+## Check the hop by hand first
+
+From the Hub container, as the Hub's user — this is exactly what the Hub
+will do, so if it fails here it will fail there:
+
+```bash
+runuser -u pisco -- ssh -o BatchMode=yes pisco@<worker-ip> \
+    'echo ok; ls -d /mnt/pisco /opt/pisco/tools/chain_demo'
+```
+
+You want `ok` and both paths listed. `Permission denied` means the key or
+its file modes; a missing path means the mount or the tool copy.
+
+## Register it
+
+```bash
+hub machines add worker1 --host <worker-ip> --user pisco
+hub machines list
+```
+
+The Hub probes on registration, so the status tells you immediately
+whether it can reach the machine. Add `--tag gpu` on machines that have
+one, and `--max-weight N` to say how much work the machine may run at
+once.
+
+Then send it something deliberately, rather than hoping the scheduler
+picks it:
+
+```bash
+hub workflow create --name remote-test \
+    --task tool=demo_produce machine=worker1 settings='{"label":"remote"}' \
+    --watch
+hub workflow status <id>      # the MACHINE column should read worker1
+```
+
+## When a remote task fails
+
+`hub task logs <id> --stderr` carries the remote program's own output; ssh
+forwards it. Beyond that:
+
+| Symptom | Cause |
+|---|---|
+| Machine shows `offline` | Hub cannot ssh in: key, host, or firewall |
+| Exit code 255, no output | ssh itself failed — usually the host key or a refused connection |
+| "No such file or directory" naming the settings file | The share is not mounted on the worker, or not at the same path |
+| "No such file or directory" naming the program | The toolbox is missing on the worker, or at a different path |
+| Permission denied writing results | The login account cannot write the share; check the UID discussion above |
+| Task hangs as Running forever | The remote program is waiting on something — the Hub cannot cancel it, so kill it over ssh |
+
+A remote task that is killed leaves the remote program running: the Hub
+only controls its local ssh process. There is no cancel operation yet.
