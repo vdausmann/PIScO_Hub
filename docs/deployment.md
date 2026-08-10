@@ -16,10 +16,24 @@ results go to shared storage.
 
 ## 1. Create the container
 
-On the Proxmox host:
+First make sure a container template is present — `pct create` fails with
+"volume ... does not exist" if it is not, and the version in the filename
+moves, so take the exact name from the mirror rather than copying one:
 
 ```bash
-pct create 110 local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst \
+pveam update
+pveam available --section system | grep debian-12   # exact current filename
+pveam download local debian-12-standard_<version>_amd64.tar.zst
+pveam list local                                    # confirm
+```
+
+Templates need a storage with `vztmpl` in its content types — `local`
+normally has it, `local-lvm` cannot hold them.
+
+Then, on the Proxmox host:
+
+```bash
+pct create 110 local:vztmpl/debian-12-standard_<version>_amd64.tar.zst \
     --hostname pisco-hub \
     --cores 2 --memory 2048 --swap 512 \
     --rootfs local-lvm:8 \
