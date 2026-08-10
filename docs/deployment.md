@@ -80,8 +80,18 @@ give every container the same mount point.
 
 ```bash
 mkdir -p /srv/pisco
-chown 101000:101000 /srv/pisco     # uid 1000 inside an unprivileged container
 pct set 110 -mp0 /srv/pisco,mp=/mnt/pisco
+```
+
+Then give it to the service user *from inside the container*, once the
+mount is there. Do not try to work out the host-side UID: `adduser
+--system` allocates from the system range rather than the 1000 you might
+expect, and container root can chown the mount anyway because the owning
+UID falls inside its mapped range.
+
+```bash
+# in the container, after step 3 has created the user
+chown -R pisco:pisco /mnt/pisco
 ```
 
 **The mount point inside the container must be the same path the workers
