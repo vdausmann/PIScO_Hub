@@ -22,9 +22,15 @@ moves, so take the exact name from the mirror rather than copying one:
 
 ```bash
 pveam update
+pveam list local                                    # already have one?
 pveam available --section system | grep debian-12   # exact current filename
-pveam download local debian-12-standard_<version>_amd64.tar.zst
-pveam list local                                    # confirm
+```
+
+If it is not listed yet, download it, substituting the filename that
+command printed — the version moves, so do not copy one from here:
+
+```bash
+pveam download local debian-12-standard_12.12-1_amd64.tar.zst
 ```
 
 Templates need a storage with `vztmpl` in its content types — `local`
@@ -33,7 +39,7 @@ normally has it, `local-lvm` cannot hold them.
 Then, on the Proxmox host:
 
 ```bash
-pct create 110 local:vztmpl/debian-12-standard_<version>_amd64.tar.zst \
+pct create 110 local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst \
     --hostname pisco-hub \
     --cores 2 --memory 2048 --swap 512 \
     --rootfs local-lvm:8 \
