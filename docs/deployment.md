@@ -243,10 +243,37 @@ manifest resolves identically from every machine:
 hub providers add /mnt/pisco/tools/pisco_segmenter_cpp
 ```
 
+## Doing this more than once
+
+Registering a key per container gets old quickly, so avoid needing to.
+
+A worker never clones this repository — it runs tools, not the Hub. And
+the tool repositories belong on the share rather than on each machine,
+which is what makes their `program_path` resolve identically everywhere:
+
+```bash
+git clone git@git.geomar.de:team-optics/plankton/pisco_segmenter_cpp.git \
+    /srv/pisco/tools/pisco_segmenter_cpp
+```
+
+So credentials are needed once for this container and once per tool
+repository, not once per machine. What stays per-machine is the runtime a
+tool needs — nix, conda, a GPU driver — since only the code is shared.
+
+For repeat container builds, make this one a template once it works
+(`pct stop 110 && pct template 110`, then `pct clone`). Clones inherit the
+venv and the key, which also means they share one identity; fine for a
+read-only key, worth knowing before it is anything more.
+
+If you would rather not exchange keys at all, a GitLab **deploy token**
+(Settings → Repository → Deploy tokens, `read_repository`) is a
+username/password usable over HTTPS from any number of machines and
+revocable in one place. The cost is a secret in the clone URL.
+
 ## What comes next
 
-Adding a worker is: install the tools and their dependencies on it, mount
-the same share at the same path, authorise the Hub's SSH key, then
+Adding a worker is: give it the runtime the tools need, mount the same
+share at the same path, authorise the Hub's SSH key, then
 `hub machines add <name> --host <ip> --user <user> --tag gpu`. The Hub
 probes it, and from then on the scheduler will place work there whenever a
 tool's requirements and weight fit. Nothing about the tools or workflows
