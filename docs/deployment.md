@@ -112,12 +112,18 @@ apt update
 apt install -y python3 python3-venv git openssh-client
 
 adduser --system --group --home /opt/pisco-hub pisco
-git clone git@git.geomar.de:team-optics/plankton/PIScO_Hub.git /opt/pisco-hub/app
+git clone -b toolbox-framework \
+    https://git.geomar.de/team-optics/plankton/PIScO_Hub.git /opt/pisco-hub/app
 cd /opt/pisco-hub/app
 
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
+
+The branch matters until this work is merged: `main` predates the tool
+registry, the API and the CLI, and has no `requirements.txt` at all.
+Cloning over HTTPS avoids putting a deploy key on the container; switch to
+SSH if you would rather pull without a password.
 
 No `python3-tk`, and no headed OpenCV: `requirements.txt` pins
 `opencv-python-headless` because the GUI build needs libGL, which a
