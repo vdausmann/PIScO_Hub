@@ -166,6 +166,20 @@ EOF
 `DATA_ROOT` is where the Hub allocates task outputs. On a single machine
 anywhere works; the moment a worker joins, it must be on the share.
 
+Those scripts create the database, so if you ran them as root the service
+will not be able to write it. Hand everything back before starting the
+service:
+
+```bash
+chown -R pisco:pisco /opt/pisco-hub
+```
+
+The Hub runs `create_all` and its migrations on every startup, so this is
+a standing requirement rather than a first-run one. Getting it wrong looks
+like `sqlite3.OperationalError: attempt to write a readonly database` in
+the journal, and note that SQLite needs to write the *directory* too — WAL
+mode puts `-wal` and `-shm` files next to the database.
+
 ## 5. SSH key for reaching workers
 
 The key generated in step 3 is the one the Hub uses:
