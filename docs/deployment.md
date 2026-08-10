@@ -45,24 +45,43 @@ pct create 110 local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst \
     --rootfs local-lvm:8 \
     --net0 name=eth0,bridge=vmbr0,ip=dhcp \
     --unprivileged 1 \
+    --features nesting=1 \
     --onboot 1
 ```
+
+`nesting=1` is needed for systemd to behave inside an unprivileged
+container; `pct create` warns about it otherwise. Add it afterwards with
+`pct set 110 --features nesting=1` if you already created the container.
 
 Give it a static address (or a DHCP reservation) — workers do not need to
 reach the Hub, but you and the CLI do.
 
 ## 2. Attach the shared storage
 
-Mount the network share **on the Proxmox host**, then bind-mount it into
-the container. Mounting NFS or CIFS inside an unprivileged container is
-blocked, and working around that costs more than it saves.
+What matters is that every machine sees one storage at **one absolute
+path**. How it gets there differs.
+
+With a real NAS, mount it on the Proxmox host and bind-mount it into the
+container — mounting NFS or CIFS inside an unprivileged container is
+blocked, and working around that costs more than it saves. Add the share
+to the host's `/etc/fstab`:
+
+```
+nas:/export/pisco  /mnt/pisco  nfs  defaults,_netdev  0 0
+```
 
 ```bash
-# on the Proxmox host, in /etc/fstab:
-#   nas:/export/pisco  /mnt/pisco  nfs  defaults,_netdev  0 0
 mkdir -p /mnt/pisco && mount /mnt/pisco
-
 pct set 110 -mp0 /mnt/pisco,mp=/mnt/pisco
+```
+
+For a single-host trial there is no NAS to mount: use a host directory and
+give every container the same mount point.
+
+```bash
+mkdir -p /srv/pisco
+chown 101000:101000 /srv/pisco     # uid 1000 inside an unprivileged container
+pct set 110 -mp0 /srv/pisco,mp=/mnt/pisco
 ```
 
 **The mount point inside the container must be the same path the workers
@@ -70,13 +89,17 @@ use.** The Hub hands absolute paths to tools verbatim — that is what makes
 remote execution need no file copying, and it is also what breaks if
 `/mnt/pisco` on the Hub is `/data/pisco` on a worker.
 
-One wrinkle with unprivileged containers: UIDs are shifted (container root
-is host UID 100000), so files the Hub creates on the share appear under
-that shifted UID. If workers write as a different user, you will get
-permission surprises. Simplest fixes, in order of preference: run the tools
-on every machine as the *same* dedicated user and align the container's UID
-mapping to it, or export the share with `all_squash` to one owner, or make
-this one container privileged. Decide before there is data on the share.
+One wrinkle with unprivileged containers: UIDs are shifted by 100000, so
+container uid 1000 writes as host uid 101000. Containers on the same host
+share that mapping and therefore agree with each other for free. A
+separate machine mounting the same share over NFS does not — it sees
+101000 and makes nothing of it.
+
+So before there is data on the share, decide how identity works across
+machines: run the tools everywhere as one dedicated user whose UID matches
+the shifted one, or export with `all_squash` mapping everything to a
+single owner. Otherwise a worker fails to read what the Hub wrote, and it
+looks like a tool bug rather than a permissions one.
 
 ## 3. Install
 
