@@ -252,24 +252,39 @@ the scheduler threads restart with it, underneath whatever is running.
 
 ## 7. Check it
 
+Find the container's address with `hostname -I`, then, substituting it and
+the token from step 4:
+
 ```bash
-curl -s http://<hub-ip>:5000/api/v1/health
+HUB=192.168.0.10          # the container's address
+TOKEN=...                 # from step 4
+
+curl -s "http://$HUB:5000/api/v1/health"
 ```
 
-Then from your workstation, against that address:
+The CLI reads the same two values from a config file, which saves setting
+them for every command:
 
 ```bash
-export PISCO_HUB_URL=http://<hub-ip>:5000
-export PISCO_HUB_TOKEN=<the token from step 4>
+mkdir -p ~/.config/pisco-hub
+printf '{"url": "http://%s:5000", "token": "%s"}\n' "$HUB" "$TOKEN" \
+    > ~/.config/pisco-hub/config.json
+chmod 600 ~/.config/pisco-hub/config.json
+
 hub machines list      # just 'local' for now
 hub tools list         # empty until you register a toolbox
 ```
 
-Register the toolboxes by the path they have **on the share**, so the same
-manifest resolves identically from every machine:
+`PISCO_HUB_URL` and `PISCO_HUB_TOKEN` work too, but they must be exported,
+or given on the same line as the command — assigning them on a line of
+their own sets a shell variable the CLI never sees.
+
+Register a toolbox by the path it has **on the machines that will run it**,
+not the path you are typing from; the Hub resolves it on its own
+filesystem and hands it to workers unchanged:
 
 ```bash
-hub providers add /mnt/pisco/tools/pisco_segmenter_cpp
+hub providers add /opt/pisco/tools/chain_demo
 ```
 
 # Doing this more than once
