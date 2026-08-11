@@ -57,8 +57,18 @@ def task_workspace(app, task):
 
 
 def allocated_output_path(app, task, output):
-    """Where an output goes when the user did not name a location."""
-    return os.path.join(task_workspace(app, task), output["name"])
+    """Where an output goes when the user did not name a location.
+
+    Directories keep a trailing separator. Both forms name the same
+    directory, but some tools treat the value as a filename prefix and
+    concatenate onto it, so the explicit form is the one that works
+    everywhere: "<dir>/" + "file.h5" lands inside, "<dir>" + "file.h5"
+    lands beside.
+    """
+    path = os.path.join(task_workspace(app, task), output["name"])
+    if output.get("kind", "directory") == "directory":
+        path += os.sep
+    return path
 
 
 def get_setting(obj, dotted_key):
