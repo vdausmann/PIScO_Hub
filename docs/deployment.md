@@ -102,9 +102,13 @@ remote execution need no file copying, and it is also what breaks if
 
 One wrinkle with unprivileged containers: UIDs are shifted by 100000, so
 container uid 1000 writes as host uid 101000. Containers on the same host
-share that mapping and therefore agree with each other for free. A
-separate machine mounting the same share over NFS does not — it sees
-101000 and makes nothing of it.
+share that *offset*, but that only helps if the accounts inside them have
+the same UID — and `adduser --system` takes the next number free in each
+container, which will not match. Create the worker's account with the
+Hub's UID explicitly (`id -u pisco` on the Hub, then `adduser --uid`), or
+the worker cannot write what the Hub created. A separate machine mounting
+the share over NFS has the same problem and cannot solve it this way: it
+sees 101000 and makes nothing of it.
 
 So before there is data on the share, decide how identity works across
 machines: run the tools everywhere as one dedicated user whose UID matches
@@ -364,10 +368,13 @@ pct start 111
 Inside it, create the account the Hub will log in as, authorise the Hub's
 key, and give it the share:
 
+Use the Hub's UID for the account (`id -u pisco` there), so both machines
+agree about who owns what on the share:
+
 ```bash
 apt update && apt install -y openssh-server python3
 
-adduser --system --group --home /home/pisco --shell /bin/bash pisco
+adduser --system --group --uid <hub's uid> --home /home/pisco --shell /bin/bash pisco
 install -d -o pisco -g pisco -m 700 /home/pisco/.ssh
 # paste the Hub's /opt/pisco-hub/.ssh/id_ed25519.pub here:
 editor /home/pisco/.ssh/authorized_keys
