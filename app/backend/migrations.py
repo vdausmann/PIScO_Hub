@@ -13,6 +13,9 @@ _MIGRATIONS = {
     "task": [
         ("machine_id", "INTEGER REFERENCES machine(id)"),
     ],
+    "machine": [
+        ("last_probe_error", "TEXT"),
+    ],
     "api_token": [
         ("scope", "VARCHAR(20) DEFAULT 'full'"),
     ],

@@ -69,6 +69,7 @@ def machine_dict(machine):
         "remaining_capacity": (machine.max_weight or 0) - load,
         "last_seen_at": machine.last_seen_at.isoformat()
             if machine.last_seen_at else None,
+        "last_probe_error": machine.last_probe_error,
         "note": machine.note,
     }
 

@@ -62,6 +62,8 @@ class Machine(db.Model):
     enabled = db.Column(db.Boolean, default=True)
     status = db.Column(db.String(20), default='unknown')  # online, offline, unknown
     last_seen_at = db.Column(db.DateTime, nullable=True)
+    # Why the last probe failed, so "offline" says what to fix
+    last_probe_error = db.Column(db.Text, nullable=True)
     note = db.Column(db.Text, nullable=True)
     is_local = db.Column(db.Boolean, default=False)
 

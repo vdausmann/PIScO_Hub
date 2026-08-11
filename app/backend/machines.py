@@ -10,6 +10,8 @@ make an SSH call hang and that must never stall scheduling.
 """
 
 import json
+import os
+import shlex
 import subprocess
 import threading
 import time
@@ -66,26 +68,64 @@ def machine_load(machine_id):
     return sum(task.weight for task in running)
 
 
-def ssh_command(machine, remote_command):
+def ssh_command(machine, remote_command, connect_timeout=10):
     """The argv that runs a command on a machine over SSH."""
     target = f"{machine.ssh_user}@{machine.host}" if machine.ssh_user else machine.host
-    return ["ssh", *SSH_OPTIONS, "-o", "ConnectTimeout=10", target, remote_command]
+    return ["ssh", *SSH_OPTIONS, "-o", f"ConnectTimeout={connect_timeout}",
+            target, remote_command]
 
 
-def probe(machine, timeout=5):
-    """Is the machine reachable right now?"""
+def probe(machine, data_root=None, timeout=5):
+    """Can this machine actually do work? Returns (ok, reason).
+
+    Reachability alone is not readiness. A machine that answers ssh but
+    cannot write the shared storage fails every task sent to it, and the
+    failure names a path the Hub chose, which reads as a Hub bug rather
+    than a missing mount. So the probe checks the storage too, and says
+    which of the two went wrong.
+    """
     if machine.is_local:
-        return True
+        return _check_local_storage(data_root)
+
     if not machine.host:
-        return False
-    target = f"{machine.ssh_user}@{machine.host}" if machine.ssh_user else machine.host
+        return False, "no host configured"
+
+    # Per-machine name: several machines may probe the same shared
+    # directory at once.
+    check = "true"
+    if data_root:
+        probe_file = os.path.join(data_root, f".hub-probe-{machine.name}")
+        check = "test -d {0} && touch {1} && rm -f {1}".format(
+            shlex.quote(data_root), shlex.quote(probe_file))
+
     try:
-        result = subprocess.run(
-            ["ssh", *SSH_OPTIONS, "-o", f"ConnectTimeout={timeout}", target, "true"],
-            capture_output=True, timeout=timeout + 5)
-        return result.returncode == 0
-    except (subprocess.TimeoutExpired, OSError):
-        return False
+        result = subprocess.run(ssh_command(machine, check, timeout),
+                                capture_output=True, timeout=timeout + 5)
+    except subprocess.TimeoutExpired:
+        return False, f"no response within {timeout + 5}s"
+    except OSError as e:
+        return False, f"could not run ssh: {e}"
+
+    if result.returncode == 0:
+        return True, None
+
+    stderr = result.stderr.decode(errors="replace").strip().splitlines()
+    detail = stderr[-1] if stderr else f"exit code {result.returncode}"
+    if result.returncode == 255:
+        return False, f"ssh failed: {detail}"
+    return False, f"cannot use {data_root}: {detail}"
+
+
+def _check_local_storage(data_root):
+    if not data_root:
+        return True, None
+    try:
+        os.makedirs(data_root, exist_ok=True)
+    except OSError as e:
+        return False, f"cannot create {data_root}: {e}"
+    if not os.access(data_root, os.W_OK):
+        return False, f"{data_root} is not writable"
+    return True, None
 
 
 class MachineMonitor:
@@ -108,12 +148,17 @@ class MachineMonitor:
                 time.sleep(GlobalSetting.get("MACHINE_PROBE_INTERVAL", default=30))
 
     def _probe_all(self):
+        from . import artifacts
+
+        root = artifacts.data_root(self.app)
         for machine in Machine.query.filter_by(enabled=True).all():
-            reachable = probe(machine)
-            status = "online" if reachable else "offline"
+            ready, reason = probe(machine, root)
+            status = "online" if ready else "offline"
             if machine.status != status:
-                print(f"[*] Machine '{machine.name}' is {status}.")
+                print(f"[*] Machine '{machine.name}' is {status}"
+                      f"{': ' + reason if reason else ''}.")
             machine.status = status
-            if reachable:
+            machine.last_probe_error = reason
+            if ready:
                 machine.last_seen_at = datetime.now()
         db.session.commit()

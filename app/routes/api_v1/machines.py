@@ -1,6 +1,6 @@
 import json
 
-from flask import jsonify, request
+from flask import current_app, jsonify, request
 
 from ...backend import machines as machines_backend
 from ...backend.models import Machine, Task, db
@@ -42,7 +42,11 @@ def register_machine():
 
     # Answer the obvious question straight away rather than making the
     # caller wait for the next probe cycle.
-    machine.status = "online" if machines_backend.probe(machine) else "offline"
+    from ...backend import artifacts
+
+    ready, reason = machines_backend.probe(machine, artifacts.data_root(current_app))
+    machine.status = "online" if ready else "offline"
+    machine.last_probe_error = reason
     db.session.commit()
 
     return jsonify(machine_dict(machine)), 201

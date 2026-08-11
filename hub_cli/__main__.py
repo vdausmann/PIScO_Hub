@@ -299,6 +299,9 @@ def cmd_machines_list(client, args):
         ("ENABLED", "enabled"), ("LOAD", "load"), ("CAPACITY", "max_weight"),
         ("TAGS", "tags"),
     ])
+    for machine in data["machines"]:
+        if machine.get("last_probe_error"):
+            print(f"  {machine['name']}: {machine['last_probe_error']}")
 
 
 def cmd_machines_add(client, args):
@@ -314,6 +317,8 @@ def cmd_machines_add(client, args):
         print_json(data)
         return
     print(f"Registered '{data['name']}' ({data['host']}) - {data['status']}")
+    if data.get("last_probe_error"):
+        print(f"  {data['last_probe_error']}")
 
 
 def cmd_machines_remove(client, args):
