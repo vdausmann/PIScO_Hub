@@ -9,7 +9,9 @@
         {
             "name": "demo_produce",
             "description": "Writes result.txt into its output directory. Leave 'output_dir' empty and the Hub allocates one.",
-            "tags": ["demo"],
+            "tags": [
+                "demo"
+            ],
             "program_path": "produce.py",
             "program_type": "python",
             "working_directory": ".",
@@ -19,7 +21,9 @@
             "settings_format": "json",
             "settings_schema": {
                 "type": "object",
-                "required": ["output_dir"],
+                "required": [
+                    "output_dir"
+                ],
                 "properties": {
                     "output_dir": {
                         "type": "string",
@@ -38,14 +42,20 @@
                 }
             },
             "outputs": [
-                {"name": "results", "kind": "directory", "settings_key": "output_dir",
-                 "description": "Directory containing result.txt"}
+                {
+                    "name": "results",
+                    "kind": "directory",
+                    "settings_key": "output_dir",
+                    "description": "Directory containing result.txt"
+                }
             ]
         },
         {
             "name": "demo_consume",
             "description": "Reads result.txt from an upstream directory and writes a report. Point 'input_dir' at another task's output with a $from reference.",
-            "tags": ["demo"],
+            "tags": [
+                "demo"
+            ],
             "program_path": "consume.py",
             "program_type": "python",
             "working_directory": ".",
@@ -55,7 +65,10 @@
             "settings_format": "json",
             "settings_schema": {
                 "type": "object",
-                "required": ["input_dir", "report_dir"],
+                "required": [
+                    "input_dir",
+                    "report_dir"
+                ],
                 "properties": {
                     "input_dir": {
                         "type": "string",
@@ -68,12 +81,45 @@
                 }
             },
             "inputs": [
-                {"name": "source", "kind": "directory", "settings_key": "input_dir",
-                 "description": "An upstream results directory"}
+                {
+                    "name": "source",
+                    "kind": "directory",
+                    "settings_key": "input_dir",
+                    "description": "An upstream results directory"
+                }
             ],
             "outputs": [
-                {"name": "report", "kind": "directory", "settings_key": "report_dir"}
+                {
+                    "name": "report",
+                    "kind": "directory",
+                    "settings_key": "report_dir"
+                }
             ]
+        },
+        {
+            "name": "demo_hang",
+            "description": "Sleeps forever. Exists to demonstrate the task timeout.",
+            "tags": [
+                "demo"
+            ],
+            "program_path": "hang.py",
+            "program_type": "python",
+            "working_directory": ".",
+            "default_priority": 1,
+            "default_weight": 1,
+            "failed_ok": false,
+            "timeout": 20,
+            "settings_format": "json",
+            "settings_schema": {
+                "type": "object",
+                "properties": {
+                    "seconds": {
+                        "type": "integer",
+                        "default": 3600,
+                        "description": "How long to sleep"
+                    }
+                }
+            }
         }
     ]
 }

@@ -43,6 +43,9 @@ class Task(db.Model):
 
     started_at = db.Column(db.DateTime, nullable=True)
     completed_at = db.Column(db.DateTime, nullable=True)
+    # When the Hub first signalled this task to stop, so it is signalled
+    # once rather than on every poll while it winds down.
+    terminated_at = db.Column(db.DateTime, nullable=True)
     # Null while pending means the scheduler still has to choose one.
     machine_id = db.Column(db.Integer, db.ForeignKey('machine.id'), nullable=True)
 
@@ -137,6 +140,9 @@ class Tool(db.Model):
     available = db.Column(db.Boolean, default=True)
     config_hash = db.Column(db.String(64), nullable=True)
     requires = db.Column(db.Text, nullable=True)  # JSON list of machine tags
+    # Seconds a task may run before it is stopped; null falls back to the
+    # TASK_TIMEOUT setting, and 0 there means no limit.
+    timeout_seconds = db.Column(db.Integer, nullable=True)
 
 
 class ApiToken(db.Model):

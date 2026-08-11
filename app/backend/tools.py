@@ -167,6 +167,11 @@ def _normalize_entry(entry, root):
         raise ManifestError(
             f"Tool {entry['name']!r}: 'requires' must be a list of machine tags")
 
+    timeout = entry.get("timeout")
+    if timeout is not None and (not isinstance(timeout, int) or timeout < 0):
+        raise ManifestError(
+            f"Tool {entry['name']!r}: 'timeout' must be a number of seconds")
+
     return {
         "name": entry["name"],
         "description": entry["description"],
@@ -183,6 +188,7 @@ def _normalize_entry(entry, root):
         "outputs": json.dumps(outputs),
         "tags": json.dumps(entry.get("tags", [])),
         "requires": json.dumps(requires),
+        "timeout_seconds": timeout,
         "version": entry.get("version"),
     }
 
@@ -218,7 +224,7 @@ def _legacy_descriptors(provider_path):
 
         # Newer optional keys work in legacy configs too.
         for key in ("settings_format", "settings_schema", "inputs", "outputs",
-                    "tags", "requires", "version"):
+                    "tags", "requires", "timeout", "version"):
             if key in config:
                 entry[key] = config[key]
 
@@ -336,6 +342,7 @@ class ToolRegistry:
         tool.outputs = desc["outputs"]
         tool.tags = desc["tags"]
         tool.requires = desc["requires"]
+        tool.timeout_seconds = desc["timeout_seconds"]
         tool.version = desc["version"]
         tool.available = True
         tool.config_hash = config_hash

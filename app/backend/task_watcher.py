@@ -1,10 +1,14 @@
 import os
+import signal
 from threading import Thread
 import time
 from datetime import datetime
 from flask_sock import Sock
 from . import artifacts
 from .models import db, Task, Workflow, GlobalSetting, Tool
+
+# How long a terminated task gets to exit before it is killed outright.
+TERMINATE_GRACE_SECONDS = 30
 
 
 
@@ -29,10 +33,70 @@ class TaskWatcher:
                 
                 for task in running_tasks:
                     if task.pid:
+                        self.enforce_timeout(task)
                         self.check_task_status(task)
-                
+
                 sleep_time = GlobalSetting.get("POLL_INTERVAL", default=5)
                 time.sleep(sleep_time)
+
+    def timeout_for(self, task):
+        """Seconds this task may run, or 0 for no limit."""
+        if task.tool is not None and task.tool.timeout_seconds:
+            return task.tool.timeout_seconds
+        return GlobalSetting.get("TASK_TIMEOUT", default=0)
+
+    def enforce_timeout(self, task):
+        """Stop a task that has outstayed its limit.
+
+        A tool that hangs holds its machine's capacity indefinitely, and
+        without this the only way out is finding the process by hand. The
+        kill makes the task fail like any other, so the workflow stops and
+        the reason is in the task's own error log.
+        """
+        limit = self.timeout_for(task)
+        if not limit or not task.started_at:
+            return
+
+        now = datetime.now()
+        elapsed = (now - task.started_at).total_seconds()
+        if elapsed < limit:
+            return
+
+        if task.terminated_at is None:
+            sig, name = signal.SIGTERM, "SIGTERM"
+        elif (now - task.terminated_at).total_seconds() > TERMINATE_GRACE_SECONDS:
+            # It ignored the polite request; stop asking.
+            sig, name = signal.SIGKILL, "SIGKILL"
+        else:
+            return  # already signalled, still winding down
+
+        note = (f"[hub] Exceeded its {limit}s limit after {int(elapsed)}s; "
+                f"sending {name}.")
+        if task.machine is not None and not task.machine.is_local:
+            note += (f" Running on {task.machine.name}: only the local ssh"
+                     " process can be signalled, so the remote program may"
+                     " keep going and need killing there.")
+
+        self._append_error_note(task, note)
+        print(f"[!] Task {task.id}: {note}")
+
+        try:
+            os.killpg(os.getpgid(task.pid), sig)
+        except (ProcessLookupError, PermissionError, OSError) as e:
+            print(f"[!] Could not signal task {task.id}: {e}")
+
+        task.terminated_at = now
+        db.session.commit()
+
+    def _append_error_note(self, task, note):
+        """Put the reason where whoever reads the logs will find it."""
+        if not task.log_prefix:
+            return
+        try:
+            with open(task.log_prefix + ".err", "a") as f:
+                f.write(note + "\n")
+        except OSError as e:
+            print(f"[!] Could not annotate log for task {task.id}: {e}")
 
     def check_task_status(self, task):
         """Checks a specific PID and updates the DB if the process ended."""

@@ -12,6 +12,7 @@ from sqlalchemy import text
 _MIGRATIONS = {
     "task": [
         ("machine_id", "INTEGER REFERENCES machine(id)"),
+        ("terminated_at", "DATETIME"),
     ],
     "machine": [
         ("last_probe_error", "TEXT"),
@@ -21,6 +22,7 @@ _MIGRATIONS = {
     ],
     "tool": [
         ("requires", "TEXT"),
+        ("timeout_seconds", "INTEGER"),
         ("provider_id", "INTEGER REFERENCES tool_provider(id)"),
         ("settings_format", "VARCHAR(20) DEFAULT 'opaque'"),
         ("settings_schema", "TEXT"),

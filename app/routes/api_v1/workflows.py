@@ -95,6 +95,7 @@ def retry_workflow(workflow_id):
         task.exit_code = None
         task.started_at = None
         task.completed_at = None
+        task.terminated_at = None
         task.machine_id = None
 
     workflow.status = "Pending"

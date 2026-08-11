@@ -52,6 +52,10 @@ _TOOL_DETAIL = {
             "outputs": {"type": "array", "items": _IO_DECLARATION},
             "requires": {"type": "array", "items": {"type": "string"},
                          "description": "Machine tags this tool needs"},
+            "timeout_seconds": {"type": ["integer", "null"],
+                                "description": "Seconds a task may run before "
+                                               "it is stopped; null uses the "
+                                               "TASK_TIMEOUT setting"},
         },
     }],
 }

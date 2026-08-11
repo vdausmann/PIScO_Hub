@@ -198,6 +198,11 @@ Rules:
   settings (`json` or `ini`), and the key must exist in your schema.
 - `requires` lists machine tags your tool needs (e.g. `["gpu"]`). It is
   matched against each machine's `tags`; an empty list runs anywhere.
+- `timeout` is how many seconds a task may run before the Hub stops it.
+  Without one, a tool that hangs holds its machine's capacity until
+  somebody notices. The `TASK_TIMEOUT` setting applies to tools that
+  declare none; 0 there means no limit. A stopped task fails like any
+  other, with the reason appended to its error log.
 
 ## Running on other machines
 

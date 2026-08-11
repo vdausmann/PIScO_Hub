@@ -34,6 +34,7 @@ def tool_detail(tool):
         "inputs": _json_or_default(tool.inputs, []),
         "outputs": _json_or_default(tool.outputs, []),
         "requires": _json_or_default(tool.requires, []),
+        "timeout_seconds": tool.timeout_seconds,
     })
     return data
 
