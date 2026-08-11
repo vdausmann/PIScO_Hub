@@ -369,12 +369,17 @@ Inside it, create the account the Hub will log in as, authorise the Hub's
 key, and give it the share:
 
 Use the Hub's UID for the account (`id -u pisco` there), so both machines
-agree about who owns what on the share:
+agree about who owns what on the share. Create the group separately and
+let it take any free GID — `--group` would try to claim a GID equal to the
+UID, which is usually already taken, and the group does not need to match
+anyway since ownership on the share is by user.
 
 ```bash
 apt update && apt install -y openssh-server python3
 
-adduser --system --group --uid <hub's uid> --home /home/pisco --shell /bin/bash pisco
+addgroup --system pisco
+adduser --system --uid <hub's uid> --ingroup pisco \
+    --home /home/pisco --shell /bin/bash pisco
 install -d -o pisco -g pisco -m 700 /home/pisco/.ssh
 # paste the Hub's /opt/pisco-hub/.ssh/id_ed25519.pub here:
 editor /home/pisco/.ssh/authorized_keys
