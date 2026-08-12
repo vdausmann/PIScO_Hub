@@ -503,10 +503,15 @@ runuser -u pisco -- bash -lc \
     'cd /opt/pisco/tools/pisco_deconvolution_py && nix develop . --command true'
 ```
 
-Check it the way the Hub will, before templating:
+Check it the way the Hub will, before templating — from the Hub, over
+ssh. That matters: the Hub's command is non-interactive and sources no
+profile, so it sees only sshd's default `PATH`. Testing on the worker with
+a login shell would pass even when the real invocation could not find
+`nix`, which is why the binaries are linked into `/usr/local/bin`.
 
 ```bash
-runuser -u pisco -- bash -lc 'nix --version && ls -d /mnt/pisco'
+runuser -u pisco -- ssh -o BatchMode=yes pisco@<worker-ip> \
+    'nix --version && ls -d /mnt/pisco /opt/pisco/tools'
 ```
 
 Then template and clone:
