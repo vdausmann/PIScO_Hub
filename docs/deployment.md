@@ -447,6 +447,86 @@ hub workflow create --name remote-test \
 hub workflow status <id>      # the MACHINE column should read worker1
 ```
 
+## A reusable worker for the nix-based tools
+
+The PIScO segmenter and deconvolution run inside nix dev shells, so a
+worker needs nix and a realized closure — several GB that you do not want
+to fetch once per machine. Build one container properly, turn it into a
+template, and clone it.
+
+The order matters. Installing nix as root and handing it over afterwards
+means fighting store ownership, an unreadable profile script under
+`/root`, and a `PATH` the service user cannot see. Create the store owned
+by the account that will run the tools, before installing:
+
+```bash
+pct create 112 local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst \
+    --hostname pisco-toolworker --cores 8 --memory 8192 \
+    --rootfs local-lvm:40 \
+    --net0 name=eth0,bridge=vmbr0,ip=dhcp \
+    --unprivileged 1 --features nesting=1 --onboot 1
+pct set 112 -mp0 /srv/pisco,mp=/mnt/pisco
+pct start 112 && pct enter 112
+```
+
+40 GB of disk: the torch closure alone is a few GB, and nix keeps old
+generations until garbage collected.
+
+```bash
+apt update && apt install -y curl xz-utils git openssh-server
+
+addgroup --system pisco
+adduser --system --uid <hub's uid> --ingroup pisco \
+    --home /home/pisco --shell /bin/bash pisco
+install -d -o pisco -g pisco -m 700 /home/pisco/.ssh
+# the Hub's public key goes in /home/pisco/.ssh/authorized_keys
+chown -R pisco:pisco /mnt/pisco
+
+# flakes are not enabled by default in a stock install
+mkdir -p /etc/nix
+printf 'experimental-features = nix-command flakes\n' > /etc/nix/nix.conf
+
+# the store must belong to the user that will run the tools
+install -d -o pisco -g pisco /nix
+runuser -u pisco -- sh -c 'curl -L https://nixos.org/nix/install | sh -s -- --no-daemon'
+ln -sf /home/pisco/.nix-profile/bin/* /usr/local/bin/
+```
+
+Then place the tools at the paths the Hub resolved, and realize their
+closures **as `pisco`**, so the work is baked into the template rather
+than repeated on first dispatch:
+
+```bash
+mkdir -p /opt/pisco/tools && chown -R pisco:pisco /opt/pisco
+# copy the repositories in, e.g. staged through /mnt/pisco
+runuser -u pisco -- bash -lc \
+    'cd /opt/pisco/tools/pisco_deconvolution_py && nix develop . --command true'
+```
+
+Check it the way the Hub will, before templating:
+
+```bash
+runuser -u pisco -- bash -lc 'nix --version && ls -d /mnt/pisco'
+```
+
+Then template and clone:
+
+```bash
+pct stop 112 && pct template 112
+pct clone 112 113 --hostname pisco-worker2
+```
+
+Clones share the template's SSH host keys, so regenerate them in each one
+(`rm /etc/ssh/ssh_host_* && dpkg-reconfigure openssh-server`) unless you
+want every worker presenting the same identity.
+
+Finally, tag the clones so the scheduler only sends them work they can
+run — see `requires` in AGENTS.md:
+
+```bash
+hub machines add worker2 --host <ip> --user pisco --tag pisco-tools
+```
+
 ## When a remote task fails
 
 `hub task logs <id> --stderr` carries the remote program's own output; ssh
