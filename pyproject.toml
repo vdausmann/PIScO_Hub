@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pisco-hub-cli"
+version = "1.0"
+description = "Command-line client for the PIScO Hub API"
+readme = "AGENTS.md"
+requires-python = ">=3.9"
+dependencies = ["requests"]
+
+# Only the client is packaged. The server is deployed from a checkout with
+# requirements.txt; it is not something you pip install onto a laptop.
+[project.scripts]
+hub = "hub_cli.__main__:main"
+
+[tool.setuptools]
+packages = ["hub_cli"]

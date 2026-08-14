@@ -262,6 +262,29 @@ TOKEN=...                 # from step 4
 curl -s "http://$HUB:5000/api/v1/health"
 ```
 
+## Installing the CLI
+
+The `hub` command is an ordinary python package, so install it wherever
+you want to drive the Hub from — the container itself, your workstation,
+anywhere that can reach port 5000:
+
+```bash
+pip install --user 'git+https://git.geomar.de/team-optics/plankton/PIScO_Hub.git@toolbox-framework'
+```
+
+On the Hub container, install it into the venv that is already there and
+put it on everyone's path:
+
+```bash
+cd /opt/pisco-hub/app
+.venv/bin/pip install -e .
+ln -sf /opt/pisco-hub/app/.venv/bin/hub /usr/local/bin/hub
+```
+
+It needs only `requests` and a token; it holds no state and talks to the
+same REST API as everything else. A machine with neither python nor the
+package can use `curl` against `/api/v1` and lose nothing but convenience.
+
 The CLI reads the same two values from a config file, which saves setting
 them for every command:
 
