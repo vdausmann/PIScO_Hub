@@ -461,16 +461,18 @@ by the account that will run the tools, before installing:
 
 ```bash
 pct create 112 local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst \
-    --hostname pisco-toolworker --cores 8 --memory 8192 \
-    --rootfs local-lvm:40 \
+    --hostname pisco-toolworker --cores 8 --memory 16384 \
+    --rootfs local-lvm:100 \
     --net0 name=eth0,bridge=vmbr0,ip=dhcp \
     --unprivileged 1 --features nesting=1 --onboot 1
 pct set 112 -mp0 /srv/pisco,mp=/mnt/pisco
 pct start 112 && pct enter 112
 ```
 
-40 GB of disk: the torch closure alone is a few GB, and nix keeps old
-generations until garbage collected.
+100 GB and 16 GiB are not generous, they are what this needs. The CUDA
+stack behind torch — cuDNN, NCCL, cuBLAS — is far larger than it looks: a
+40 GB container filled completely and wedged, and unpacking it exhausted
+8 GiB. Thin provisioning means the disk costs nothing until used.
 
 ```bash
 apt update && apt install -y curl xz-utils git openssh-server
@@ -516,9 +518,29 @@ runuser -u pisco -- ssh -o BatchMode=yes pisco@<worker-ip> \
 
 Then template and clone:
 
+Install locales before templating. A tool wrapper that emits locale
+warnings can break callers that parse its output — CMake's MPI detection
+does exactly that, and misreads the warnings as compiler flags — and the
+fault would be baked into every clone:
+
 ```bash
-pct stop 112 && pct template 112
+apt install -y locales
+sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
+locale-gen
+```
+
+Then remove the shared-storage mount before templating. Proxmox cannot
+template or clone a container that has a bind mount, since the storage
+behind it is not something it can copy; give each clone its own instead.
+
+```bash
+pct shutdown 112
+pct set 112 --delete mp0
+pct template 112
+
 pct clone 112 113 --hostname pisco-worker2
+pct set 113 -mp0 /srv/pisco,mp=/mnt/pisco
+pct start 113
 ```
 
 Clones share the template's SSH host keys, so regenerate them in each one
