@@ -11,6 +11,9 @@ Detailed API + toolbox-authoring contract: [AGENTS.md](AGENTS.md)
 (also served at `/api/v1/docs`). OpenAPI spec: `/api/v1/openapi.json`.
 Procedure and pitfalls for wiring up a new toolbox:
 [docs/toolbox-integration.md](docs/toolbox-integration.md).
+Deploying on a cluster: [docs/cluster-runbook.md](docs/cluster-runbook.md)
+for the condensed procedure, [docs/deployment.md](docs/deployment.md) for
+the same ground with the reasoning.
 
 ## How a run works
 
