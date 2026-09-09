@@ -48,6 +48,9 @@ HDF Profile Viewer
     </div>
 
 
+    <div class="hdf-splitter" id="hdf-splitter" title="Drag to resize, double-click to reset"></div>
+
+
     <div class="hdf-info">
 
         <h3>
@@ -76,6 +79,11 @@ HDF Profile Viewer
 
 const filePath =
     {{ file_path|tojson }};
+
+// Set when the page was reached from an EcoTaxa object_link: open this frame
+// and select this object instead of starting at the tree root.
+const focusGroup = {{ focus_group|tojson }};
+const focusIndex = {{ focus_index|tojson }};
 
 </script>
 
