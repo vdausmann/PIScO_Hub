@@ -1,6 +1,6 @@
 from flask import Flask
 from .routes import (auth, processing, visualization, task_manager, global_settings,
-    workflow_builder, file_explorer)
+    workflow_builder, file_explorer, deep_link)
 from .routes.api_v1 import api_v1_bp
 from .backend.models import db, login_manager
 from .backend.viewers import ViewerManager
@@ -53,6 +53,9 @@ def create_app(create_worker=True):
     app.register_blueprint(workflow_builder.workflow_bp,
                            url_prefix='/workflow-builder')
     app.register_blueprint(api_v1_bp, url_prefix='/api/v1')
+    # Deliberately short: these URLs are stored per object in EcoTaxa's
+    # object_link, which is only 255 characters wide.
+    app.register_blueprint(deep_link.deep_link_bp, url_prefix='/v')
 
     # Register tools and viewers:
     with app.app_context():
