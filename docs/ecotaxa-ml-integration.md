@@ -17,8 +17,12 @@ Neither capability needs a fork of EcoTaxa, and neither needs a fork of
 write ourselves, and predictions have a REST API. The work is a Hub tool that
 runs after import, not a reimplementation of their ML backend.
 
-That matters because `ecotaxa_ML_back` is pinned to **Python 3.8 + CUDA 11.4 +
-TensorFlow**, while the dual ViT is PyTorch/transformers. Forking it means
+We target the older `ViT_custom_size_sensitive_*` pair rather than
+`ATAIIR2604_NorthSea`, because those were trained on non-isolated crops and so
+match what the exporter already writes.
+
+The fork question matters because `ecotaxa_ML_back` is pinned to **Python 3.8 +
+CUDA 11.4 + TensorFlow**, while the dual ViT is PyTorch/transformers. Forking it means
 porting a PyTorch model into an EOL TensorFlow environment and rebasing it
 forever, in exchange for one thing only: EcoTaxa's own "Predict" button
 driving the job. Not worth it.
@@ -28,34 +32,61 @@ driving the job. Not worth it.
 `training/README.md` in `process_pisco_profiles` is explicit that a classifier
 is only valid for crops that look like its training data, and names the cost of
 getting it wrong: swapping the deconvolution model under the ATAIIR2604 models
-**dropped the living rate by 83–93% at unchanged confidence**.
+**dropped the living rate by 83-93% at unchanged confidence**. Treat
+deconvolution, isolation, scale bar and classifier as one versioned unit.
 
-There are now **three** axes on which our exported crops must match the regime a
-model was trained under. Treat deconvolution, isolation, scale bar and
-classifier as one versioned unit.
+### Which models we target
 
-| axis | trained as (ATAIIR2604_NorthSea) | HDF5 export today |
+**Not `ATAIIR2604_NorthSea`.** Those were trained on neighbour-**isolated**
+crops, which our HDF5 export does not produce. We use the older pair instead —
+the config default:
+
+```json
+"model_dirs": {
+  "binary": ".../ViT_custom_size_sensitive_binary/best_model",
+  "living": ".../ViT_custom_size_sensitive_v5/best_model"
+}
+```
+
+These predate the isolation work — there is no isolation code anywhere in
+`process_pisco_profiles` — so they were trained on non-isolated crops and match
+what the exporter writes today. That removes the isolation mismatch entirely.
+
+### Where the axes now stand
+
+| axis | older pair trained as | HDF5 export today |
 |---|---|---|
-| deconvolution model | LUCYD **v5a** | v5a when `pisco_deconvolve` ran first ✅ |
-| neighbour isolation | **isolated** | **not isolated** ❌ |
+| neighbour isolation | not isolated | not isolated ✅ |
 | scale bar | absent | present, but exactly removable ✅ |
+| deconvolution model | **unconfirmed** | v5a, when `pisco_deconvolve` ran ⚠️ |
 
-Two consequences, both of which are work:
+The scale bar must be stripped before inference via
+`scale_bar.strip_scale_bar()` — that is why it was built reversible. Read the
+PNGs with PIL so the `pisco_orig_size` text chunk survives; a converter that
+drops text chunks silently leaves right padding in place.
 
-- **The exporter needs an `isolateCrops` option.** `result.h5` carries
-  `maskPixelData`, and the viewer already does the operation
-  (`np.where(mask > 0, crop, 255)` — non-object pixels to white). The exporter
-  ignores it today, so its crops are out of domain for a model trained on
-  isolated ones. This is the same axis the README warns about, so it should be
-  expected to matter, not assumed not to.
-- **The scale bar must be stripped before inference**, via
-  `scale_bar.strip_scale_bar()`. That is precisely why it was built reversible.
-  Read the PNGs with PIL so the `pisco_orig_size` text chunk survives; a
-  converter that drops text chunks silently leaves right-padding in place.
+### The one axis still open: deconvolution
 
-Any inference tool we build must record which deconvolution model, which
-isolation setting and which classifier produced a result, or the next
-out-of-domain regression will be as hard to attribute as the last one.
+Isolation is settled; deconvolution is not, and it is the *other* half of the
+coupling the README warns about.
+
+`pisco_deconvolve` defaults to `lucyd-edof-plankton_231204.pth`. Our M202
+workflow explicitly used `best_loss_v5a_noGrad_ablation.pth`. Those are not
+interchangeable: running the same 46 frames through both produced **zero
+byte-identical groups and a mean absolute difference of 15** on the uint8
+scale. If the older ViTs were trained on crops from the older default, feeding
+them v5a crops is precisely the mismatch that cost 83-93% previously.
+
+The `v5` in `ViT_custom_size_sensitive_v5` is ambiguous — it may name the ViT
+revision or the LUCYD v5 models. **This needs confirming before any prediction
+run is trusted**, and it is cheap to settle: run the same crops through the
+classifier under both deconvolutions and compare living rates. Until then,
+either match the deconvolution the models were trained with, or treat the first
+run as a calibration rather than a result.
+
+Whatever we build must record which deconvolution model, which isolation
+setting and which classifier produced a result, or the next out-of-domain
+regression will be as hard to attribute as the last one.
 
 ## Part 1 — "similar to"
 
@@ -210,18 +241,48 @@ property baked into files.
 
 ## Sequencing
 
-1. **`isolateCrops` in the exporter.** Small, and everything downstream depends
-   on matching the training regime.
-2. **Features + similarity search.** Self-contained, no taxonomy mapping needed,
+1. **Confirm the deconvolution the older ViTs were trained under.** Cheap, and
+   it gates whether any prediction number means anything.
+2. **Features + similarity search.** Self-contained, needs no taxonomy mapping,
    and immediately useful for annotation even with no predictions.
 3. **Taxonomy mapping.** Decision work, not code work.
 4. **Predictions.**
+5. **`isolateCrops` in the exporter** (see below) — wanted regardless, but no
+   longer a prerequisite now that we target the non-isolated models.
+
+## `isolateCrops` — worth having on its own merits
+
+Not needed for the older models, but specced because it is wanted anyway.
+
+A bounding box usually catches parts of its neighbours. `result.h5` stores
+`maskPixelData` saying which pixels belong to *this* object, and the viewer
+already does the operation at display time:
+
+```python
+np.where(mask > 0, crop, 255)   # non-object pixels to white
+```
+
+Adding it to the exporter is a handful of lines, since the mask is already read
+there for morphometrics. What it buys:
+
+- Crops that match the ATAIIR2604 models, should we want them later.
+- A cleaner training set: `build_trainset.py` derives its images from exported
+  crops, so isolation becomes a property of the export rather than something
+  reproduced by hand.
+- Less neighbour contamination in the 50-dim embeddings, which should sharpen
+  similarity search.
+
+It must be a **setting, not a default**: it is one of the axes a classifier is
+tied to, so flipping it silently is the failure mode this whole section exists
+to prevent. Record it alongside the deconvolution model in whatever provenance
+we keep.
 
 ## Risks
 
-- **Out-of-domain crops.** The isolation mismatch is real today. Quantify it
-  before trusting any prediction run: same crops, isolated and not, through the
-  same model.
+- **Out-of-domain crops.** Isolation is settled by targeting the older models,
+  but the deconvolution axis is not. Quantify before trusting any prediction
+  run: same crops through both deconvolutions, same classifier, compare living
+  rates.
 - **All-or-nothing features.** One object without a vector disables similarity
   search for the whole project. Feature writing needs to be complete or
   transactional.
