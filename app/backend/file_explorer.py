@@ -1,6 +1,32 @@
-from .models import GlobalSetting
+from .models import GlobalSetting, Workflow
 from pathlib import Path
 import os
+import re
+
+
+# Task output is filed under one directory per workflow, named by its id.
+# That is unreadable when browsing, so the listing carries the workflow's
+# name alongside it -- the same name the processing view shows.
+_WORKFLOW_ID = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE)
+
+
+def _workflow_labels(entries):
+    """Names for whichever directory entries are workflow ids, in one query."""
+    ids = [e["name"] for e in entries
+           if e["type"] == "directory" and _WORKFLOW_ID.match(e["name"])]
+
+    if not ids:
+        return {}
+
+    try:
+        rows = Workflow.query.filter(Workflow.id.in_(ids)).all()
+    except Exception:
+        # Browsing files should not fail because a lookup did.
+        return {}
+
+    return {workflow.id: workflow.name for workflow in rows if workflow.name}
 
 
 def get_files(_path: str, show_hidden: bool = False):
@@ -34,6 +60,7 @@ def get_files(_path: str, show_hidden: bool = False):
 
             entries.append({
                 "name": item.name,
+                "label": None,
                 "type": ("directory" if item.is_dir() else "file"),
                 "extension": (item.suffix if item.is_file() else None),
                 "size": (stat.st_size if item.is_file() else None),
@@ -52,6 +79,10 @@ def get_files(_path: str, show_hidden: bool = False):
     files.sort(key=lambda x: x["name"].lower())
 
     entries = folders + files
+
+    labels = _workflow_labels(entries)
+    for entry in entries:
+        entry["label"] = labels.get(entry["name"])
 
     return {
             "current_path": str(path.relative_to(root)),
