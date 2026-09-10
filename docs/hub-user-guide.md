@@ -67,20 +67,50 @@ step 4 carry it the rest of the way into EcoTaxa.
 
     {"tool": "pisco_vit_classify", "settings": {
       "sourcePath": {"$from": {"task": 0, "output": "results"}},
-      "targetPath": "", "modelPath": "<your model>",
-      "emitEmbeddings": true, "topK": 3}},
+      "targetPath": "", "modelPath": "<binary model>",
+      "emitEmbeddings": true, "topK": 1}},
+
+    {"tool": "pisco_vit_classify", "settings": {
+      "sourcePath": {"$from": {"task": 0, "output": "results"}},
+      "targetPath": "", "modelPath": "<taxon model>",
+      "restrictToPath": {"$from": {"task": 3, "output": "predictions"}},
+      "restrictLabels": "living", "topK": 3}},
 
     {"tool": "pisco_ecotaxa_export", "settings": {
       "sourcePath": {"$from": {"task": 0, "output": "results"}},
       "targetPath": "", "profileName": "my_profile",
-      "predictionsPath": {"$from": {"task": 3, "output": "predictions"}},
+      "predictionsPath": {"$from": {"task": 4, "output": "predictions"}},
       "taxonomyMapPath": "/opt/pisco/tools/process_pisco_profiles/ecotaxa_taxonomy_map.json",
       "linkBase": "http://10.11.11.110:5000"}}
   ]
 }
 ```
 
-Two things that look odd but are deliberate:
+That is the **dual-ViT setup**: task 3 is the binary living/not-living pass
+over every crop, task 4 the taxon pass over the living ones only. Three details
+matter and are easy to get wrong:
+
+* **`emitEmbeddings` goes on the binary stage**, not the taxon one. Only the
+  binary stage sees every object, and EcoTaxa disables similarity search
+  entirely for a project where any object lacks a feature vector.
+* **`predictionsPath` points at the *last* stage only.** The taxon stage carries
+  forward the rows it skipped (`carryForward`, on by default), so its
+  `predictions.csv` already covers every object: taxon labels where it
+  classified, the binary verdict elsewhere. Turn `carryForward` off and the
+  not-living objects arrive unannotated.
+
+  This exists because the Hub resolves `{"$from": ...}` inside dicts but **not
+  inside lists**, so two references cannot be combined into one setting. Making
+  each stage's output complete sidesteps that. (For a manual run, the exporter
+  also accepts several paths comma-separated, applied in order.)
+* `living` is a **gate**, not a taxon — it is marked `skip` in the taxonomy map
+  and never becomes an annotation. `not-living` *is* a real EcoTaxa category
+  (84960), so those objects do get labelled.
+
+A single-model chain is the same thing with task 4 removed and
+`predictionsPath` naming one directory.
+
+Two more things that look odd but are deliberate:
 
 * **`targetPath: ""`** means "Hub, pick a directory". Leave it empty unless you
   have a reason not to.
@@ -106,14 +136,14 @@ carrying a project number around:
 
 ```json
     {"tool": "pisco_ecotaxa_import", "settings": {
-      "archivePath": {"$from": {"task": 4, "output": "export"}},
+      "archivePath": {"$from": {"task": 5, "output": "export"}},
       "targetPath": "",
       "projectTitle": "my profile",
       "instrument": "Other camera"}},
 
     {"tool": "pisco_ecotaxa_features", "settings": {
       "embeddingsPath": {"$from": {"task": 3, "output": "predictions"}},
-      "projectIdFrom": {"$from": {"task": 5, "output": "import"}},
+      "projectIdFrom": {"$from": {"task": 6, "output": "import"}},
       "pcaPath": "/mnt/pisco/vit/pisco_pca50.npz"}}
 ```
 
@@ -147,11 +177,17 @@ project:
 0 pisco_segment          gpuworker   clean + compress
 1 pisco_deconvolve       gpuworker   deblur the crops
 2 pisco_segment          gpuworker   extract objects
-3 pisco_vit_classify     gpuworker   classify + embeddings
-4 pisco_ecotaxa_export   gpuworker   crops, TSV, zip
-5 pisco_ecotaxa_import   ecotaxa     create project, import
-6 pisco_ecotaxa_features ecotaxa     attach embeddings
+3 pisco_vit_classify     gpuworker   binary pass, all crops + embeddings
+4 pisco_vit_classify     gpuworker   taxon pass, living crops only
+5 pisco_ecotaxa_export   gpuworker   crops, TSV, zip
+6 pisco_ecotaxa_import   ecotaxa     create project, import
+7 pisco_ecotaxa_features ecotaxa     attach embeddings
 ```
+
+The seven-task single-model version of this has been run end to end. The dual
+variant's pieces are each verified — stage chaining and restriction, and the
+prediction merge — but no run has used a real binary model yet, since only one
+stand-in was available.
 
 ## How work gets distributed
 
