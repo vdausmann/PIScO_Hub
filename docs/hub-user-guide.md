@@ -189,6 +189,19 @@ variant's pieces are each verified — stage chaining and restriction, and the
 prediction merge — but no run has used a real binary model yet, since only one
 stand-in was available.
 
+### 6. Closing the loop: retraining on what was validated
+
+Once a human has validated objects in EcoTaxa, three more tools turn that work
+back into models — `pisco_ecotaxa_labels`, `pisco_vit_trainset` and
+`pisco_vit_train` — and `pisco_vit_classify` takes a training task's output
+directory straight as its `modelPath`. So the next run classifies with a model
+trained on the corrections made to the last one, without anyone moving crops
+between machines.
+
+See [vit-retraining.md](vit-retraining.md) for the workflow and, more
+importantly, for the couplings that make a retrained model valid or worthless:
+crop isolation, the deconvolution model, and validated-versus-predicted labels.
+
 ## How work gets distributed
 
 Each tool declares what it needs (`requires`) and how heavy it is (`weight`).
