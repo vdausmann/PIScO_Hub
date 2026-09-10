@@ -296,6 +296,26 @@ Outputs `summary.json`, `per_frame.csv`, and `matches.csv` — the per-object
 table whose `stratum` column (`matched`, `only_old`, `only_new`) is what the
 validation sample is drawn from.
 
+## Settled: the deconvolution input is correct
+
+**Do not re-open this.** Both routes feed LUCYD `bitwise_not(absdiff(img, bg))` —
+dark objects on a near-white (~253) flat background, with the sensor noise
+removed by the subtraction. The C++ route does the same via an atlas of packed
+crops (`pack_crops.py:104` inverts in, `writer.py:14` inverts back).
+
+**Veit confirmed (2026-09-10) the model was trained on images matching that
+near-white cleaned background**, so this is in-distribution and correct. The
+`LUCYD_background-corr_230705.png` slide showing a ~197 grey background is not
+the training condition and should be disregarded.
+
+This matters because the model is *not* invariant to the level — feeding a 197
+pedestal puts 6x as much area above threshold, and 230 explodes the count to
+156x baseline (`comparison/pedestal.py`). The current setting is right; anything
+that changes the background level of the deconvolution input would not be.
+
+Related: the fixed detection threshold of 10 is only meaningful against a ~253
+background. Any change to the correction step has to re-reference it.
+
 ## Controlled-arm results (2026-09-10)
 
 Six arms on m202_a, 46 frames, same LUCYD weights
