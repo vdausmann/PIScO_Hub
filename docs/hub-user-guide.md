@@ -41,7 +41,8 @@ if you re-run into a fresh workflow directory.
 
 Save this as `wf.json`. It is the chain that was verified end to end: clean and
 compress the frames, deblur the crops, extract them, classify them, and write
-an EcoTaxa archive with the predictions already in it.
+an EcoTaxa archive with the predictions already in it. Two more tasks in
+step 4 carry it the rest of the way into EcoTaxa.
 
 ```json
 {
@@ -98,34 +99,59 @@ pct exec 110 -- /usr/local/bin/hub workflow status <id>
 
 `--watch` follows it. `hub workflow list` shows everything.
 
-### 4. Import into EcoTaxa — this part is manual
+### 4. Import into EcoTaxa
 
-The chain ends at a `.zip`. **Importing it is not yet a Hub tool**, so:
-
-1. Copy the zip somewhere EcoTaxa can read:
-   `/srv/pisco/ecotaxa-imports/` on the Proxmox host, which EcoTaxa sees as
-   `/file_srv/pisco/ecotaxa-imports/`.
-2. In EcoTaxa (`http://10.11.11.114:8088`), create a project, then
-   **Import** → "choose a folder or zip file on the server".
-
-Objects arrive already carrying the ViT's predictions, ready to validate.
-
-### 5. Enable "similar to" (optional, after import)
-
-Similarity search needs the embeddings attached to the imported objects, and
-that can only happen once EcoTaxa has assigned them ids. One more small
-workflow, using the project id from step 4:
+Add two more tasks and the chain finishes on its own — no manual import, no
+carrying a project number around:
 
 ```json
-{"name": "features", "tasks": [
-  {"tool": "pisco_ecotaxa_features", "settings": {
-    "embeddingsPath": "/mnt/pisco/hub-data/workflows/<id>/3_pisco_vit_classify/predictions/",
-    "projectId": 8,
-    "pcaPath": "/mnt/pisco/vit/pisco_pca50.npz"}}]}
+    {"tool": "pisco_ecotaxa_import", "settings": {
+      "archivePath": {"$from": {"task": 4, "output": "export"}},
+      "targetPath": "",
+      "projectTitle": "my profile",
+      "instrument": "Other camera"}},
+
+    {"tool": "pisco_ecotaxa_features", "settings": {
+      "embeddingsPath": {"$from": {"task": 3, "output": "predictions"}},
+      "projectIdFrom": {"$from": {"task": 5, "output": "import"}},
+      "pcaPath": "/mnt/pisco/vit/pisco_pca50.npz"}}
 ```
 
-It must cover **every** object in the project — EcoTaxa disables similarity
-search entirely for a project where any object lacks a feature vector.
+By default the import **creates a new project**. Set `projectId` instead to add
+to one that already exists — useful for building a project up profile by
+profile. `updateMode: "Yes"` with `skipExistingObjects: true` re-imports without
+duplicating.
+
+Nothing is copied. The share is mounted inside EcoTaxa's server load area, so
+the archive is imported where the export task already wrote it.
+
+`instrument` must be one EcoTaxa knows. There is no PIScO entry, so
+`Other camera` is the generic that works.
+
+### 5. What the last task buys you
+
+`pisco_ecotaxa_features` attaches the ViT embeddings, which is what enables
+EcoTaxa's **"similar to"** filter. It reads the project id from the import
+task's `import.json`, because the Hub chains tasks by *path*, not by value —
+a project that did not exist when you wrote the workflow could not be named in
+it otherwise.
+
+It must cover **every** object in the project: EcoTaxa disables similarity
+search entirely for a project where any object lacks a feature vector, rather
+than degrading. The task refuses a partial write for that reason.
+
+That is the whole chain — seven tasks, raw frames to an annotated, searchable
+project:
+
+```
+0 pisco_segment          gpuworker   clean + compress
+1 pisco_deconvolve       gpuworker   deblur the crops
+2 pisco_segment          gpuworker   extract objects
+3 pisco_vit_classify     gpuworker   classify + embeddings
+4 pisco_ecotaxa_export   gpuworker   crops, TSV, zip
+5 pisco_ecotaxa_import   ecotaxa     create project, import
+6 pisco_ecotaxa_features ecotaxa     attach embeddings
+```
 
 ## How work gets distributed
 
@@ -144,10 +170,11 @@ task.weight <= machine.max_weight - current load
 | `ecotaxa` (10.11.11.114) | `ecotaxa` | 4 |
 | `local` (the Hub itself) | — | 10 |
 
-So `pisco_ecotaxa_features` (requires `ecotaxa`) always lands on the EcoTaxa
-machine — that is how EcoTaxa's database stays on loopback instead of being
-exposed to the whole subnet. Everything else goes to whichever GPU worker is
-free.
+So `pisco_ecotaxa_import` and `pisco_ecotaxa_features` (both require
+`ecotaxa`) always land on the EcoTaxa machine — that is how EcoTaxa's database
+stays on loopback instead of being exposed to the whole subnet, and how its
+credentials stay off the shared storage. Everything else goes to whichever GPU
+worker is free.
 
 Weights are what keep a machine from being over-committed: the segmenter is 8
 and a ViT pass is 6, so those two cannot share a worker with capacity 10. Two
@@ -195,16 +222,6 @@ In the GUI: the task manager page links each task to its log.
 **An empty log with a non-zero exit** usually means the tool's wrapper died
 before it ran anything — a missing required setting, or an interpreter that
 cannot import what the script needs.
-
-## The manual steps, and why
-
-Two things in the chain are not Hub tasks:
-
-1. **Importing the zip into EcoTaxa.** There is no `pisco_ecotaxa_import` tool
-   yet. This is the obvious next one to add.
-2. **Attaching features**, which needs the project id that only exists after
-   the import. Even with an import tool, this stays a separate step unless the
-   Hub grows a way to pass a value (not a path) from one task to the next.
 
 ## Quick reference
 
