@@ -296,7 +296,60 @@ Outputs `summary.json`, `per_frame.csv`, and `matches.csv` — the per-object
 table whose `stratum` column (`matched`, `only_old`, `only_new`) is what the
 validation sample is drawn from.
 
-## First results — preliminary
+## Controlled-arm results (2026-09-10)
+
+Six arms on m202_a, 46 frames, same LUCYD weights
+(`best_ssim_v5a_noGrad_ablation.pth`) in both deconvolution arms. Submitted via
+`comparison/arms.py`.
+
+| arm | route | deconv | FOV mask | recorded | objects |
+|---|---|---|---|---|---|
+| A1 | python | off | on | 10944 | 6107 |
+| A2 | python | on | on | 41813 | **27891** |
+| A1b | python | off | off | 11085 | 6187 |
+| A2b | python | on | off | 42400 | 28255 |
+| B1 | C++ | off | n/a | — | 5548 |
+| B2 | C++ | on | n/a | — | **14055** |
+
+**Deconvolution multiplies the object count in both routes** — python 4.6x,
+C++ 2.5x. Without it the routes are within 10% (6107 vs 5548); with it they
+differ by a factor of two. Deconvolution is meant to sharpen crops, not create
+particles, so this is the finding the validation must address first: it is
+lifting texture above the detection threshold.
+
+**This retracts the claim that C++ abundance cannot depend on the deconvolution
+model.** Pass-1 ROIs are model-independent, but extraction re-thresholds ROI
+pixels that deconvolution has replaced, so the final object set moves with the
+model.
+
+**The FOV mask does not matter.** Turning it off (`maskImage = false`, a setting
+added to the tool for this) adds 80 objects to A1 and 364 to A2 — about 1.3%.
+
+Agreement, after harmonisation (FOV mask both sides, C++ de-padded 10 px,
+area > 50 px both, python saved-only):
+
+| comparison | python | C++ | matched | of python | of C++ | area C++/python |
+|---|---|---|---|---|---|---|
+| A1 vs B1, no deconv | 6107 | 3494 | 1180 | 19.3% | 33.8% | 0.622 |
+| A2 vs B2, deconv | 27891 | 10359 | 6686 | 24.0% | 64.5% | 0.849 |
+
+Deconvolution *improves* C++-side agreement (34% -> 65%, and 93% for objects
+above 1000 um) while the python route accumulates a large unmatched
+small-object population. Crowding bands for A2 vs B2 locate it: on the 15
+sparsest frames python reports 4153 objects against the C++ chain's 557, and
+only 5.1% of them match. A quiet frame is where a false-positive mechanism is
+most visible.
+
+**The TRIANGLE re-threshold explains nothing.** Over 10347 objects the TRIANGLE
+estimate lands *below* the floor of 10 for 86% of them, so the effective
+threshold is just 10 — the same fixed value the python route uses. Recomputing
+every mask at a fixed 10 reproduces the stored areas exactly (ratio 1.000 at
+p10, median and p90). The area gap remains open; the background estimator is the
+remaining candidate.
+
+Report with charts: https://claude.ai/code/artifact/e2f65008-a379-4ca4-bbf8-81739c82a023
+
+## Earlier shakedown results — superseded
 
 m202_a, 46 frames, `oldpipe_a` against workflow
 `2c7e9867-b3dd-45b3-9ac9-696af916d4c7`. **Provenance is incomplete**: the old
