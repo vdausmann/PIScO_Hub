@@ -339,6 +339,33 @@ Gaussian grain sigma 2.8–3.8. Training images are **whole 2560x2560 frames**.
   deconvolution is the in-distribution application and the **C++ route's atlas
   of packed crops is not** — unrelated crops adjacent, white gaps between them.
 
+### The atlas costs ~20% of mask area, and the gap fill is why
+
+`comparison/atlas_cost.py`. Same objects deconvolved both ways on three sparse
+frames: whole frame (in-distribution, what the python route does) versus packed
+into a 2600x2600 atlas (`ImagePacker(2600, 2600, 5)`, what `pisco_deconvolve`
+does). Atlas crops compared against the whole-frame crops they should match:
+
+| padding | gap fill | MAE (0-255) | mask area ratio | p10 | p90 |
+|---|---|---|---|---|---|
+| **5** | **white** | **2.10** | **1.201** | 1.057 | 1.490 |
+| 5 | texture | 1.74 | 1.142 | 1.013 | 1.383 |
+| 20 | white | 2.61 | 1.304 | 1.079 | 1.655 |
+| 60 | white | 2.53 | 1.302 | 1.103 | 1.703 |
+
+Pixel-wise the atlas is close (MAE ~2/255). **Mask area is not**: the atlas
+inflates it by 20%, and mask area is Task 2 in the retraining log. Two things
+follow:
+
+- **More padding makes it worse**, so this is not neighbour bleed — it is the
+  flat white surround. Keep padding at 5.
+- **Filling the gaps with real background texture instead of white recovers
+  about a third of the error** (1.201 -> 1.142) and lowers MAE. The
+  commented-out `atlas += 20` and `GaussianBlur` in `pack_crops.py` were
+  reaching for this. The test used a crude single tile from the frame's own
+  quiet region; sampling `bg_pool`-style textures with grain (sigma 2.8-3.8, as
+  the generator adds) should do better.
+
 ### Gate result: the deconvolution-only objects are real
 
 `comparison/snr_gate.py` applies `local_snr` verbatim to the six sparse frames.
