@@ -1,19 +1,54 @@
 .hdf-profile-viewer {
 	display: flex;
-	gap: 20px;
+
 	height: 80vh;
 }
 
 
+/* The tree is a list of names; the preview beside it is where the work
+   happens, so it starts narrow. The splitter overrides this inline. */
 .hdf-tree {
-	flex: 1;
+	flex: 0 0 20%;
+
+	min-width: 120px;
+
 	overflow: auto;
-	border-right: 1px solid #555;
+
+	padding-right: 10px;
 }
 
 
+.hdf-splitter {
+	flex: 0 0 7px;
+
+	cursor: col-resize;
+
+	background: #555;
+
+	border-radius: 3px;
+
+	/* the drag target is thin, so make it obvious it is grabbable */
+	background-clip: content-box;
+
+	border-left: 2px solid transparent;
+
+	border-right: 2px solid transparent;
+}
+
+
+.hdf-splitter:hover {
+	background: #888;
+}
+
+
+/* min-width:0 or a wide preview refuses to shrink below its content. */
 .hdf-info {
-	flex: 1;
+	flex: 1 1 auto;
+
+	min-width: 0;
+
+	overflow: auto;
+
 	padding: 20px;
 }
 
@@ -63,4 +98,190 @@
 	box-sizing: border-box;
 
 	color: white;
+}
+
+
+/* --- Frame view: the overview and the crop picked out of it --- */
+
+.frame-hint {
+	margin-bottom: 8px;
+
+	font-size: 0.85rem;
+}
+
+
+/* Swap the reconstructed frame for the raw source image. */
+.frame-toggle {
+	margin-left: 10px;
+
+	cursor: pointer;
+}
+
+
+.frame-note {
+	margin-left: 8px;
+
+	opacity: 0.75;
+}
+
+
+/* Frame, crop and profile share the space right of the splitter evenly. */
+.frame-layout {
+	display: flex;
+
+	gap: 16px;
+
+	align-items: flex-start;
+
+	flex-wrap: wrap;
+}
+
+
+.frame-layout > * {
+	flex: 1 1 260px;
+
+	min-width: 240px;
+}
+
+
+/* The canvas sits exactly on top of the preview and carries the highlights,
+   so the frame itself never has to be redrawn. */
+.frame-stage {
+	position: relative;
+
+	line-height: 0;
+}
+
+
+.frame-stage img {
+	display: block;
+
+	max-width: 100%;
+
+	height: auto;
+}
+
+
+#frame-overlay {
+	position: absolute;
+
+	top: 0;
+
+	left: 0;
+
+	width: 100%;
+
+	height: 100%;
+}
+
+
+.profile-panel canvas {
+	width: 100%;
+
+	height: auto;
+
+	border: 1px solid #444;
+
+	background: transparent;
+}
+
+
+.profile-head {
+	display: flex;
+
+	align-items: center;
+
+	justify-content: space-between;
+
+	gap: 8px;
+
+	margin-bottom: 6px;
+
+	font-size: 0.85rem;
+}
+
+
+.profile-readout {
+	margin-top: 6px;
+
+	font-size: 0.8rem;
+
+	opacity: 0.8;
+
+	min-height: 1.2em;
+}
+
+
+.crop-nav {
+	display: flex;
+
+	align-items: center;
+
+	justify-content: space-between;
+
+	gap: 8px;
+
+	margin-bottom: 8px;
+}
+
+
+.crop-nav button {
+	padding: 4px 10px;
+
+	cursor: pointer;
+}
+
+
+.crop-nav button:disabled {
+	cursor: default;
+
+	opacity: 0.4;
+}
+
+
+.crop-holder {
+	border: 1px solid #444;
+
+	padding: 8px;
+
+	min-height: 120px;
+
+	background: #fff;
+}
+
+
+/* Crops are often only a few dozen pixels across, so they are scaled up to
+   fill the panel; pixelated keeps that readable instead of blurry. */
+.crop-holder img {
+	width: 100%;
+
+	height: auto;
+
+	max-height: 420px;
+
+	object-fit: contain;
+
+	image-rendering: pixelated;
+}
+
+
+.crop-meta {
+	margin-top: 6px;
+
+	font-size: 0.8rem;
+
+	opacity: 0.8;
+}
+
+
+.crop-toggle {
+	display: block;
+
+	margin-bottom: 6px;
+
+	font-size: 0.8rem;
+
+	cursor: pointer;
+
+	user-select: none;
 }

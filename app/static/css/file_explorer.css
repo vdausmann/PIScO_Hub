@@ -84,3 +84,19 @@
 .viewer-menu div:hover {
 	background: #b3d7ff;
 }
+
+
+/* The workflow's own name, shown beside the id its directory is named after. */
+.entry-label {
+	margin-left: 8px;
+
+	padding: 1px 6px;
+
+	border-radius: 3px;
+
+	background: rgba(59, 130, 246, 0.15);
+
+	font-size: 0.85em;
+
+	opacity: 0.9;
+}

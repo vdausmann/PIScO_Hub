@@ -4,7 +4,7 @@ from threading import Thread
 import time
 from datetime import datetime
 from flask_sock import Sock
-from . import artifacts
+from . import artifacts, process_registry
 from .models import db, Task, Workflow, GlobalSetting, Tool
 
 # How long a terminated task gets to exit before it is killed outright.
@@ -100,16 +100,29 @@ class TaskWatcher:
 
     def check_task_status(self, task):
         """Checks a specific PID and updates the DB if the process ended."""
+        process = process_registry.get(task.pid)
+        if process is not None:
+            # We started it, so poll the handle. This reports the true exit
+            # status and cannot lose the child to subprocess's cleanup.
+            exit_code = process.poll()
+            if exit_code is not None:
+                self.finalize_task(task, exit_code)
+            return
+
+        # No handle: the task belongs to an earlier Hub process, since a
+        # restart leaves tasks marked Running in the database. It is not our
+        # child, so it cannot be reaped -- all we can do is see whether it is
+        # still there, and report that we do not know how it ended.
         try:
             pid, status = os.waitpid(task.pid, os.WNOHANG)
-            
+
             if pid != 0:
                 exit_code = os.waitstatus_to_exitcode(status)
                 self.finalize_task(task, exit_code)
-                
+
         except ChildProcessError:
             if not os.path.exists(f"/proc/{task.pid}"):
-                self.finalize_task(task, -1) 
+                self.finalize_task(task, -1)
         except Exception as e:
             print(f"[!] Watcher error on Task {task.id}: {e}")
 
@@ -118,6 +131,7 @@ class TaskWatcher:
         task.status = 'Finished' if exit_code == 0 else 'Failed'
         task.exit_code = exit_code
         task.completed_at = datetime.now()
+        process_registry.forget(task.pid)
         task.pid = None
 
         if task.status == 'Finished':

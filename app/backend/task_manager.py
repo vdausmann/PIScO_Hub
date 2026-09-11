@@ -1,5 +1,5 @@
 from .models import db, Workflow, Task, Tool, GlobalSetting, Machine
-from . import artifacts, machines, settings_engine
+from . import artifacts, machines, process_registry, settings_engine
 import json
 import shlex
 import time
@@ -376,6 +376,9 @@ class TaskManager:
                     start_new_session=True,
                     **popen_kwargs
                 )
+            # Keep the handle: the watcher polls it instead of the raw pid,
+            # so subprocess's own cleanup cannot reap the child first.
+            process_registry.remember(process.pid, process)
             print(f"[*] Started {tool.name} (PID: {process.pid})")
             return (process.pid, prefix)
         except Exception as e:

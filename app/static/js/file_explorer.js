@@ -2,6 +2,23 @@
 let currentPath = "";
 let selectedEntry = null;
 
+
+// Names reach the page through innerHTML, and a workflow's name is whatever
+// its author typed, so escape before interpolating.
+function escapeHtml(value)
+{
+	return String(value ?? "").replace(
+		/[&<>"']/g,
+		ch => ({
+			"&": "&amp;",
+			"<": "&lt;",
+			">": "&gt;",
+			'"': "&quot;",
+			"'": "&#39;"
+		}[ch])
+	);
+}
+
 let contextPosition =
 {
 	x:0,
@@ -109,8 +126,12 @@ function updateInfo(entry)
 
         <p>
             <b>Name:</b>
-            ${entry.name}
+            ${escapeHtml(entry.name)}
         </p>
+
+        ${entry.label
+            ? `<p><b>Workflow:</b> ${escapeHtml(entry.label)}</p>`
+            : ""}
 
         <p>
             <b>Type:</b>
@@ -202,7 +223,10 @@ function renderFiles(data)
 		row.innerHTML = `
 			<td>
 				${entry.type === "directory" ? "📁" : "📄"}
-				${entry.name}
+				${escapeHtml(entry.name)}
+				${entry.label
+					? `<span class="entry-label">${escapeHtml(entry.label)}</span>`
+					: ""}
 			</td>
 			<td>${formatSize(entry.size)}</td>
 			<td>${formatDate(entry.last_modified) ?? ""}</td>
