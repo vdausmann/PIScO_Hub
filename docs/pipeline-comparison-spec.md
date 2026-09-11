@@ -53,10 +53,24 @@ the one that became the Hub tool. Two lineages:
 | 2024-11-20 | `PIScO_Control_Center` first commit `56b9e0c` | carries the pairwise-min version |
 | 2025-12-13 | `790859e`, and the working copy (2026-01-12) | unchanged |
 
-The deployed `pisco_segmenter_py` descends from the **July-2023** lineage. It has
-since gained a centred window, shape checks and error handling, but never the
-pairwise minimum. So the C++ segmenter agrees with the *Control Center* python
-version, and the Hub tool is the odd one out.
+The deployed source is **`git@git.geomar.de:team-optics/plankton/pisco_segmenter_py.git`**
+(HEAD `b805b9a`, 2026-09-03) — the testbed's `bg_correction.py` is byte-identical
+to it, installed pip-editable so edits take effect without a reinstall. None of
+the copies on the Mac is the deployed code.
+
+**There is no commit that changed the background calculation.**
+`git log --all -S'np.min([input.images'` over that repo returns nothing: the
+pairwise minimum was never in it. The package was created on **2026-04-10**
+(`f3191ec`, "Create pip-installable pisco-segmenter package") already carrying
+the plain max, refactored from the plain-max lineage rather than from
+`MaxSegmenterProcessPool`. It is an inheritance from the wrong parent at
+package-creation time, not a regression. The centred window dates from that same
+commit. So the C++ segmenter agrees with the *Control Center* python version, and
+the Hub tool is the odd one out.
+
+**`bg_size` is not a setting** — hardcoded to 6 at `segmenter.py:261`, while the
+C++ exposes the equivalent as `imageStackSize`. Aligning the estimators should
+expose it too.
 
 **Why a grep does not find this:** the line `bg = np.max(bg_imgs, axis=0)` is
 *identical* in both versions. Only what fills `bg_imgs` differs — raw frames
