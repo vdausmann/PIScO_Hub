@@ -39,6 +39,33 @@ What follows from it:
    mechanisms and models are the same. They currently do not. See the
    decomposition below.
 
+### The background estimators diverged by accident, not by design
+
+Traced 2026-09-11. The python route's background calculation was **never
+changed** — the improvement was made in a different copy and never propagated to
+the one that became the Hub tool. Two lineages:
+
+| when | where | background |
+|---|---|---|
+| 2023-07-25 | `pisco_segmenter` (codebase.helmholtz.cloud), first commit `df38ffb` | `np.max` over raw frames |
+| 2023-07-27 | same repo, `9a08862` — still the newest on that remote | unchanged |
+| **2023-12-07** | `MaxSegmenterProcessPool/bg_correction.py` (the copy in `~/Downloads`, not under git) | **pairwise minima, then max** — the C++ algorithm, with the old plain-max line commented out directly above it |
+| 2024-11-20 | `PIScO_Control_Center` first commit `56b9e0c` | carries the pairwise-min version |
+| 2025-12-13 | `790859e`, and the working copy (2026-01-12) | unchanged |
+
+The deployed `pisco_segmenter_py` descends from the **July-2023** lineage. It has
+since gained a centred window, shape checks and error handling, but never the
+pairwise minimum. So the C++ segmenter agrees with the *Control Center* python
+version, and the Hub tool is the odd one out.
+
+**Why a grep does not find this:** the line `bg = np.max(bg_imgs, axis=0)` is
+*identical* in both versions. Only what fills `bg_imgs` differs — raw frames
+versus pairwise minima. A diff of that line shows nothing.
+
+Consequence: the decomposition below is measuring an accidental divergence, not
+a design decision, and closing it is a small edit to the deployed
+`bg_correction.py`.
+
 ### Why >50 px objects do not match yet
 
 `comparison/decompose.py`, 8 sparse frames, undeconvolved, identical detection
