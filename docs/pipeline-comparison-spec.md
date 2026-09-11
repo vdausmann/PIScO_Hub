@@ -9,6 +9,68 @@ Status: draft, 2026-09-10. Code facts below were verified by reading the
 > thresholds at `mean + n_sigma*std`. The deployed tool does neither. Any
 > analysis must name the commit it ran against.
 
+## DIRECTIVE (Veit, 2026-09-11): counts come from raw, not deconvolved, data
+
+**Particle counts are measured on the background-corrected image with no
+deconvolution.** Deconvolution is not part of detection or counting. It has
+exactly two jobs:
+
+- **A.** make particles **larger than 50 px in area** recognisable to a human
+  (contrast);
+- **B.** make the segmentation masks sit better on the objects — *to be
+  quantified*.
+
+What follows from it:
+
+1. The noise/particle threshold must be established on the **undeconvolved**
+   background-corrected image, and particles counted between that threshold and
+   50 px. The current fixed `threshold = 10` is not noise-referenced: measured
+   on real frames it lands anywhere from **2.4 to 5.4 sigma** of the frame's own
+   background, so sensitivity drifts frame to frame. That is tolerable when
+   counting is a by-product; it is not when counting is the product.
+   (The retraining log's "do not retune the detector threshold" was about not
+   compensating for *model* differences, and does not bind this.)
+2. The **blur/haze halo** around every particle, from the EDOF imaging, is part
+   of the thresholded area. For a small particle the halo is a larger fraction
+   of the measured area, so it biases the size spectrum exactly where the new
+   counting regime lives. Needs measuring — an area-versus-threshold curve on
+   isolated particles will show it.
+3. **Particles above 50 px must match completely between the routes** when the
+   mechanisms and models are the same. They currently do not. See the
+   decomposition below.
+
+### Why >50 px objects do not match yet
+
+`comparison/decompose.py`, 8 sparse frames, undeconvolved, identical detection
+in every row, only the named component changed:
+
+| background estimator | objects | matched with python's |
+|---|---|---|
+| python — max over centred 6 | 314 | — |
+| C++ — max of pairwise minima over 20 | 242 (0.77x) | **97.1% of C++**, 74.8% of python |
+| training convention — max over 12 | 372 (1.18x) | 98.1% of python, 82.8% of train |
+
+**The populations are nearly nested, not randomly different**: 97.1% of what the
+C++ background finds, the python background also finds. The estimators order
+maxmin-20 ⊂ max-6 ⊂ max-12 — a longer, gentler background estimate yields a
+brighter background, a larger absdiff, and more detections.
+
+Morphology pulls the other way, on the same corrected image:
+
+| detection | objects | matched |
+|---|---|---|
+| python, plain contours | 314 | — |
+| python + 3x3 MORPH_CLOSE (what the C++ adds) | 492 (1.57x) | 84.1% |
+
+So the C++ route's two differences partly cancel — its background estimator
+removes objects, its morphology invents them — which is why the end-to-end
+numbers were hard to read.
+
+**Action:** standardise the background estimator across both routes. The
+training convention (**max over 12 neighbouring frames**) is the natural choice,
+because the LUCYD `bg_pool` textures were built that way, so it also puts the
+deconvolution input back in distribution. Then re-check the >50 px match.
+
 ## What this is for
 
 Decide whether the C++ route (`pisco_segment` -> `pisco_deconvolve` ->
