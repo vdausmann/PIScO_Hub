@@ -1,7 +1,6 @@
 from flask import Flask
 from .routes import (auth, processing, visualization, task_manager, global_settings,
-    workflow_builder, file_explorer, hardware_control)
-    workflow_builder, file_explorer, deep_link)
+    workflow_builder, file_explorer, deep_link, hardware_control)
 from .routes.api_v1 import api_v1_bp
 from .backend.models import db, login_manager
 from .backend.viewers import ViewerManager
