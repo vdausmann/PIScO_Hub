@@ -1,0 +1,22 @@
+{
+	"device1": {
+		"sensors": [
+			{"shorthand": "...", "name": "...", "group": "...",  "format": "..."},
+			{"shorthand": "...", "name": "...", "group": "...",  "format": "..."}
+		],
+		"commands": [
+			{"shorthand": "...", "name": "...", "group": "...",  "format": "..."},
+			{"shorthand": "...", "name": "...", "group": "...",  "format": "..."}
+		]
+	},
+	"device2": {
+		"sensors": [
+			{"shorthand": "...", "name": "...", "group": "...",  "format": "..."},
+			{"shorthand": "...", "name": "...", "group": "...",  "format": "..."}
+		],
+		"commands": [
+			{"shorthand": "...", "name": "...", "group": "...",  "format": "..."},
+			{"shorthand": "...", "name": "...", "group": "...",  "format": "..."}
+		]
+	}
+}

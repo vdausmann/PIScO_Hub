@@ -137,13 +137,34 @@
 
 		// --- 2. UNIVERSAL BACKGROUND INTERCEPTOR (Fetch API) ---
 		const { fetch: originalFetch } = window;
-		window.fetch = async (...args) => {
-			showLoader();
+
+		window.fetch = async (input, options = {}) => {
+
+			const showGlobalLoader =
+				options.showLoader !== false;
+
+			if (showGlobalLoader) {
+				showLoader();
+			}
+
 			try {
-				const response = await originalFetch(...args);
-				return response;
+
+				/*
+				 * Remove our custom option before passing the
+				 * options to the actual browser fetch function.
+				 */
+				const { showLoader, ...fetchOptions } = options;
+
+				return await originalFetch(
+					input,
+					fetchOptions
+				);
+
 			} finally {
-				hideLoader();
+
+				if (showGlobalLoader) {
+					hideLoader();
+				}
 			}
 		};
 

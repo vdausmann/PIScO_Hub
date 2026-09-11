@@ -1,0 +1,1 @@
+Pi-StartRec_1_Pi-FlashDur_0050_Pi-SetFPS_12.5_Pi-AcqTime_0200

@@ -1,6 +1,6 @@
 from flask import Flask
 from .routes import (auth, processing, visualization, task_manager, global_settings,
-    workflow_builder, file_explorer)
+    workflow_builder, file_explorer, hardware_control)
 from .routes.api_v1 import api_v1_bp
 from .backend.models import db, login_manager
 from .backend.viewers import ViewerManager
@@ -53,6 +53,8 @@ def create_app(create_worker=True):
     app.register_blueprint(workflow_builder.workflow_bp,
                            url_prefix='/workflow-builder')
     app.register_blueprint(api_v1_bp, url_prefix='/api/v1')
+    app.register_blueprint(hardware_control.hardware_control_bp,
+                           url_prefix='/hardware-control')
 
     # Register tools and viewers:
     with app.app_context():
