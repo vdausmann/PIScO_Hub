@@ -39,6 +39,41 @@ What follows from it:
    mechanisms and models are the same. They currently do not. See the
    decomposition below.
 
+### Result of aligning the estimators (2026-09-11)
+
+Both routes now use max-of-pairwise-minima; both run at stack 12; deconvolution
+off; arms `A1x` / `B1x`.
+
+| | python | C++ | matched of python | matched of C++ | area C++/python |
+|---|---|---|---|---|---|
+| before (`A1` vs `B1`) | 6107 | 3494 | 19.3% | 33.8% | 0.622 |
+| **after (`A1x` vs `B1x`)** | 4930 | 3494 | **40.9%** | **57.6%** | **0.712** |
+
+A real gain — matched share of C++ objects went from a third to well over half,
+and the mask-area gap narrowed. Not the complete match the directive asks for.
+
+**Two hypotheses for the remainder, both dead** (`comparison/selfcheck.py`):
+
+- *The C++ includes the frame in its own background while python excludes it.*
+  It does, and it makes no difference: 434 vs 436 objects over 8 frames,
+  identical median area. The pairwise minimum already suppresses the frame's own
+  objects.
+- *`imageStackSize` was doing the work.* Raw object count is **5548 either way**
+  at 20 and at 12. The `result.h5` files differ in content but not in how many
+  objects come out, so the stack size is not what separates the routes.
+
+**What is left is structural, not a parameter.** `segmenter.cpp:66` calls
+`backgroundCorrection(imageStack, settings)`, which computes **one background
+for the whole stack** and applies it to every frame in it, then advances by
+`fileIndex += imageStack.size()` — non-overlapping blocks. The python route
+computes a **sliding centred window per frame**. So the C++ background cannot
+track drift within a block, while python's follows it frame by frame.
+
+Closing the last of the gap means changing one route's *structure* — either the
+C++ moves to a sliding window, or python adopts block correction. That is a
+decision, not a setting, and it should be made on which is better science rather
+than on which is easier to match.
+
 ### The background estimators diverged by accident, not by design
 
 Traced 2026-09-11. The python route's background calculation was **never

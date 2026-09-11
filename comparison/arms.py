@@ -51,9 +51,11 @@ def api(path, payload=None, method=None):
         return json.loads(r.read())
 
 
-def python_arm(deconv, fov_mask=True):
+def python_arm(deconv, fov_mask=True, stack=None):
     settings = {"sourcePath": SOURCE, "targetPath": "", "deconvolution": deconv,
                 "nCores": 8, "maskImage": fov_mask}
+    if stack:
+        settings["backgroundStackSize"] = stack
     if deconv:
         # whole 2560^2 frames go through the model, so this is the peak
         # allocation; 2 is what fits an 8 GB Tesla P4
@@ -61,9 +63,10 @@ def python_arm(deconv, fov_mask=True):
     return [{"tool": "pisco_segment_py", "settings": settings}]
 
 
-def cpp_arm(deconv):
+def cpp_arm(deconv, stack=None):
+    cpp = dict(CPP, **({"imageStackSize": stack} if stack else {}))
     tasks = [{"tool": "pisco_segment", "settings": dict(
-        CPP, sourcePath=SOURCE, targetPath="",
+        cpp, sourcePath=SOURCE, targetPath="",
         mode="Mode::BACKGROUND_CORRECTION_AND_COMPRESSION")}]
     if deconv:
         tasks.append({"tool": "pisco_deconvolve", "settings": {
@@ -71,7 +74,7 @@ def cpp_arm(deconv):
             "modelPath": MODEL}})
     # extraction is a second sweep over the correction directory, never a fresh one
     tasks.append({"tool": "pisco_segment", "settings": dict(
-        CPP, sourcePath=SOURCE,
+        cpp, sourcePath=SOURCE,
         targetPath={"$from": {"task": 0, "output": "results"}},
         mode="Mode::OBJECT_EXTRACTION")})
     return tasks
@@ -85,7 +88,12 @@ ARMS = [("A1 python deconv=off", python_arm(False)),
         ("B1 cpp deconv=off",    cpp_arm(False)),
         ("B2 cpp deconv=on",     cpp_arm(True)),
         ("A1b python deconv=off nomask", python_arm(False, fov_mask=False)),
-        ("A2b python deconv=on nomask",  python_arm(True, fov_mask=False))]
+        ("A2b python deconv=on nomask",  python_arm(True, fov_mask=False)),
+        # Aligned arms: same background algorithm (pairwise minima, since the
+        # python route now does what the C++ always did) and the same stack, so
+        # detection is the only thing left that can differ.
+        ("A1x python deconv=off bg12", python_arm(False, stack=12)),
+        ("B1x cpp deconv=off stack12", cpp_arm(False, stack=12))]
 
 # Arms already submitted are skipped by name, so this is safe to re-run.
 SKIP_EXISTING = True
