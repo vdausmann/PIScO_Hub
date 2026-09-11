@@ -296,6 +296,65 @@ Outputs `summary.json`, `per_frame.csv`, and `matches.csv` — the per-object
 table whose `stratum` column (`matched`, `only_old`, `only_new`) is what the
 validation sample is drawn from.
 
+## What the LUCYD training sources establish (2026-09-11)
+
+Repo `git@git.geomar.de:team-optics/plankton/underwater-lucyd.git` (SSH works;
+clone it, don't guess) and Zenodo record 22705689. `docs/RETRAINING_LOG.md` is
+the development log and it already answers several questions asked here.
+
+**Use `snr_real_vs_hallucinated`, not object counts.** The log's own words:
+"raw detection count is not a metric. The deploy gate is
+`snr_real_vs_hallucinated` — small-detection SNR distribution vs a
+model-independent control noise floor". Model v3 produced **+436%** detections
+and was rejected as speckle; "raw count would have called it a success; only the
+SNR-vs-control gate caught it". Implementations:
+`sim/real_vs_hallucinated.py`, `sim/validate_v3.py`, `eval/metrics.py`.
+
+**Do not retune the detection threshold.** "Every model under-segments at
+threshold 10; v4/v5d IoU already peaks there — do not retune the detector
+threshold." That closes the adaptive-threshold question for deconv-off.
+
+**The priorities are not abundance.** Task 1 is human recognizability
+(object/background contrast), Task 2 is correct segmentation-mask area, and
+"detection completeness is subordinate."
+
+**`v5d` is the deploy candidate, not `v5a`.** The log lists `v5a` as
+"ablation: v5 data, no gradient term" and `v5d` (+13%) as "**deploy candidate**
+— boost 1.30 + mask weighting, no gradient term". The comparison arms here used
+`best_ssim_v5a_noGrad_ablation.pth`; they should be re-run on
+`*_v5d_maskweight.pth`.
+
+**Training composition**, which bounds what the model can be trusted to
+reconstruct: 29,477 in-focus objects, area **120–40,000 px**, contrast **>= 60**,
+focus <= 2.0 px, mostly marine snow; 25–55 per synthetic frame at scale 0.5–1.6
+and opacity 0.85–1.0, composited onto real cleaned background textures plus
+Gaussian grain sigma 2.8–3.8. Training images are **whole 2560x2560 frames**.
+
+**Two mismatches worth checking:**
+
+- The background pool was built with `absdiff(img, max over **12** neighbouring
+  frames)`; the deployed python route uses `bg_size = 6` and the C++ route a
+  max-of-pairwise-minima over 20. Neither matches the training condition.
+- Training images are whole frames, so the python route's whole-frame
+  deconvolution is the in-distribution application and the **C++ route's atlas
+  of packed crops is not** — unrelated crops adjacent, white gaps between them.
+
+### Gate result: the deconvolution-only objects are real
+
+`comparison/snr_gate.py` applies `local_snr` verbatim to the six sparse frames.
+SNR measured on the cleaned input, which is identical with and without
+deconvolution:
+
+| population | n | median SNR | clears control p95 |
+|---|---|---|---|
+| kept (found both ways) | 254 | 5.63 | 82.3% |
+| promoted | 199 | 3.67 | 88.9% |
+| **new (deconvolution only)** | **820** | **3.04** | **82.0%** |
+| control (noise floor) | 1273 | 1.90 | 5.0% |
+
+The "new" objects clear the noise floor at the same rate as the reference
+population. They are fainter, as expected, but **they are not hallucinated**.
+
 ## Settled: the deconvolution input is correct
 
 **Do not re-open this.** Both routes feed LUCYD `bitwise_not(absdiff(img, bg))` —
