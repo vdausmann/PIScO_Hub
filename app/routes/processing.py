@@ -67,6 +67,14 @@ def status_class_filter(status):
             "Failed": "status-failed"}.get(status, "status-pending")
 
 
+@processing_bp.app_template_filter("from_json")
+def from_json_filter(text):
+    try:
+        return json.loads(text) if text else {}
+    except (ValueError, TypeError):
+        return {}
+
+
 @processing_bp.app_template_filter("pretty_json")
 def pretty_json_filter(text):
     try:

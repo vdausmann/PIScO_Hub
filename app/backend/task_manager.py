@@ -52,20 +52,29 @@ def _validate_refs(tool, settings_obj, position, tools_so_far):
                 "has no settings_key, so its location is not tracked")
 
 
-def create_new_workflow(workflow_name: str, task_specs: list[dict]):
+def create_new_workflow(workflow_name: str, task_specs: list[dict],
+                        params: dict | None = None, template=None):
     """Create a workflow from task specs.
 
     Each spec: {"tool": <name>, "settings": <object or text, optional>,
     "priority": <int, optional>, "weight": <int, optional>}.
     Settings are stored as text (JSON text for structured formats) and
     validated against the tool's schema when one exists. Settings values
-    may be {"$from": {"task": <position>|"prev", "output": <name>}} to
-    consume an earlier task's output; those are resolved at dispatch.
+    may be references: {"$from": {"task": <position>|"prev", "output":
+    <name>}} consumes an earlier task's output, {"$param": <name>} and
+    {"$format": "...{name}..."} take from the workflow's params. All are
+    kept in the stored settings and resolved at dispatch; params are
+    validated here already, since they are known.
     Raises KeyError for unknown/unavailable tools and ValueError for
     invalid settings.
     """
+    params = dict(params or {})
     new_workflow = Workflow()
     new_workflow.name = workflow_name
+    new_workflow.params = json.dumps(params)
+    if template is not None:
+        new_workflow.template_id = template.id
+        new_workflow.template_name = template.name
 
     db.session.add(new_workflow)
     db.session.flush() # This gets us the workflow.id before committing
@@ -90,7 +99,7 @@ def create_new_workflow(workflow_name: str, task_specs: list[dict]):
             _validate_refs(tool, settings, i, tools_so_far)
 
             errors = settings_engine.validate(
-                tool, artifacts.validation_candidate(tool, settings))
+                tool, artifacts.validation_candidate(tool, settings, params))
             if errors:
                 raise ValueError(
                     f"Invalid settings for tool '{tool_name}': " + "; ".join(errors))
@@ -123,6 +132,13 @@ def create_new_workflow(workflow_name: str, task_specs: list[dict]):
     print(f"[*] Created workflow '{workflow_name}' with {len(task_specs)} tasks.")
 
     return new_workflow.id
+
+
+def _workflow_params(workflow):
+    try:
+        return json.loads(workflow.params) if workflow.params else {}
+    except (ValueError, TypeError):
+        return {}
 
 
 def get_current_load():
@@ -229,6 +245,7 @@ class TaskManager:
         if not isinstance(obj, dict):
             return task.settings
 
+        obj = settings_engine.resolve_params(obj, _workflow_params(task.workflow))
         for path, ref in settings_engine.extract_from_refs(obj):
             artifacts.set_setting(obj, path, self._resolve_ref(task, path, ref))
 

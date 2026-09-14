@@ -115,6 +115,8 @@ def workflow_summary(workflow):
 
 def workflow_detail(workflow):
     data = workflow_summary(workflow)
+    data["params"] = _json_or_default(workflow.params, {})
+    data["template"] = workflow.template_name
     tasks = sorted(workflow.tasks, key=lambda t: t.workflow_position)
     data["tasks"] = [task_dict(t) for t in tasks]
     return data

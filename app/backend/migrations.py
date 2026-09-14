@@ -14,6 +14,18 @@ _MIGRATIONS = {
         ("machine_id", "INTEGER REFERENCES machine(id)"),
         ("terminated_at", "DATETIME"),
     ],
+    "workflow": [
+        ("params", "TEXT DEFAULT '{}'"),
+        ("template_id", "VARCHAR(36)"),
+        ("template_name", "VARCHAR(100)"),
+    ],
+    "template_workflow": [
+        ("description", "TEXT"),
+        ("params_schema", "TEXT"),
+        ("name_format", "VARCHAR(200)"),
+        ("provider_id", "INTEGER REFERENCES tool_provider(id)"),
+        ("manifest_hash", "VARCHAR(64)"),
+    ],
     "machine": [
         ("last_probe_error", "TEXT"),
     ],

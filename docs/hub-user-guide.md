@@ -23,7 +23,24 @@ path (`/mnt/pisco`), so a task can hand its output to the next one by path.
 | **REST API** | scripting, other programs | interactive use |
 
 **The practical answer: build chains as a JSON file and submit them with the
-CLI.** Use the GUI to watch them and to look at the results.
+CLI, or instantiate a template.** Use the GUI to watch them and to look at
+the results.
+
+Values that several steps share — the frame directory, cruise and station,
+a model path — go once into the workflow's `params` and are referenced from
+settings as `{"$param": "frames"}` or `{"$format": "{cruise}_{station}"}`.
+A *template* is such a chain with a schema for its parameters; the standard
+ones are shipped with the toolboxes and `hub templates list` shows what is
+registered:
+
+```
+hub templates describe process_profile        # which parameters it needs
+hub workflow create --template process_profile \
+    --param cruise=M203 --param station=012-01 --param frames=/mnt/pisco/incoming/M203_012-01/ --watch
+```
+
+The workflow page shows the parameters it ran with, and **Export JSON** gives
+a file that recreates the run. See AGENTS.md for the reference syntax.
 
 The GUI cannot express `{"$from": ...}` references, so a chain built there needs
 every path typed by hand. That works, but it is easy to get wrong and it breaks

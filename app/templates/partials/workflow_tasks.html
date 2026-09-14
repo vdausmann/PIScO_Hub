@@ -29,6 +29,20 @@
     {% if started %}· started {{ started | min | clock }}{% endif %}
 </p>
 
+{% set params = workflow.params | from_json %}
+{% if params or workflow.template_name %}
+<div class="card" style="margin-bottom: 1rem;">
+    <h3>Parameters{% if workflow.template_name %} · from template <span class="mono">{{ workflow.template_name }}</span>{% endif %}</h3>
+    {% if params %}
+    <dl class="meta-grid">
+        {% for key, value in params.items() %}
+        <dt>{{ key }}</dt><dd>{{ value if value is string else value | tojson }}</dd>
+        {% endfor %}
+    </dl>
+    {% else %}<span class="muted small">none</span>{% endif %}
+</div>
+{% endif %}
+
 <div class="table-scroll">
 <table class="ph-table">
     <thead>

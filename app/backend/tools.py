@@ -56,6 +56,10 @@ def load_toolbox_manifest(path):
         raise ManifestError(f"{manifest_path}: 'tools' must be a non-empty list")
 
     descriptors = [_normalize_entry(entry, path) for entry in tools]
+    workflows = manifest.get("workflows", [])
+    if not isinstance(workflows, list):
+        raise ManifestError(f"{manifest_path}: 'workflows' must be a list")
+    provider_info = dict(provider_info, workflows=workflows)
     return provider_info, descriptors
 
 
@@ -286,6 +290,10 @@ class ToolRegistry:
                 print(f"[!] Provider '{provider.name}': {e}")
                 continue
 
+            workflows = []
+            if not provider.builtin:
+                workflows = provider_info.get("workflows", [])
+
             for desc in descriptors:
                 name = desc["name"]
                 if name in seen_names:
@@ -299,6 +307,10 @@ class ToolRegistry:
 
             provider.last_scanned_at = datetime.now()
             db.session.commit()
+
+            # Templates come after the tools they reference are in place.
+            from . import templates
+            templates.sync_provider(provider, workflows, result)
 
         # Tools that no provider mentions anymore are hidden from new
         # workflows but kept for the history of finished tasks.

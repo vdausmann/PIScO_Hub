@@ -122,7 +122,37 @@ _WORKFLOW = {
                    "enum": ["Pending", "Running", "Finished", "Failed"]},
         "created_at": {"type": ["string", "null"]},
         "task_count": {"type": "integer"},
+        "params": {"type": "object",
+                   "description": "Workflow-level values task settings "
+                                  "reference with $param / $format"},
+        "template": {"type": ["string", "null"],
+                     "description": "Name of the template it was made from"},
         "tasks": {"type": "array", "items": _TASK},
+    },
+}
+
+_TEMPLATE = {
+    "type": "object",
+    "description": "A reusable workflow: steps whose settings reference "
+                   "parameters, plus a JSON Schema for those parameters. "
+                   "Shipped by a toolbox manifest (provider set, read-only) "
+                   "or saved by a user.",
+    "properties": {
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "description": {"type": ["string", "null"]},
+        "provider": {"type": ["string", "null"]},
+        "task_count": {"type": "integer"},
+        "tools": {"type": "array", "items": {"type": "string"}},
+        "name_format": {"type": ["string", "null"],
+                        "description": "Default workflow name, e.g. "
+                                       "\"{cruise}_{station}\""},
+        "params_schema": {"type": ["object", "null"],
+                          "description": "JSON Schema the params must satisfy; "
+                                         "detail view only"},
+        "tasks": {"type": "array", "description": "Creation-style task specs; "
+                                                  "detail view only"},
+        "created_at": {"type": ["string", "null"]},
     },
 }
 
@@ -144,11 +174,28 @@ _FROM_REF = {
     },
 }
 
+_PARAM_REF = {
+    "type": "object",
+    "description": "Take a workflow parameter as the value ({\"$param\": "
+                   "\"cruise\"}) or compose a string from several "
+                   "({\"$format\": \"{cruise}_{station}\"}). Checked "
+                   "against the params when the workflow is created.",
+    "properties": {"$param": {"type": "string"}, "$format": {"type": "string"}},
+}
+
 _WORKFLOW_CREATE = {
     "type": "object",
-    "required": ["name", "tasks"],
+    "description": "Either 'name' + 'tasks', or 'template' + 'params' "
+                   "(name optional, defaulting to the template's "
+                   "name_format). An exported workflow carries both; then "
+                   "the tasks are used and the template records provenance.",
     "properties": {
         "name": {"type": "string"},
+        "template": {"type": "string", "description": "Template name or id"},
+        "params": {"type": "object",
+                   "description": "Values for $param/$format references. "
+                                  "Strings are coerced to the template "
+                                  "schema's declared types."},
         "tasks": {
             "type": "array",
             "minItems": 1,
@@ -160,8 +207,9 @@ _WORKFLOW_CREATE = {
                     "settings": {
                         "description": "Object for schema'd tools (validated), "
                                        "string for opaque tools, omit for defaults. "
-                                       "Any value may be a $from reference; declared "
-                                       "outputs left blank get an allocated path.",
+                                       "Any value may be a $from, $param or $format "
+                                       "reference; declared outputs left blank get "
+                                       "an allocated path.",
                     },
                     "priority": {"type": "integer"},
                     "weight": {"type": "integer"},
@@ -325,12 +373,46 @@ def build_spec(server_url):
                 "delete": _op("Delete a workflow (409 while Running)",
                               scope="operate", params=[_p("id")]),
             },
+            "/workflows/{id}/spec": {"get": _op(
+                "The workflow as a creation request (name, params, template, "
+                "tasks with stored settings) for resubmitting to POST /workflows",
+                params=[_p("id")],
+                responses={"200": _json_resp(_WORKFLOW_CREATE)})},
             "/workflows/{id}/retry": {"post": _op(
                 "Requeue from the first failed task, discarding the artifacts "
                 "recorded from that point on",
                 scope="operate", params=[_p("id")],
                 responses={"200": _json_resp(_WORKFLOW, "Requeued"),
                            "409": _json_resp(_ERROR, "Nothing to retry")})},
+            "/templates": {
+                "get": _op("List templates",
+                           responses={"200": _json_resp({
+                               "type": "object",
+                               "properties": {"templates": {"type": "array",
+                                                            "items": _TEMPLATE}}})}),
+                "post": _op("Save a template", scope="operate",
+                            body={"type": "object",
+                                  "required": ["name"],
+                                  "properties": {
+                                      "name": {"type": "string"},
+                                      "tasks": {"type": "array",
+                                                "description": "Creation-style task specs"},
+                                      "from_workflow": {"type": "string",
+                                                        "description": "Copy this workflow's steps instead of giving tasks"},
+                                      "params_schema": {"type": "object"},
+                                      "description": {"type": "string"},
+                                      "name_format": {"type": "string"}}},
+                            responses={"201": _json_resp(_TEMPLATE, "Created"),
+                                       "400": _json_resp(_ERROR, "Invalid")}),
+            },
+            "/templates/{id}": {
+                "get": _op("Template detail incl. params_schema and tasks; "
+                           "id or name", params=[_p("id")],
+                           responses={"200": _json_resp(_TEMPLATE)}),
+                "delete": _op("Remove a user-saved template (400 for a "
+                              "provider-shipped one)", scope="operate",
+                              params=[_p("id")]),
+            },
             "/tasks/{id}": {"get": _op("Task detail incl. stored settings",
                                        params=[_p("id")])},
             "/tasks/{id}/artifacts": {"get": _op(

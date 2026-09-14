@@ -64,8 +64,11 @@ CLI quick reference (full help: `hub -h`):
 ```
 hub tools list | describe <name> | refresh
 hub providers list | add <path> | remove <id>
-hub workflow create --file wf.json [--watch] | list | status <id> | delete <id>
-hub task status <id> | logs <id> [--stderr] [--follow]
+hub workflow create --file wf.json [--watch] | list | status <id> | export <id> | retry <id> | delete <id>
+hub workflow create --template <name> --param k=v … [--params @meta.json]
+hub templates list | describe <name> | delete <id>
+hub task status <id> | artifacts <id> | logs <id> [--stderr] [--follow]
+hub machines list | add <name> --host <h> | enable <id> | disable <id> | remove <id>
 hub system load
 ```
 

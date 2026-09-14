@@ -114,6 +114,49 @@ the Hub allocates a location for it under `DATA_ROOT`.
 Because the value is filled in later, a schema property bound to a path
 should be a plain `"type": "string"` without `pattern`/`enum` constraints.
 
+### Workflow parameters
+
+Facts that several tasks share — a profile's cruise and station, the
+frame directory, a model path — belong to the workflow, not to each
+task. Give them once as `params` and reference them from settings:
+
+```json
+{"name": "M203_012-01",
+ "params": {"cruise": "M203", "station": "012-01", "frames": "/mnt/pisco/incoming/M203_012-01/"},
+ "tasks": [
+   {"tool": "pisco_segment", "settings": {"sourcePath": {"$param": "frames"}, "targetPath": ""}},
+   {"tool": "pisco_ecotaxa_export", "settings": {"profileName": {"$format": "{cruise}_{station}"}}}
+ ]}
+```
+
+`{"$param": "name"}` takes the parameter's value as it is (so a number
+stays a number); `{"$format": "…{name}…"}` composes a string from
+several. Like `$from`, they stay in the stored settings and are resolved
+at dispatch — but because the values are known at creation, they are
+validated then, with the real value substituted: an unknown parameter or
+a type mismatch is a `400` naming the setting. `GET /workflows/<id>`
+returns `params`; the workflow page and the export carry them too.
+
+### Templates
+
+A template is a task list whose settings reference parameters, plus a
+JSON Schema for those parameters. Toolboxes ship them in their manifest
+(`workflows`, see below); users save their own with `POST /templates`.
+Instantiate one instead of writing the task list:
+
+```json
+{"template": "process_profile",
+ "params": {"cruise": "M203", "station": "012-01", "lat": 38.58, "lon": -27.32}}
+```
+
+The params are checked against the template's `params_schema` (text
+values are coerced to the declared types first, so `"lat": "38.58"` from a
+form or a CLI flag is fine; defaults are filled in), the name comes from
+the template's `name_format` unless `name` is given, and the response is
+the usual workflow detail. `GET /templates/<name>` shows the schema, so an
+agent can work out what to ask for. CLI: `hub templates describe <name>`,
+`hub workflow create --template <name> --param k=v … [--params @file]`.
+
 ### Monitoring agents
 
 Give a monitoring agent an `operate` token. A reasonable loop: poll the
@@ -204,6 +247,42 @@ Rules:
   declare none; 0 there means no limit. A stopped task fails like any
   other, with the reason appended to its error log.
 
+### Shipping workflow templates
+
+A manifest may also carry a `workflows` list: the standard chains built
+from its tools, versioned with them. Each entry is a template — the same
+shape `POST /workflows` accepts, plus a schema for its parameters:
+
+```json
+"workflows": [
+  {
+    "name": "process_profile",
+    "description": "Correct, deconvolve, extract, classify and export one profile.",
+    "name_format": "{cruise}_{station}",
+    "params_schema": {
+      "type": "object",
+      "required": ["cruise", "station", "frames"],
+      "properties": {
+        "cruise":  {"type": "string", "title": "Cruise"},
+        "station": {"type": "string", "title": "Station (DSHIP id)"},
+        "frames":  {"type": "string", "title": "Frame directory"},
+        "lat":     {"type": "number", "minimum": -90, "maximum": 90}
+      }
+    },
+    "tasks": [
+      {"tool": "pisco_segment", "settings": {"sourcePath": {"$param": "frames"}, "targetPath": ""}},
+      {"tool": "pisco_ecotaxa_export", "settings": {"profileName": {"$format": "{cruise}_{station}"}}}
+    ]
+  }
+]
+```
+
+Tools are named as usual and may come from any registered provider.
+Templates are registered on every scan (`hub tools refresh`), show their
+provider in `GET /templates`, and cannot be edited or deleted through
+the Hub — change the manifest and refresh. An entry that fails to load
+is reported in the scan result and skipped; the others still load.
+
 ## Running on other machines
 
 The Hub can dispatch tasks to other machines over SSH. This assumes
@@ -235,10 +314,15 @@ no cancel operation today; kill such a process manually over SSH.
 | POST | `/api/v1/providers` | full | register a toolbox |
 | DELETE | `/api/v1/providers/<id>` | full | remove (tools become unavailable) |
 | GET | `/api/v1/workflows` | read | list |
-| POST | `/api/v1/workflows` | operate | create + queue |
+| POST | `/api/v1/workflows` | operate | create + queue (`tasks`, or `template` + `params`) |
 | GET | `/api/v1/workflows/<id>` | read | status detail incl. artifacts |
+| GET | `/api/v1/workflows/<id>/spec` | read | the run as a creation request, for resubmitting |
 | POST | `/api/v1/workflows/<id>/retry` | operate | requeue from the first failed task |
 | DELETE | `/api/v1/workflows/<id>` | operate | delete (409 while Running) |
+| GET | `/api/v1/templates` | read | list templates |
+| GET | `/api/v1/templates/<id or name>` | read | params schema and steps |
+| POST | `/api/v1/templates` | operate | save a template (`tasks` or `from_workflow`) |
+| DELETE | `/api/v1/templates/<id>` | operate | remove a user-saved template |
 | GET | `/api/v1/tasks/<id>` | read | task detail incl. stored settings |
 | GET | `/api/v1/tasks/<id>/artifacts` | read | what the task produced |
 | GET | `/api/v1/tasks/<id>/logs` | read | `?stream=stdout|stderr&tail=N` |

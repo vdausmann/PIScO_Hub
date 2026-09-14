@@ -65,7 +65,9 @@ def spec(workflow):
     """The workflow as a creation request: the body POST /workflows takes
     and `hub workflow create --file` reads, so a run can be repeated or
     edited and resubmitted. Structured settings come back as objects,
-    with any $from references intact; opaque ones stay text."""
+    with any $from/$param references intact; opaque ones stay text.
+    The template name is informative: the tasks are listed in full, so
+    the file recreates the run even if the template changed since."""
     tasks = []
     for task in sorted(workflow.tasks, key=lambda t: t.workflow_position):
         settings = task.settings
@@ -79,4 +81,14 @@ def spec(workflow):
         if task.machine is not None and not task.machine.is_local:
             entry["machine"] = task.machine.name
         tasks.append(entry)
-    return {"name": workflow.name, "tasks": tasks}
+    spec = {"name": workflow.name}
+    try:
+        params = json.loads(workflow.params) if workflow.params else {}
+    except (ValueError, TypeError):
+        params = {}
+    if params:
+        spec["params"] = params
+    if workflow.template_name:
+        spec["template"] = workflow.template_name
+    spec["tasks"] = tasks
+    return spec

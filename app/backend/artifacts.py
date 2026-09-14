@@ -92,17 +92,19 @@ def set_setting(obj, dotted_key, value):
     node[parts[-1]] = value
 
 
-def validation_candidate(tool, settings_obj):
+def validation_candidate(tool, settings_obj, params=None):
     """A copy of the settings with everything the Hub fills in later stubbed.
 
     Validation happens when a workflow is built, but references have no
     path until their upstream task runs, and outputs left blank are only
     assigned a location at dispatch. Both would otherwise fail a schema
-    that marks them required.
+    that marks them required. Workflow params are known already, so
+    those references are filled with their real values and validated.
     """
     from . import settings_engine
 
-    candidate = settings_engine.substitute_from_refs(settings_obj)
+    candidate = settings_engine.resolve_params(settings_obj, params)
+    candidate = settings_engine.substitute_from_refs(candidate)
     for output in declarations(tool, "outputs"):
         key = output.get("settings_key")
         if key and not get_setting(candidate, key):
