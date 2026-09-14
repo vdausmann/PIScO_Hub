@@ -407,6 +407,55 @@ EcoTaxa is the natural annotation tool: an arbitration project holding exactly
 the sampled objects, with stratum and route provenance in free columns, hidden
 from the sorting view.
 
+## Input formats (measured 2026-09-14)
+
+Both pipelines read through the same call, `cv.imread(..., IMREAD_GRAYSCALE)`,
+with the same codecs linked (OpenJPEG 2.5, libjpeg-turbo, libpng, libtiff), so
+decode capability is identical. They differ only in the file filter: the C++
+takes `allowedImageFileExtensions` as a setting; the python route is
+**hardcoded** to `.png/.jpg/.tif` at `segmenter.py:185` and silently skips
+anything else.
+
+Per frame, 2560x2560 8-bit, Tesla P4 (`comparison/formats.py`, `nvj2k_bench.py`,
+`hevc_bench.py`):
+
+| format | size | decode | lossless | where |
+|---|---|---|---|---|
+| PNG (current) | 3.05 MB | 37 ms | yes | CPU |
+| BMP | 6.55 MB | 5 ms | yes | CPU |
+| TIFF | 3.62 MB | 32 ms | yes | CPU |
+| JPEG 2000 lossless, OpenJPEG | 2.82 MB | **418 ms** | yes | CPU |
+| JPEG 2000 lossless, nvJPEG2000 | 2.82 MB | 53-61 ms | yes | GPU (CUDA kernels) |
+| JPEG 2000 20:1 | 0.33 MB | 76 ms | **no, max diff 16** | CPU |
+| **HEVC lossless intra, NVDEC** | **2.84 MB** | **31 ms** | yes | **GPU fixed-function** |
+| raw 8-bit dump | 6.55 MB | 1 ms via `numpy.fromfile` | yes | `imread` returns None |
+
+Notes that matter:
+
+- **nvJPEG2000 is not hardware** — it is CUDA compute, so it runs on any card
+  but competes with LUCYD. 7-8x over OpenJPEG on the P4. The python route's 8
+  reader threads already amortise CPU decode to ~52 ms/frame, so on the P4 the
+  gain is freed CPU rather than raw throughput; on Ampere it is both.
+- **HEVC decodes on NVDEC, a fixed-function engine** on every card owned,
+  costing no CPU and no CUDA cores. Encode is NVENC at 32 ms/frame on the P4;
+  lossless, 4:4:4 and 10-bit encode all confirmed in its caps. Decode as fast as
+  PNG on the P4 and faster on Ampere. Grayscale carried as NV12 with a flat 128
+  chroma plane stays decodable on every NVDEC generation, which 4:4:4 and
+  monochrome profiles are not. Intra-only (gop=1) keeps it seekable and stops a
+  corrupt frame cascading; inter-frame would compress the static background
+  better at the cost of both.
+- **HEVC caps at 10-bit.** NVENC has no 12-bit profile. PNG and TIFF carry 16.
+- **Both routes force 8-bit.** A 16-bit PNG holding 12-bit data came back with
+  max value 14 (source 3792), silently divided by 256 - no detections and no
+  warning against a threshold of 10. Any >8-bit path needs `IMREAD_UNCHANGED`
+  plus an explicit scaling step.
+- **A video is a different data model**, not a codec swap. Both pipelines key
+  everything - frame identity, the MPI split, the EcoTaxa export, the viewer's
+  deep links - on a per-frame *filename* that carries the metadata. A stream
+  needs a frame-index-to-metadata sidecar and a derived naming convention,
+  the python reader replaced by a decoder loop, and NVDEC linked into the nix
+  build for the C++. The decoder is the easy part.
+
 ## Acceptance criteria
 
 To be agreed **before** results are looked at. Placeholders:
