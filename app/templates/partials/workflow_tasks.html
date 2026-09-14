@@ -10,6 +10,10 @@
     <h1>{{ workflow.name }}</h1>
     <span class="muted">{{ workflow.status }}</span>
     <div class="actions">
+        {% if workflow.template_id %}
+        <a class="btn" href="{{ url_for('workflow.new_from_template', template_id=workflow.template_id, **{'from': workflow.id}) }}"
+           title="New workflow from the same template, prefilled with these parameters">Run again…</a>
+        {% endif %}
         <a class="btn" href="{{ url_for('processing.export_workflow', workflow_id=workflow.id) }}"
            title="Download as hub workflow create --file input">Export JSON</a>
         {% if workflow.status == "Failed" %}

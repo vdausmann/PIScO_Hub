@@ -18,7 +18,7 @@ path (`/mnt/pisco`), so a task can hand its output to the next one by path.
 
 | | good for | not good for |
 |---|---|---|
-| **Web GUI** at `http://10.11.11.110:5000` | watching progress, live logs, artifacts, retrying failed runs, exporting a run as JSON, one-off tasks | chaining tasks — there is no "use the output of step 2" picker yet |
+| **Web GUI** at `http://10.11.11.110:5000` | starting a run from a template (guided: pick → parameters → review), watching progress, live logs, artifacts, retrying failed runs, exporting a run as JSON | building a new chain from scratch — references (`$from`, `$param`) are typed as JSON there, with no picker yet |
 | **CLI** (`hub`, on the Hub machine) | everything, especially repeatable runs from a file | nothing much |
 | **REST API** | scripting, other programs | interactive use |
 
@@ -39,8 +39,13 @@ hub workflow create --template process_profile \
     --param cruise=M203 --param station=012-01 --param frames=/mnt/pisco/incoming/M203_012-01/ --watch
 ```
 
-The workflow page shows the parameters it ran with, and **Export JSON** gives
-a file that recreates the run. See AGENTS.md for the reference syntax.
+In the GUI, **+ New workflow** does the same thing guided: pick the template,
+fill in its parameters (values marked *remembered* are prefilled from the
+previous run of that template — cruise and instrument stay put across a
+station), review the steps with everything filled in, adjust one if you must,
+start. A finished run's page has **Run again…**, which opens the form
+prefilled with that run's parameters, and **Export JSON**, which gives a file
+that recreates the run from the CLI. See AGENTS.md for the reference syntax.
 
 The GUI cannot express `{"$from": ...}` references, so a chain built there needs
 every path typed by hand. That works, but it is easy to get wrong and it breaks

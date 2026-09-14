@@ -100,7 +100,7 @@
 					</form>
 				</div>
 
-				<a href="{{ url_for('workflow.edit_settings', task_id=task.id) }}" class="btn btn-cfg">CFG</a>
+				<a href="{{ url_for('workflow.edit_settings', task_id=task.id, next='builder') }}" class="btn btn-cfg">CFG</a>
 				
 				<form action="{{ url_for('workflow.delete_task', task_id=task.id) }}" method="POST" style="margin:0;">
 					<button type="submit" class="btn btn-del">DEL</button>
@@ -109,17 +109,28 @@
 		</div>
 		{% endfor %}
 
+		<div class="panel" style="margin-top: 20px;">
+			<h3 style="margin-top: 0;">Workflow parameters <span class="muted" style="font-weight: normal; font-size: 0.75rem;">(JSON object; settings refer to them with $param / $format)</span></h3>
+			<form action="{{ url_for('workflow.set_draft_params', workflow_id=workflow.id) }}" method="POST">
+				<textarea name="params" rows="4" class="mono" style="width: 100%; box-sizing: border-box; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 8px;">{{ params_text }}</textarea>
+				<button type="submit" class="btn" style="margin-top: 6px;">Save parameters</button>
+			</form>
+		</div>
+
 		<div class="panel" style="margin-top: 30px; border-top: 2px solid var(--accent); padding-top: 20px;">
             
             <form action="{{ url_for('workflow.finalize_workflow', workflow_id=workflow.id) }}" method="POST" style="margin-bottom: 25px;">
                 <div style="margin-bottom: 10px;">
                     <label style="display: block; font-weight: bold; margin-bottom: 5px;">MISSION NAME (PRODUCTION)</label>
-                    <input type="text" name="workflow_name" placeholder="Enter final name..." required 
+                    <input type="text" name="workflow_name" placeholder="Enter final name..." value="{{ workflow.name or '' }}" required 
                            style="width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box;">
                 </div>
                 <button type="submit" style="width: 100%; padding: 12px; background: var(--accent); color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.9rem;">
-                    SAVE & DEPLOY WORKFLOW
+                    START WORKFLOW
                 </button>
+            </form>
+            <form action="{{ url_for('workflow.discard_draft', workflow_id=workflow.id) }}" method="POST" onsubmit="return confirm('Discard this draft?')" style="margin-bottom: 25px;">
+                <button type="submit" class="btn btn-danger" style="width: 100%;">Discard draft</button>
             </form>
 
             <hr style="border: 0; border-top: 1px dashed var(--border); margin: 20px 0;">

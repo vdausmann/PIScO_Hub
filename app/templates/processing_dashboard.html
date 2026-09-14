@@ -10,9 +10,7 @@
 <div class="ph-header">
     <h1>Workflows</h1>
     <div class="actions">
-        <form action="{{ url_for('workflow.init_workflow') }}" method="POST">
-            <button type="submit" class="btn btn-primary">+ New workflow</button>
-        </form>
+        <a class="btn btn-primary" href="{{ url_for('workflow.new_workflow') }}">+ New workflow</a>
     </div>
 </div>
 

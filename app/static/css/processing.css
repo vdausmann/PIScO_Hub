@@ -162,3 +162,46 @@ pre.log-box { background: var(--card); color: var(--text); padding: 12px; border
               overflow: auto; white-space: pre-wrap; font-family: monospace; font-size: 0.85em; margin: 0;
               min-height: 200px; max-height: 65vh; }
 pre.log-box.stderr { border-color: rgba(239, 68, 68, 0.4); }
+
+/* ---- new-workflow wizard --------------------------------------------- */
+
+.pick-group { margin: 1.5rem 0 0.6rem; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin: 0; }
+.pick-card { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; background: var(--card);
+             border: 1px solid var(--border); border-radius: 8px; text-decoration: none; color: inherit;
+             text-align: left; font: inherit; cursor: pointer; }
+.pick-card:hover { border-color: var(--accent); }
+.pick-title { font-weight: bold; font-size: 1.05em; }
+.pick-steps { color: var(--accent); word-break: break-word; }
+.pick-scratch { border-style: dashed; }
+
+.wizard-form { max-width: 720px; }
+.wizard-form .input-group { margin-bottom: 1.2rem; }
+.wizard-form label { display: block; font-weight: bold; margin-bottom: 4px; }
+.wizard-form .hint { margin-bottom: 6px; }
+.wizard-form .req { color: var(--bad); }
+.wizard-form input[type=text], .wizard-form input[type=number], .wizard-form select {
+    padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text); }
+.wizard-form input.wide { width: 100%; box-sizing: border-box; }
+.wizard-form .actions { display: flex; gap: 8px; margin-top: 1rem; }
+.path-field { display: flex; gap: 6px; }
+.path-field input { flex: 1; }
+
+.picker[hidden] { display: none; }
+.picker { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 50; }
+.picker-box { width: min(640px, 90vw); max-height: 80vh; display: flex; flex-direction: column; background: var(--card);
+              border: 1px solid var(--border); border-radius: 8px; padding: 12px; gap: 8px; }
+.picker-head, .picker-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.picker-list { overflow: auto; border: 1px solid var(--border); border-radius: 4px; min-height: 200px; }
+.picker-row { padding: 6px 10px; cursor: pointer; font-family: monospace; font-size: 0.9em; }
+.picker-row:hover { background: var(--surface); }
+
+details.step { margin-bottom: 8px; padding: 0.6rem 1rem; }
+details.step summary { display: flex; align-items: center; gap: 12px; cursor: pointer; list-style: none; }
+details.step summary::-webkit-details-marker { display: none; }
+details.step summary::before { content: "▸"; color: var(--muted); font-size: 0.8em; }
+details.step[open] summary::before { content: "▾"; }
+details.step pre.code { margin-top: 0.6rem; }
+.card h3 .mono { text-transform: none; letter-spacing: 0; }
+.card input.wide { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid var(--border); border-radius: 4px;
+                   background: var(--surface); color: var(--text); font-size: 1em; }

@@ -1,13 +1,28 @@
-from ..utils import clean_string
-from flask import Blueprint, redirect, render_template, request, url_for
-from flask_login import login_required, current_user
-from ..backend import artifacts, settings_engine
-from ..backend.models import (TemporaryWorkflow, Workflow, db, Tool, TemporaryTask, Task,
-                              TemplateTask, TemplateWorkflow)
+"""Building workflows in the browser.
+
+Two ways in, one draft underneath. The guided path picks a template,
+asks for its parameters and shows a review; the free path is the
+builder, where tools are added one by one. Both edit a TemporaryWorkflow
+and both start the run through create_new_workflow, so a workflow built
+here is validated exactly like one submitted through the API.
+"""
+
 import json
+
+from flask import (Blueprint, abort, flash, redirect, render_template, request,
+                   url_for)
+from flask_login import current_user, login_required
+
+from ..backend import artifacts, settings_engine, templates
+from ..backend.models import (TemplateTask, TemplateWorkflow, TemporaryTask,
+                              TemporaryWorkflow, Tool, Workflow, db)
+from ..backend.task_manager import create_new_workflow
+from ..utils import clean_string
 
 workflow_bp = Blueprint('workflow', __name__)
 
+
+# ---- helpers ------------------------------------------------------------------
 
 def _coerce_field(prop, raw):
     """Convert a form string into the type the schema property declares."""
@@ -55,82 +70,272 @@ def _settings_from_form(schema, form):
     return obj
 
 
+def _params_from_form(schema, form):
+    """Workflow parameters from the wizard form: strings as typed, which
+    validate_params coerces; unchecked booleans are false; blanks are
+    left out so a default or a 'required' error applies."""
+    params = {}
+    for key, prop in (schema or {}).get("properties", {}).items():
+        if prop.get("type") == "boolean":
+            params[key] = f"p_{key}" in form
+            continue
+        raw = form.get(f"p_{key}")
+        if raw is not None and raw.strip() != "":
+            params[key] = raw.strip()
+    return params
+
+
+def _json_or(text, default):
+    try:
+        return json.loads(text) if text else default
+    except (ValueError, TypeError):
+        return default
+
+
+def _draft_params(draft):
+    return _json_or(draft.params, {})
+
+
+def _task_settings_obj(task):
+    """A draft task's settings as an object (structured tools) or text."""
+    if (task.tool.settings_format or "opaque") == "opaque":
+        return task.settings
+    return _json_or(task.settings, task.settings)
+
+
+def _draft_specs(draft):
+    return [{"tool": t.tool.name, "settings": _task_settings_obj(t),
+             "priority": t.priority, "weight": t.weight}
+            for t in draft.tasks]
+
+
+def _has_refs(settings_text):
+    return any(key in (settings_text or "") for key in settings_engine.REF_KEYS)
+
+
+def _preview(draft, task):
+    """What the tool will be given, as far as it is known before the run:
+    params substituted, $from shown as a pointer to the step it consumes."""
+    obj = _task_settings_obj(task)
+    if not isinstance(obj, dict):
+        return obj or ""
+    try:
+        obj = settings_engine.resolve_params(obj, _draft_params(draft))
+    except ValueError as e:
+        return f"cannot resolve parameters: {e}"
+
+    def show(value):
+        if settings_engine.ref_kind(value) == settings_engine.FROM_KEY:
+            ref = value[settings_engine.FROM_KEY]
+            target = ref.get("task")
+            if target == "prev":
+                target = task.workflow_position - 1
+            return f"← step {target} · {ref.get('output')}"
+        if isinstance(value, dict):
+            return {k: show(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [show(v) for v in value]
+        return value
+
+    return json.dumps(show(obj), indent=2, ensure_ascii=False)
+
+
+def _fill_from_template(draft, template):
+    """Replace a draft's steps with a template's."""
+    for old in list(draft.tasks):
+        db.session.delete(old)
+    for tpl_task in template.tasks:
+        task = TemporaryTask()
+        task.workflow = draft
+        task.tool_id = tpl_task.tool_id
+        task.workflow_position = tpl_task.workflow_position
+        task.priority = tpl_task.priority
+        task.weight = tpl_task.weight
+        task.settings = tpl_task.settings
+        db.session.add(task)
+    draft.template_id = template.id
+    draft.template_name = template.name
+
+
+def _prefill(template, draft=None):
+    """Parameter values to show in the form: the draft being edited,
+    else a run to repeat (?from=), else the sticky values of the last
+    run made from this template, on top of the schema defaults."""
+    schema = _json_or(template.params_schema, {}) or {}
+    values = {}
+    for key, prop in schema.get("properties", {}).items():
+        if "default" in prop:
+            values[key] = prop["default"]
+
+    if draft is not None:
+        values.update(_draft_params(draft))
+        return values
+
+    source = request.args.get("from")
+    if source:
+        workflow = Workflow.query.get(source)
+        if workflow is not None:
+            values.update(_json_or(workflow.params, {}))
+            return values
+
+    last = (Workflow.query.filter_by(template_id=template.id)
+            .order_by(Workflow.created_at.desc()).first())
+    if last is not None:
+        previous = _json_or(last.params, {})
+        for key, prop in schema.get("properties", {}).items():
+            if prop.get("sticky") and key in previous:
+                values[key] = previous[key]
+    return values
+
+
+# ---- the guided path -------------------------------------------------------------
+
+@workflow_bp.route('/new')
+@login_required
+def new_workflow():
+    """Step 1: what to run."""
+    rows = TemplateWorkflow.query.order_by(TemplateWorkflow.name).all()
+    shipped = [t for t in rows if t.provider_id is not None]
+    saved = [t for t in rows if t.provider_id is None]
+    return render_template('wizard_pick.html', shipped=shipped, saved=saved,
+                           schemas={t.id: _json_or(t.params_schema, {}) or {}
+                                    for t in rows})
+
+
+@workflow_bp.route('/new/<template_id>', methods=['GET', 'POST'])
+@login_required
+def new_from_template(template_id):
+    """Step 2: the template's parameters. Submitting makes (or updates)
+    a draft and moves on to the review."""
+    template = templates.find(template_id)
+    if template is None:
+        abort(404)
+    schema = _json_or(template.params_schema, {}) or {}
+    draft = None
+    if request.args.get("draft"):
+        draft = TemporaryWorkflow.query.get(request.args["draft"])
+
+    if request.method == 'POST':
+        params = _params_from_form(schema, request.form)
+        name = request.form.get("workflow_name", "").strip() or None
+        try:
+            name, params, _ = templates.instantiate(template, params, name)
+        except templates.TemplateError as e:
+            errors = str(e).removeprefix("Invalid parameters: ").split("; ")
+            return render_template('wizard_params.html', template=template,
+                                   schema=schema, values=params, draft=draft,
+                                   name=request.form.get("workflow_name", ""),
+                                   errors=errors)
+        if draft is None:
+            draft = TemporaryWorkflow()
+            draft.user_id = current_user.id
+            db.session.add(draft)
+            _fill_from_template(draft, template)
+        draft.name = name
+        draft.params = json.dumps(params)
+        db.session.commit()
+        return redirect(url_for('workflow.review', workflow_id=draft.id))
+
+    return render_template('wizard_params.html', template=template,
+                           schema=schema, values=_prefill(template, draft),
+                           draft=draft, name=draft.name if draft else "",
+                           errors=None)
+
+
+@workflow_bp.route('/review/<workflow_id>')
+@login_required
+def review(workflow_id):
+    """Step 3: the draft as it will run."""
+    draft = TemporaryWorkflow.query.get_or_404(workflow_id)
+    template = templates.find(draft.template_id) if draft.template_id else None
+    previews = {task.id: _preview(draft, task) for task in draft.tasks}
+    return render_template('wizard_review.html', workflow=draft,
+                           template=template, params=_draft_params(draft),
+                           previews=previews)
+
+
+@workflow_bp.route('/draft/<workflow_id>/discard', methods=['POST'])
+@login_required
+def discard_draft(workflow_id):
+    draft = TemporaryWorkflow.query.get_or_404(workflow_id)
+    db.session.delete(draft)
+    db.session.commit()
+    return redirect(url_for('processing.dashboard'))
+
+
+# ---- the builder ---------------------------------------------------------------
+
 @workflow_bp.route('/workflow/init', methods=["POST"])
 @login_required
 def init_workflow():
-    # first check if a temporary workflow already exists
-    if TemporaryWorkflow.query.count() > 0:
-        workflow = TemporaryWorkflow.query.first()
-        if not isinstance(workflow, TemporaryWorkflow):
-            raise Exception("TemporaryWorkflow query returned non-TemporaryWorkflow object")
-        return redirect(url_for("workflow.builder",
-                                workflow_id=workflow.id))
-
-    new_workflow = TemporaryWorkflow()
-    new_workflow.user_id = current_user.id
-
-    db.session.add(new_workflow)
+    """Start from scratch: an empty draft."""
+    draft = TemporaryWorkflow()
+    draft.user_id = current_user.id
+    db.session.add(draft)
     db.session.commit()
+    return redirect(url_for("workflow.builder", workflow_id=draft.id))
 
-    return redirect(url_for("workflow.builder", workflow_id=new_workflow.id))
 
 @workflow_bp.route('/builder/<workflow_id>')
 @login_required
 def builder(workflow_id):
     draft = TemporaryWorkflow.query.get_or_404(workflow_id)
-
     all_tools = Tool.query.filter(Tool.available != False).order_by(Tool.name).all()
-    # Pull all templates so the user can select them inside the UI
-    all_templates = TemplateWorkflow.query.all()
-    
-    return render_template('workflow_builder.html', 
-                           workflow=draft, 
-                           tools=all_tools,
-                           templates=all_templates)
+    all_templates = TemplateWorkflow.query.order_by(TemplateWorkflow.name).all()
+    return render_template('workflow_builder.html', workflow=draft, tools=all_tools,
+                           templates=all_templates,
+                           params_text=json.dumps(_draft_params(draft), indent=2))
+
+
+@workflow_bp.route('/draft/<workflow_id>/params', methods=['POST'])
+@login_required
+def set_draft_params(workflow_id):
+    """The builder's parameters panel: a JSON object."""
+    draft = TemporaryWorkflow.query.get_or_404(workflow_id)
+    text = request.form.get("params", "").strip() or "{}"
+    try:
+        params = json.loads(text)
+        if not isinstance(params, dict):
+            raise ValueError("must be a JSON object")
+    except ValueError as e:
+        flash(f"Parameters not saved: {e}", "error")
+        return redirect(url_for('workflow.builder', workflow_id=workflow_id))
+    draft.params = json.dumps(params)
+    db.session.commit()
+    return redirect(url_for('workflow.builder', workflow_id=workflow_id))
+
 
 @workflow_bp.route('/workflow/<workflow_id>/add-tool/<int:tool_id>', methods=['POST'])
 @login_required
 def add_tool_to_workflow(workflow_id, tool_id):
-
     tool = Tool.query.get_or_404(tool_id)
     draft = TemporaryWorkflow.query.get_or_404(workflow_id)
 
-    if not isinstance(tool, Tool):
-        raise Exception("Tool query returned non-Tool object")
-
-    # Calculate the next order index
-    next_index = len(draft.tasks)
-
-    # Create the temporary task using tool defaults
     new_task = TemporaryTask()
     new_task.workflow_id = workflow_id
     new_task.tool_id = tool_id
-    new_task.workflow_position = next_index
+    new_task.workflow_position = len(draft.tasks)
     new_task.settings = settings_engine.default_settings(tool)
     new_task.priority = tool.default_priority
     new_task.weight = tool.default_weight
-
     db.session.add(new_task)
     db.session.commit()
-    
     return redirect(url_for('workflow.builder', workflow_id=workflow_id))
+
 
 @workflow_bp.route('/workflow/task/<int:task_id>/delete', methods=['POST'])
 @login_required
 def delete_task(task_id):
     task = TemporaryTask.query.get_or_404(task_id)
     wf_id = task.workflow_id
-    
     db.session.delete(task)
     db.session.commit()
-    
+
     # Re-normalize positions so there are no gaps (e.g., 0, 1, 3 -> 0, 1, 2)
-    remaining_tasks = TemporaryTask.query.filter_by(workflow_id=wf_id)\
+    remaining = TemporaryTask.query.filter_by(workflow_id=wf_id)\
         .order_by(TemporaryTask.workflow_position).all()
-    
-    for i, t in enumerate(remaining_tasks):
+    for i, t in enumerate(remaining):
         t.workflow_position = i
-        
     db.session.commit()
     return redirect(url_for('workflow.builder', workflow_id=wf_id))
 
@@ -141,231 +346,157 @@ def move_task(task_id, direction):
     task = TemporaryTask.query.get_or_404(task_id)
     wf_id = task.workflow_id
     current_pos = task.workflow_position
-    
+
     if direction == 'up' and current_pos > 0:
-        # Find the task currently above it
         neighbor = TemporaryTask.query.filter_by(
-            workflow_id=wf_id, 
-            workflow_position=current_pos - 1
-        ).first()
+            workflow_id=wf_id, workflow_position=current_pos - 1).first()
         if neighbor:
             task.workflow_position -= 1
             neighbor.workflow_position += 1
-            
     elif direction == 'down':
-        # Find the task currently below it
         neighbor = TemporaryTask.query.filter_by(
-            workflow_id=wf_id, 
-            workflow_position=current_pos + 1
-        ).first()
+            workflow_id=wf_id, workflow_position=current_pos + 1).first()
         if neighbor:
             task.workflow_position += 1
             neighbor.workflow_position -= 1
-            
+
     db.session.commit()
     return redirect(url_for('workflow.builder', workflow_id=wf_id))
 
+
+def _after_edit(task):
+    """Where the settings editor returns to: the review for a guided
+    draft, the builder otherwise (or whatever ?next= says)."""
+    target = request.args.get("next") or request.form.get("next")
+    if target in ("review", "builder"):
+        return redirect(url_for(f'workflow.{target}', workflow_id=task.workflow_id))
+    if task.workflow.template_id:
+        return redirect(url_for('workflow.review', workflow_id=task.workflow_id))
+    return redirect(url_for('workflow.builder', workflow_id=task.workflow_id))
 
 
 @workflow_bp.route('/edit-settings/<int:task_id>', methods=['GET', 'POST'])
 @login_required
 def edit_settings(task_id):
-    # 1. Get the specific task from the temporary table
+    """A step's settings. Structured tools get a form from their schema,
+    or a raw JSON editor — the only way to write $from/$param references,
+    and the default when the settings already contain some."""
     task = TemporaryTask.query.get_or_404(task_id)
-
-    if not isinstance(task, TemporaryTask):
-        return "Task not found", 404
-
     tool = task.tool
+    params = _draft_params(task.workflow)
     schema = None
     if tool.settings_schema and (tool.settings_format or "opaque") != "opaque":
         schema = json.loads(tool.settings_schema)
+    structured = (tool.settings_format or "opaque") != "opaque"
+    mode = request.values.get("mode")
+    if mode not in ("form", "json"):
+        mode = "json" if (not schema or _has_refs(task.settings)) else "form"
+    if not structured:
+        mode = "text"
+
+    def render(values=None, text=None, errors=None):
+        if values is None:
+            values = _json_or(task.settings, {}) if structured else {}
+        if text is None:
+            text = task.settings
+        return render_template('workflow_settings.html', task=task, schema=schema,
+                               values=values, text=text, mode=mode,
+                               structured=structured, errors=errors,
+                               params=params, next=request.values.get("next"))
 
     if request.method == 'POST':
-        # 2. Update the task with form data
         task.priority = request.form.get('priority', type=int)
         task.weight = request.form.get('weight', type=int)
 
-        if schema is not None and request.form.get('form_mode') == 'schema':
+        if mode == "form":
             values = _settings_from_form(schema, request.form)
-            # An output left blank is a request for the Hub to choose the
-            # location, not a missing value.
             errors = settings_engine.validate(
-                tool, artifacts.validation_candidate(tool, values))
+                tool, artifacts.validation_candidate(tool, values, params))
             if errors:
                 db.session.rollback()
-                return render_template('workflow_settings.html', task=task,
-                                       schema=schema, values=values, errors=errors)
+                return render(values=values, errors=errors)
+            task.settings = json.dumps(values, indent=2)
+        elif mode == "json":
+            text = request.form.get('settings_string', '')
+            try:
+                values = json.loads(text) if text.strip() else {}
+                if not isinstance(values, dict):
+                    raise ValueError("settings must be a JSON object")
+                errors = settings_engine.validate(
+                    tool, artifacts.validation_candidate(tool, values, params))
+            except ValueError as e:
+                errors = [str(e)]
+            if errors:
+                db.session.rollback()
+                return render(text=text, errors=errors)
             task.settings = json.dumps(values, indent=2)
         else:
-            settings = request.form.get('settings_string')
-            task.settings = clean_string(settings)
+            task.settings = clean_string(request.form.get('settings_string', ''))
 
         db.session.commit()
+        return _after_edit(task)
 
-        # 3. Redirect back to the builder for the parent workflow
-        return redirect(url_for('workflow.builder', workflow_id=task.workflow_id))
-
-    # GET request: Show the editing page
-    values = {}
-    if schema is not None:
-        try:
-            values = json.loads(task.settings) if task.settings else {}
-        except ValueError:
-            values = {}
-    return render_template('workflow_settings.html', task=task,
-                           schema=schema, values=values, errors=None)
+    return render()
 
 
 @workflow_bp.route('/workflow/finalize/<workflow_id>', methods=['POST'])
 @login_required
 def finalize_workflow(workflow_id):
-    temporary_workflow = TemporaryWorkflow.query.get_or_404(workflow_id)
-    new_name = request.form.get('workflow_name', 'Unnamed')
-
+    """Start the run. Goes through create_new_workflow so references and
+    parameters are checked like an API submission; a problem returns to
+    the draft with the message rather than losing it."""
+    draft = TemporaryWorkflow.query.get_or_404(workflow_id)
+    name = request.form.get('workflow_name', '').strip() or draft.name or 'Unnamed'
+    template = templates.find(draft.template_id) if draft.template_id else None
+    back = url_for('workflow.review' if draft.template_id else 'workflow.builder',
+                   workflow_id=draft.id)
+    if not draft.tasks:
+        flash("Add at least one step first.", "error")
+        return redirect(back)
     try:
-        final_wf = Workflow()
-        final_wf.name = new_name
-        final_wf.user_id = temporary_workflow.user_id
-        db.session.add(final_wf)
-        db.session.flush() # Flushes to get the final_wf.id for the tasks
-
-        for temp_task in temporary_workflow.tasks:
-            new_task = Task()
-            new_task.workflow_id = final_wf.id
-            new_task.tool_id = temp_task.tool_id
-            new_task.workflow_position = temp_task.workflow_position
-            new_task.priority = temp_task.priority
-            new_task.weight = temp_task.weight
-            new_task.settings = temp_task.settings
-
-            db.session.add(new_task)
-
-        db.session.delete(temporary_workflow)
-        
-        db.session.commit()
-        print(url_for('processing.dashboard'))
-        return redirect(url_for('processing.dashboard'))
-
-    except Exception as e:
+        new_id = create_new_workflow(name, _draft_specs(draft),
+                                     _draft_params(draft), template)
+    except (KeyError, ValueError) as e:
         db.session.rollback()
-        print(f"Finalization Error: {e}")
-        return "Failed to finalize workflow", 500
+        # args[0] rather than str(e): KeyError's str() wraps it in quotes.
+        flash(e.args[0] if e.args else str(e), "error")
+        return redirect(back)
+    db.session.delete(draft)
+    db.session.commit()
+    return redirect(url_for('processing.workflow_detail', workflow_id=new_id))
 
+
+# ---- templates from the builder ----------------------------------------------------
 
 @workflow_bp.route('/workflow/save-template/<workflow_id>', methods=['POST'])
 @login_required
 def save_as_template(workflow_id):
-    """
-    Takes the current TemporaryWorkflow state and copies it into 
-    the Template tables without destroying the draft.
-    """
-    temporary_workflow = TemporaryWorkflow.query.get_or_404(workflow_id)
-    template_name = request.form.get('template_name', 'Unnamed Template')
-
+    """Copy the draft into a user-saved template, keeping the draft. A
+    draft made from a template inherits its parameter schema."""
+    draft = TemporaryWorkflow.query.get_or_404(workflow_id)
+    template_name = request.form.get('template_name', '').strip() or 'Unnamed Template'
+    source = templates.find(draft.template_id) if draft.template_id else None
     try:
-        # Create the top-level template
-        template_wf = TemplateWorkflow()
-        template_wf.name = template_name
-        template_wf.user_id = current_user.id
-        
-        db.session.add(template_wf)
-        db.session.flush()  # Aquire template_wf.id
-
-        # Copy over the sequence
-        for temp_task in temporary_workflow.tasks:
-            tpl_task = TemplateTask()
-            tpl_task.workflow_id = template_wf.id
-            tpl_task.tool_id = temp_task.tool_id
-            tpl_task.workflow_position = temp_task.workflow_position
-            tpl_task.priority = temp_task.priority
-            tpl_task.weight = temp_task.weight
-            tpl_task.settings = temp_task.settings
-            
-            db.session.add(tpl_task)
-
-        db.session.commit()
-        return redirect(url_for('workflow.builder', workflow_id=workflow_id))
-
-    except Exception as e:
-        db.session.rollback()
-        print(f"Template Saving Error: {e}")
-        return "Failed to save template", 500
-
-
-@workflow_bp.route('/workflow/load-template/<template_id>', methods=['POST'])
-@login_required
-def load_template(template_id):
-    """
-    Initializes a completely new workspace draft populated 
-    with configuration components pulled straight from a saved template.
-    """
-    template = TemplateWorkflow.query.get_or_404(template_id)
-    
-    # Optional: Clear existing temporary workflows first if your application rules limit users to 1 sandbox 
-    TemporaryWorkflow.query.filter_by(user_id=current_user.id).delete()
-
-    try:
-        new_workflow = TemporaryWorkflow()
-        new_workflow.name = f"Draft from {template.name}"
-        new_workflow.user_id = current_user.id
-        
-        db.session.add(new_workflow)
-        db.session.flush()
-
-        for tpl_task in template.tasks:
-            temp_task = TemporaryTask()
-            temp_task.workflow_id = new_workflow.id
-            temp_task.tool_id = tpl_task.tool_id
-            temp_task.workflow_position = tpl_task.workflow_position
-            temp_task.priority = tpl_task.priority
-            temp_task.weight = tpl_task.weight
-            temp_task.settings = tpl_task.settings
-            
-            db.session.add(temp_task)
-
-        db.session.commit()
-        return redirect(url_for('workflow.builder', workflow_id=new_workflow.id))
-
-    except Exception as e:
-        db.session.rollback()
-        print(f"Template Loading Error: {e}")
-        return "Failed to load template into workspace", 500
+        templates.save(template_name, _draft_specs(draft),
+                       _json_or(source.params_schema, None) if source else None,
+                       source.description if source else None,
+                       source.name_format if source else None,
+                       current_user.id)
+        flash(f"Saved template '{template_name}'.", "success")
+    except templates.TemplateError as e:
+        flash(str(e), "error")
+    back = 'workflow.review' if draft.template_id else 'workflow.builder'
+    return redirect(url_for(back, workflow_id=workflow_id))
 
 
 @workflow_bp.route('/workflow/<workflow_id>/apply-template/<template_id>', methods=['POST'])
 @login_required
 def apply_template_to_draft(workflow_id, template_id):
-    """
-    Clears out the tasks in the active workspace and appends 
-    all structural steps directly out of an existing system template preset.
-    """
+    """Replace the builder draft's steps with a template's."""
     draft = TemporaryWorkflow.query.get_or_404(workflow_id)
     template = TemplateWorkflow.query.get_or_404(template_id)
-    
-    try:
-        # 1. Purge all existing tasks in this workspace to start clean
-        TemporaryTask.query.filter_by(workflow_id=workflow_id).delete()
-        
-        # 2. Update the default draft title text to reference your structural preset
+    _fill_from_template(draft, template)
+    if not draft.name:
         draft.name = f"Draft from {template.name}"
-        
-        # 3. Duplicate individual components from the template array to your active workspace 
-        for tpl_task in template.tasks:
-            temp_task = TemporaryTask()
-            temp_task.workflow_id = draft.id
-            temp_task.tool_id = tpl_task.tool_id
-            temp_task.workflow_position = tpl_task.workflow_position
-            temp_task.priority = tpl_task.priority
-            temp_task.weight = tpl_task.weight
-            temp_task.settings = tpl_task.settings
-            
-            db.session.add(temp_task)
-            
-        db.session.commit()
-        return redirect(url_for('workflow.builder', workflow_id=workflow_id))
-        
-    except Exception as e:
-        db.session.rollback()
-        print(f"Error applying template configuration payload: {e}")
-        return "Failed to import structural configurations into layout workspace", 500
+    db.session.commit()
+    return redirect(url_for('workflow.builder', workflow_id=workflow_id))

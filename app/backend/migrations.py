@@ -19,6 +19,11 @@ _MIGRATIONS = {
         ("template_id", "VARCHAR(36)"),
         ("template_name", "VARCHAR(100)"),
     ],
+    "temporary_workflow": [
+        ("params", "TEXT DEFAULT '{}'"),
+        ("template_id", "VARCHAR(36)"),
+        ("template_name", "VARCHAR(100)"),
+    ],
     "template_workflow": [
         ("description", "TEXT"),
         ("params_schema", "TEXT"),

@@ -174,6 +174,10 @@ class TemporaryWorkflow(db.Model):
                             cascade="all, delete-orphan",
                             order_by="TemporaryTask.workflow_position")
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    # Same as on Workflow: the draft carries what the run will carry.
+    params = db.Column(db.Text, default="{}")
+    template_id = db.Column(db.String(36), nullable=True)
+    template_name = db.Column(db.String(100), nullable=True)
 
 
 class TemporaryTask(db.Model):

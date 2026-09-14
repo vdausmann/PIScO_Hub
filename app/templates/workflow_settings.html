@@ -28,12 +28,22 @@
 </style>
 
 <div class="editor-container">
-    <div style="margin-bottom: 2rem;">
-        <h1 style="margin: 0;">Task Settings: {{ task.tool.name }}</h1>
-        <p class="muted">Step #{{ task.workflow_position + 1 }} in Workflow {{ task.workflow_id[:8] }}</p>
+    <div style="margin-bottom: 1.5rem;">
+        <h1 style="margin: 0;">{{ task.tool.name }}</h1>
+        <p class="muted">Step #{{ task.workflow_position }}{% if task.workflow.name %} of {{ task.workflow.name }}{% endif %}</p>
     </div>
 
-    <form action="{{ url_for('workflow.edit_settings', task_id=task.id) }}" method="POST" class="form-section">
+    {% if structured and schema %}
+    <div class="filters" style="margin-bottom: 1rem;">
+        <a class="chip {% if mode == 'form' %}active{% endif %}"
+           href="{{ url_for('workflow.edit_settings', task_id=task.id, mode='form', next=next) }}">Form</a>
+        <a class="chip {% if mode == 'json' %}active{% endif %}"
+           href="{{ url_for('workflow.edit_settings', task_id=task.id, mode='json', next=next) }}">JSON</a>
+        <span class="muted small">JSON is where <span class="mono">$from</span>, <span class="mono">$param</span> and <span class="mono">$format</span> references are written.</span>
+    </div>
+    {% endif %}
+
+    <form action="{{ url_for('workflow.edit_settings', task_id=task.id, mode=mode, next=next) }}" method="POST" class="form-section">
         <div style="display: flex; gap: 2rem;">
             <div class="input-group">
                 <label for="priority">Execution Priority</label>
@@ -46,28 +56,34 @@
             </div>
         </div>
 
-        {% if schema %}
-        {% from "partials/schema_form.html" import schema_form %}
         {% if errors %}
-        <div style="background: #fef2f2; border: 1px solid #fca5a5; color: #b91c1c;
-                    padding: 1rem; border-radius: 4px; margin-bottom: 1.5rem;">
+        <div class="flash flash-error">
             <strong>Invalid settings:</strong>
             <ul style="margin: 0.5rem 0 0 1rem;">
                 {% for error in errors %}<li>{{ error }}</li>{% endfor %}
             </ul>
         </div>
         {% endif %}
-        <input type="hidden" name="form_mode" value="schema">
+
+        {% if mode == 'form' %}
+        {% from "partials/schema_form.html" import schema_form %}
         {{ schema_form(schema, values) }}
         {% else %}
         <div class="input-group">
-            <label for="settings_string">Configuration</label>
-            <textarea id="settings_string" name="settings_string">{{ task.settings }}</textarea>
+            <label for="settings_string">{% if mode == 'json' %}Settings (JSON){% else %}Configuration{% endif %}</label>
+            <textarea id="settings_string" name="settings_string">{{ text }}</textarea>
         </div>
+        {% if params %}
+        <div class="muted small" style="margin-top: -1rem; margin-bottom: 1.5rem;">
+            Workflow parameters available: {% for key in params %}<span class="mono">{{ key }}</span>{{ ", " if not loop.last }}{% endfor %}
+            — e.g. <span class="mono">{"$param": "{{ params | first }}"}</span>
+        </div>
+        {% endif %}
         {% endif %}
 
         <div class="actions">
-            <a href="{{ url_for('workflow.builder', workflow_id=task.workflow_id) }}" class="btn btn-cancel">CANCEL</a>
+            {% set back = url_for('workflow.review', workflow_id=task.workflow_id) if (next == 'review' or (next != 'builder' and task.workflow.template_id)) else url_for('workflow.builder', workflow_id=task.workflow_id) %}
+            <a href="{{ back }}" class="btn btn-cancel">CANCEL</a>
             <button type="submit" class="btn btn-save">APPLY & RETURN</button>
         </div>
     </form>
