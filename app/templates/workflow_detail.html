@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}{{ workflow.name }} · PIScO Hub{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/processing.css') }}">
+{% endblock %}
+
+{% block content %}
+{% with section = 'workflows' %}{% include "partials/processing_nav.html" %}{% endwith %}
+
+{% include "partials/workflow_tasks.html" %}
+{% endblock %}

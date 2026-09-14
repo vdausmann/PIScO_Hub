@@ -1,0 +1,8 @@
+{# One declared output of a task and where it landed. #}
+<div class="artifact">
+    <span class="name">{{ artifact.name }}</span>
+    <a href="{{ url_for('file-explorer.hub', path=artifact | explorer_dir) }}" title="Open in the File Explorer">{{ artifact.path }}</a>
+    {% if artifact.exists is sameas false %}<span class="missing">MISSING</span>
+    {% elif artifact.exists and artifact.size_bytes %}<span class="muted">{{ artifact.size_bytes | filesizeformat }}</span>
+    {% elif artifact.exists is none %}<span class="muted">pending</span>{% endif %}
+</div>

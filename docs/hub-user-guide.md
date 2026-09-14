@@ -18,7 +18,7 @@ path (`/mnt/pisco`), so a task can hand its output to the next one by path.
 
 | | good for | not good for |
 |---|---|---|
-| **Web GUI** at `http://10.11.11.110:5000` | browsing results, watching progress, reading logs, one-off tasks | chaining tasks — there is no "use the output of step 2" picker |
+| **Web GUI** at `http://10.11.11.110:5000` | watching progress, live logs, artifacts, retrying failed runs, exporting a run as JSON, one-off tasks | chaining tasks — there is no "use the output of step 2" picker yet |
 | **CLI** (`hub`, on the Hub machine) | everything, especially repeatable runs from a file | nothing much |
 | **REST API** | scripting, other programs | interactive use |
 
@@ -266,7 +266,14 @@ GET /api/v1/tasks/<task-id>/logs?stream=stderr&tail=100
 On disk, on the Hub machine: `/opt/pisco-hub/app/logs/<tool>/<task-id>.log`
 and `.err`. The Hub's own service log is `journalctl -u pisco-hub`.
 
-In the GUI: the task manager page links each task to its log.
+In the GUI: open the workflow from the Processing Hub, then a task's **Logs**
+button. The task page shows stdout and stderr with a tail length and a
+*follow* toggle that refreshes every two seconds while the task runs, the
+settings as stored and as dispatched (with `$from` references resolved), and
+the artifacts with links into the File Explorer. A failed workflow has a
+**Retry** button, which requeues it from the first failed task exactly like
+`hub workflow retry`, and **Export JSON** downloads it in the form
+`hub workflow create --file` accepts.
 
 **An empty log with a non-zero exit** usually means the tool's wrapper died
 before it ran anything — a missing required setting, or an interpreter that

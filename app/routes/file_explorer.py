@@ -17,7 +17,10 @@ def list_files():
 
     path = request.args.get("path", "")
 
-    result = get_files(path)
+    try:
+        result = get_files(path)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
 
     return jsonify(result)
 

@@ -1,28 +1,36 @@
 {% extends "base.html" %}
+{% block title %}Task settings · PIScO Hub{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/processing.css') }}">
+{% endblock %}
 
 {% block content %}
+{% with section = 'workflows' %}{% include "partials/processing_nav.html" %}{% endwith %}
 <style>
-    .editor-container { max-width: 900px; margin: 40px auto; font-family: monospace; }
-    .form-section { background: #f8fafc; border: 1px solid #e2e8f0; padding: 2rem; border-radius: 8px; }
+    .editor-container { max-width: 900px; margin: 20px auto; font-family: monospace; }
+    .form-section { background: var(--card); border: 1px solid var(--border); padding: 2rem; border-radius: 8px; }
     .input-group { margin-bottom: 1.5rem; }
-    label { display: block; font-weight: bold; margin-bottom: 0.5rem; color: #475569; }
-    
-    input[type="number"] { width: 120px; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; }
-    textarea { 
-        width: 100%; height: 400px; padding: 1rem; border: 1px solid #cbd5e1; 
-        border-radius: 4px; font-family: 'Courier New', monospace; background: #fff;
+    label { display: block; font-weight: bold; margin-bottom: 0.5rem; color: var(--muted); }
+
+    .form-section input[type="number"], .form-section input[type="text"], .form-section select {
+        padding: 8px; border: 1px solid var(--border); border-radius: 4px;
+        background: var(--surface); color: var(--text);
     }
-    
+    .form-section input[type="number"] { width: 120px; }
+    textarea {
+        width: 100%; height: 400px; padding: 1rem; border: 1px solid var(--border);
+        border-radius: 4px; font-family: 'Courier New', monospace; background: var(--surface); color: var(--text);
+    }
+
     .actions { display: flex; justify-content: space-between; margin-top: 2rem; }
-    .btn { padding: 10px 20px; cursor: pointer; font-weight: bold; border-radius: 4px; text-decoration: none; }
-    .btn-save { background: #2563eb; color: white; border: none; }
-    .btn-cancel { background: #64748b; color: white; border: none; }
+    .btn-save { background: var(--accent); color: white; border: none; }
+    .btn-cancel { background: var(--muted); color: white; border: none; }
 </style>
 
 <div class="editor-container">
     <div style="margin-bottom: 2rem;">
         <h1 style="margin: 0;">Task Settings: {{ task.tool.name }}</h1>
-        <p style="color: #64748b;">Step #{{ task.workflow_position + 1 }} in Workflow {{ task.workflow_id[:8] }}</p>
+        <p class="muted">Step #{{ task.workflow_position + 1 }} in Workflow {{ task.workflow_id[:8] }}</p>
     </div>
 
     <form action="{{ url_for('workflow.edit_settings', task_id=task.id) }}" method="POST" class="form-section">

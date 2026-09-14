@@ -1,0 +1,9 @@
+{# The tail of one log stream. Rendered into #log-panel of the task page. #}
+{% if missing %}
+<pre class="log-box {{ stream }}"><span class="muted">{{ missing }}</span></pre>
+{% else %}
+<pre class="log-box {{ stream }}">{{ content }}{% if not content %}<span class="muted">({{ stream }} is empty{% if task.status in ('Pending', 'Running') %} so far{% endif %})</span>{% endif %}</pre>
+{% endif %}
+<div class="muted small" style="margin-top: 6px;">
+    {{ stream }}{% if tail %}, last {{ tail }} lines{% endif %} · {{ task.status }}{% if task.status in ('Pending', 'Running') %} · refreshing{% endif %}
+</div>

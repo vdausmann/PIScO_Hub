@@ -1,43 +1,52 @@
 {% extends "base.html" %}
+{% block title %}Workflows · PIScO Hub{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/processing.css') }}">
+{% endblock %}
 
 {% block content %}
+{% with section = 'workflows' %}{% include "partials/processing_nav.html" %}{% endwith %}
 
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-<h1>Workflows</h1>
-<a href="{{ url_for('index') }}" style="color: var(--accent); text-decoration: none;">&larr; Dashboard</a>
+<div class="ph-header">
+    <h1>Workflows</h1>
+    <div class="actions">
+        <form action="{{ url_for('workflow.init_workflow') }}" method="POST">
+            <button type="submit" class="btn btn-primary">+ New workflow</button>
+        </form>
+    </div>
 </div>
 
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-	<form action="{{ url_for('workflow.init_workflow') }}" method="POST">
-		<button type="submit" class="btn btn-primary">
-			+ Create New Workflow
-		</button>
-	</form>
-</div>
+{# Filters are plain links and a search box; the polled list reads the same
+   query string, so a filter survives every refresh. #}
+<form id="filters" class="filters" method="GET" action="{{ url_for('processing.dashboard') }}">
+    <a class="chip {% if not active_status %}active{% endif %}"
+       href="{{ url_for('processing.dashboard', q=q or None) }}">All</a>
+    {% for status in status_filters %}
+    <a class="chip {% if active_status == status %}active{% endif %}"
+       href="{{ url_for('processing.dashboard', status=status, q=q or None) }}">{{ status }}</a>
+    {% endfor %}
+    {% if active_status %}<input type="hidden" name="status" value="{{ active_status }}">{% endif %}
+    <input type="search" name="q" value="{{ q }}" placeholder="Search by name…"
+           hx-get="{{ url_for('processing.workflows_partial') }}" hx-include="#filters"
+           hx-trigger="keyup changed delay:300ms, search" hx-target="#workflow-container">
+</form>
 
-<div 
-	id="workflow-container"
-    hx-get="/processing/partials/workflows"
-    hx-trigger="load, every 2s"
-    hx-swap="innerHTML"
->
-    Loading...
+<div id="workflow-container"
+     hx-get="{{ url_for('processing.workflows_partial') }}"
+     hx-include="#filters"
+     hx-trigger="load, every 2s"
+     hx-swap="innerHTML">
+    {% include "partials/workflow_list.html" %}
 </div>
 
 <script>
-function toggle(el) {
-    const next = el.nextElementSibling;
-    next.style.display = next.style.display === "none" ? "block" : "none";
-}
-</script>
-
-<script>
+// Which workflow cards are expanded, kept across the 2 s refresh.
 const openNodes = new Set();
 
-function toggle(el) {
+function toggle(el, event) {
+    if (event && event.target.closest("a, form, button")) return;
     const id = el.dataset.id;
     const content = el.nextElementSibling;
-
     if (openNodes.has(id)) {
         openNodes.delete(id);
         content.style.display = "none";
@@ -47,100 +56,12 @@ function toggle(el) {
     }
 }
 
-// restore open state after HTMX reload
 document.body.addEventListener("htmx:afterSwap", (event) => {
     if (event.target.id !== "workflow-container") return;
-
     document.querySelectorAll(".workflow-header").forEach(el => {
-        const id = el.dataset.id;
         const content = el.nextElementSibling;
-
-        if (!content) return;
-
-        content.style.display = openNodes.has(id) ? "block" : "none";
+        if (content) content.style.display = openNodes.has(el.dataset.id) ? "block" : "none";
     });
 });
 </script>
-
-<style>
-.workflow-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.workflow-card {
-    background: var(--card);
-    border-radius: 8px;
-    padding: 10px;
-    border: 1px solid #4443;
-}
-
-.workflow-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;              /* spacing between items */
-    padding: 6px 0;
-    cursor: pointer;
-    font-weight: bold;
-}
-
-.workflow-header:hover {
-    opacity: 0.8;
-}
-
-.task-list {
-    margin-top: 8px;
-    margin-left: 20px;
-    display: none;
-}
-
-.task-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 4px 0;
-    font-size: 0.9em;
-}
-
-.task-row:not(:last-child) {
-    border-bottom: 1px solid #4442;
-}
-
-/* status dots */
-.status-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    display: inline-block;
-}
-
-.workflow-status,
-.task-status {
-    margin-left: auto;
-}
-
-.status-running { background: orange; }
-.status-done { background: #22c55e; }
-.status-failed { background: #ef4444; }
-.status-pending { background: gray; }
-.log-button {
-    margin-left: 10px;
-    padding: 4px 8px;
-    font-size: 0.8em;
-
-    background: var(--accent);
-    color: white;
-
-    text-decoration: none;
-    border-radius: 4px;
-
-    transition: 0.2s;
-}
-
-.log-button:hover {
-    opacity: 0.8;
-}
-</style>
-
 {% endblock %}

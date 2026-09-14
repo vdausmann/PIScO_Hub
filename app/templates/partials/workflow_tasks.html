@@ -1,0 +1,67 @@
+{# Header and task table of one workflow. Polls itself while the workflow
+   is still moving and stops once it reaches a terminal state. #}
+{% set active = workflow.status in ("Pending", "Running") %}
+<div id="workflow-detail"
+     {% if active %}hx-get="{{ url_for('processing.workflow_partial', workflow_id=workflow.id) }}"
+     hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+
+<div class="ph-header">
+    <span class="status-dot {{ workflow.status | status_class }}" style="width: 14px; height: 14px;"></span>
+    <h1>{{ workflow.name }}</h1>
+    <span class="muted">{{ workflow.status }}</span>
+    <div class="actions">
+        <a class="btn" href="{{ url_for('processing.export_workflow', workflow_id=workflow.id) }}"
+           title="Download as hub workflow create --file input">Export JSON</a>
+        {% if workflow.status == "Failed" %}
+        <form action="{{ url_for('processing.retry_workflow', workflow_id=workflow.id) }}" method="POST">
+            <button type="submit" class="btn btn-primary" title="Requeue from the first failed task">Retry</button>
+        </form>
+        {% endif %}
+        <form action="{{ url_for('processing.delete_workflow', workflow_id=workflow.id) }}" method="POST"
+              onsubmit="return confirm('Delete workflow \'{{ workflow.name }}\'? Its task records and artifact bookkeeping go with it; files on disk stay.');">
+            <button type="submit" class="btn btn-danger" {% if workflow.status == "Running" %}disabled title="Running workflows cannot be deleted"{% endif %}>Delete</button>
+        </form>
+    </div>
+</div>
+<p class="muted small mono" style="margin-top: -0.5rem;">
+    {{ workflow.id }} · created {{ workflow.created_at | clock }}
+    {% set started = workflow.tasks | selectattr("started_at") | map(attribute="started_at") | list %}
+    {% if started %}· started {{ started | min | clock }}{% endif %}
+</p>
+
+<div class="table-scroll">
+<table class="ph-table">
+    <thead>
+        <tr>
+            <th>#</th><th>Tool</th><th>Machine</th><th>Status</th>
+            <th class="num">Exit</th><th>Started</th><th>Duration</th><th>Priority / weight</th><th></th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for task in workflow.tasks | sort(attribute="workflow_position") %}
+        <tr class="task-row">
+            <td class="mono muted">{{ task.workflow_position }}</td>
+            <td><a href="{{ url_for('processing.task_detail', task_id=task.id) }}">{{ task.tool.name }}</a></td>
+            <td class="muted">{{ task.machine.name if task.machine else "—" }}</td>
+            <td><span class="status-text"><span class="status-dot {{ task.status | status_class }}"></span>{{ task.status }}</span></td>
+            <td class="num" {% if task.exit_code %}style="color: var(--bad)"{% endif %}>{{ task.exit_code if task.exit_code is not none else "" }}</td>
+            <td class="muted">{{ task.started_at | clock }}</td>
+            <td class="muted">{{ task | duration }}</td>
+            <td class="muted">{{ task.priority }} / {{ task.weight }}</td>
+            <td><a class="btn btn-sm" href="{{ url_for('processing.task_detail', task_id=task.id, stream='stderr' if task.status == 'Failed' else 'stdout') }}">Logs</a></td>
+        </tr>
+        {% if task.artifacts %}
+        <tr class="artifact-row">
+            <td></td>
+            <td colspan="8">
+                {% for artifact in task.artifacts %}
+                {% include "partials/artifact.html" %}
+                {% endfor %}
+            </td>
+        </tr>
+        {% endif %}
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+</div>
