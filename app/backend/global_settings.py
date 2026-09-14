@@ -12,6 +12,9 @@ def seed_settings(app):
         'FILE_EXPLORER_ROOT': {'value': '/home/tim/', 'type': 'str', 'desc': 'Root of file explorer.'},
         'DATA_ROOT': {'value': os.path.join(app.config["HUB_ROOT"], "data"), 'type': 'str',
                       'desc': 'Root for Hub-allocated task outputs. Must be on shared storage when tasks run on other machines.'},
+        'HARDWARE_CONTROL_CONFIG_FILE': {'value':
+                                         "hardware_control/hardware_control_config.json",
+                                         'type': 'str', 'desc': "Config file for hardware control."},
     }
 
     with app.app_context():

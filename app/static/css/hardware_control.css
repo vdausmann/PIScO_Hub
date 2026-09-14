@@ -1,0 +1,72 @@
+.device-section {
+	margin-bottom: 2.5rem;
+}
+
+.device-title {
+	margin: 0 0 1rem 0;
+	font-size: 1.4rem;
+}
+
+.sensor-group {
+	margin-bottom: 1.5rem;
+}
+
+.group-title {
+	margin: 0 0 0.75rem 0;
+
+	font-size: 0.9rem;
+	font-weight: 600;
+
+	opacity: 0.65;
+
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.sensor-grid {
+	display: grid;
+
+	grid-template-columns:
+		repeat(auto-fill,
+			minmax(180px, 1fr));
+
+	gap: 1rem;
+}
+
+.sensor-entry {
+	background: var(--card);
+
+	padding: 1rem;
+
+	border-radius: 8px;
+
+	min-width: 0;
+
+	box-sizing: border-box;
+}
+
+.sensor-name {
+	display: block;
+
+	font-size: 0.85rem;
+
+	opacity: 0.7;
+
+	margin-bottom: 0.5rem;
+}
+
+.sensor-value {
+	display: block;
+
+	font-size: 1.4rem;
+	font-weight: bold;
+
+	color: var(--accent);
+
+	overflow-wrap: anywhere;
+}
+
+.sensor-value.missing {
+	opacity: 0.5;
+	font-weight: normal;
+}
