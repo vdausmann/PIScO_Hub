@@ -180,7 +180,7 @@ pre.log-box.stderr { border-color: rgba(239, 68, 68, 0.4); }
 .wizard-form label { display: block; font-weight: bold; margin-bottom: 4px; }
 .wizard-form .hint { margin-bottom: 6px; }
 .wizard-form .req { color: var(--bad); }
-.wizard-form input[type=text], .wizard-form input[type=number], .wizard-form select {
+.wizard-form input[type=text], .wizard-form input[type=number], .wizard-form input[type=date], .wizard-form select {
     padding: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text); }
 .wizard-form input.wide { width: 100%; box-sizing: border-box; }
 .wizard-form .actions { display: flex; gap: 8px; margin-top: 1rem; }
@@ -205,3 +205,18 @@ details.step pre.code { margin-top: 0.6rem; }
 .card h3 .mono { text-transform: none; letter-spacing: 0; }
 .card input.wide { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid var(--border); border-radius: 4px;
                    background: var(--surface); color: var(--text); font-size: 1em; }
+
+/* ---- template editor ------------------------------------------------- */
+
+.param-row { margin-bottom: 8px; padding: 0.6rem 0.9rem; }
+.param-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.param-head .key { width: 130px; }
+.param-head .title { width: 220px; }
+.param-head label { display: inline-flex; align-items: center; gap: 4px; margin: 0; font-weight: normal; color: var(--muted); }
+.param-body { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+.param-extras { display: flex; gap: 12px; flex-wrap: wrap; }
+.param-extras label { display: inline-flex; align-items: center; gap: 4px; margin: 0; font-weight: normal; color: var(--muted); }
+.param-extras label[hidden] { display: none; }
+.param-row input[type=text], .param-row select { padding: 5px 7px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text); }
+.param-row input.wide { width: 100%; box-sizing: border-box; }
+fieldset:disabled { opacity: 0.7; }

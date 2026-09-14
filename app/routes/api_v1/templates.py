@@ -49,6 +49,29 @@ def create_template():
     return jsonify(templates.template_dict(template, detail=True)), 201
 
 
+@api_v1_bp.route("/templates/<string:template_id>", methods=["PATCH"])
+@api_auth("operate")
+def update_template(template_id):
+    """Change a user-saved template. Body: any of name, description,
+    name_format, params_schema, tasks."""
+    template = TemplateWorkflow.query.get(template_id)
+    if template is None:
+        return jsonify({"error": "Template not found"}), 404
+    data = request.get_json(silent=True) or {}
+    try:
+        templates.update(
+            template, data.get("name"),
+            data.get("description", template.description),
+            data.get("name_format", template.name_format),
+            data["params_schema"] if "params_schema" in data
+            else (templates.template_dict(template, detail=True)["params_schema"]))
+        if "tasks" in data:
+            templates.update_tasks(template, data["tasks"] or [])
+    except templates.TemplateError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify(templates.template_dict(template, detail=True))
+
+
 @api_v1_bp.route("/templates/<string:template_id>", methods=["DELETE"])
 @api_auth("operate")
 def delete_template(template_id):

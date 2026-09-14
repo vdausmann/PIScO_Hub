@@ -8,6 +8,7 @@ here is validated exactly like one submitted through the API.
 """
 
 import json
+import re
 
 from flask import (Blueprint, abort, flash, redirect, render_template, request,
                    url_for)
@@ -282,8 +283,9 @@ def builder(workflow_id):
     draft = TemporaryWorkflow.query.get_or_404(workflow_id)
     all_tools = Tool.query.filter(Tool.available != False).order_by(Tool.name).all()
     all_templates = TemplateWorkflow.query.order_by(TemplateWorkflow.name).all()
+    source = templates.find(draft.template_id) if draft.template_id else None
     return render_template('workflow_builder.html', workflow=draft, tools=all_tools,
-                           templates=all_templates,
+                           templates=all_templates, source_template=source,
                            params_text=json.dumps(_draft_params(draft), indent=2))
 
 
@@ -500,3 +502,253 @@ def apply_template_to_draft(workflow_id, template_id):
         draft.name = f"Draft from {template.name}"
     db.session.commit()
     return redirect(url_for('workflow.builder', workflow_id=workflow_id))
+
+
+# ---- template editor -------------------------------------------------------------
+#
+# Parameters are edited as rows (key, title, type, required, …), never as
+# JSON: the rows are turned into the template's params_schema on save and
+# back into rows when it is opened again.
+
+from ..backend.param_catalog import CATALOG, TYPES  # noqa: E402
+
+_TYPE_BY_ID = {t["id"]: t for t in TYPES}
+_KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
+
+
+def _type_id(prop):
+    """Which editor type a schema property is."""
+    if prop.get("enum"):
+        return "choice"
+    fmt = prop.get("format")
+    if fmt in ("directory", "file", "date"):
+        return fmt
+    return {"number": "number", "integer": "integer",
+            "boolean": "boolean"}.get(prop.get("type"), "text")
+
+
+def _rows_from_schema(schema):
+    schema = schema or {}
+    required = set(schema.get("required", []))
+    rows = []
+    for key, prop in schema.get("properties", {}).items():
+        default = prop.get("default")
+        rows.append({
+            "key": key, "title": prop.get("title", ""), "type": _type_id(prop),
+            "required": key in required, "sticky": bool(prop.get("sticky")),
+            "default": "" if default is None else
+                       (str(default).lower() if isinstance(default, bool) else str(default)),
+            "choices": ", ".join(str(v) for v in prop.get("enum", [])),
+            "min": "" if prop.get("minimum") is None else str(prop["minimum"]),
+            "max": "" if prop.get("maximum") is None else str(prop["maximum"]),
+            "pattern": prop.get("pattern", ""),
+            "description": prop.get("description", ""),
+        })
+    return rows
+
+
+def _rows_from_form(form):
+    rows = []
+    for rid in [r for r in form.get("rows", "").split(",") if r]:
+        get = lambda field: form.get(f"r{rid}_{field}", "").strip()  # noqa: E731
+        rows.append({
+            "key": get("key"), "title": get("title"),
+            "type": get("type") or "text",
+            "required": f"r{rid}_required" in form,
+            "sticky": f"r{rid}_sticky" in form,
+            "default": get("default"), "choices": get("choices"),
+            "min": get("min"), "max": get("max"),
+            "pattern": get("pattern"), "description": get("description"),
+        })
+    return rows
+
+
+def _schema_from_rows(rows):
+    """Rows -> params_schema. Returns (schema, errors)."""
+    properties, required, errors, seen = {}, [], [], set()
+    for i, row in enumerate(rows):
+        key = row["key"]
+        label = row["title"] or key or f"parameter {i + 1}"
+        if not _KEY_RE.match(key):
+            errors.append(f"{label}: the key must be a word (letters, digits, "
+                          f"underscore), got '{key}'")
+            continue
+        if key in seen:
+            errors.append(f"{label}: key '{key}' is used twice")
+            continue
+        seen.add(key)
+        kind = _TYPE_BY_ID.get(row["type"], _TYPE_BY_ID["text"])
+        prop = dict(kind["schema"])
+        if row["title"]:
+            prop["title"] = row["title"]
+        if row["description"]:
+            prop["description"] = row["description"]
+        if row["sticky"]:
+            prop["sticky"] = True
+        if kind.get("extra") == "enum":
+            choices = [c.strip() for c in row["choices"].split(",") if c.strip()]
+            if not choices:
+                errors.append(f"{label}: a choice needs its options, comma-separated")
+            prop["enum"] = choices
+        if kind.get("extra") == "range":
+            cast = int if prop["type"] == "integer" else float
+            for bound, field in (("minimum", "min"), ("maximum", "max")):
+                if row[field]:
+                    try:
+                        prop[bound] = cast(row[field])
+                    except ValueError:
+                        errors.append(f"{label}: {field} must be a number")
+        if row["type"] == "text" and row["pattern"]:
+            try:
+                re.compile(row["pattern"])
+                prop["pattern"] = row["pattern"]
+            except re.error as e:
+                errors.append(f"{label}: bad pattern ({e})")
+        if row["default"] != "":
+            default, err = _typed_default(prop, row["default"])
+            if err:
+                errors.append(f"{label}: {err}")
+            else:
+                prop["default"] = default
+        if row["required"]:
+            required.append(key)
+        properties[key] = prop
+    schema = {"type": "object", "properties": properties}
+    if required:
+        schema["required"] = required
+    return schema, errors
+
+
+def _typed_default(prop, text):
+    try:
+        if prop["type"] == "integer":
+            return int(text), None
+        if prop["type"] == "number":
+            return float(text), None
+        if prop["type"] == "boolean":
+            return text.lower() in ("true", "1", "yes", "on"), None
+    except ValueError:
+        return None, f"default '{text}' is not a {prop['type']}"
+    if prop.get("enum") and text not in prop["enum"]:
+        return None, f"default '{text}' is not one of the choices"
+    return text, None
+
+
+def _render_editor(template, rows, errors=None, form=None):
+    """`template` is None for a new one; `form` carries unsaved values."""
+    form = form or {}
+    return render_template(
+        'template_editor.html', template=template, rows=rows, errors=errors,
+        catalog=CATALOG, types=TYPES,
+        name=form.get("name", template.name if template else ""),
+        description=form.get("description", (template.description or "") if template else ""),
+        name_format=form.get("name_format", (template.name_format or "") if template else ""),
+        readonly=bool(template and template.provider_id is not None))
+
+
+@workflow_bp.route('/templates')
+@login_required
+def list_templates():
+    rows = TemplateWorkflow.query.order_by(TemplateWorkflow.name).all()
+    return render_template('templates.html',
+                           shipped=[t for t in rows if t.provider_id is not None],
+                           saved=[t for t in rows if t.provider_id is None],
+                           counts={t.id: len((_json_or(t.params_schema, {}) or {})
+                                             .get("properties", {})) for t in rows})
+
+
+@workflow_bp.route('/templates/new', methods=['GET', 'POST'])
+@workflow_bp.route('/templates/<template_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_template(template_id=None):
+    template = None
+    if template_id is not None:
+        template = TemplateWorkflow.query.get_or_404(template_id)
+
+    if request.method == 'GET':
+        if template is not None:
+            rows = _rows_from_schema(_json_or(template.params_schema, {}))
+        elif request.args.get("copy"):
+            # "Copy" of a shipped template: same parameters, own name.
+            source = TemplateWorkflow.query.get_or_404(request.args["copy"])
+            rows = _rows_from_schema(_json_or(source.params_schema, {}))
+            return _render_editor(None, rows, form={
+                "name": f"{source.name} copy", "description": source.description or "",
+                "name_format": source.name_format or ""})
+        else:
+            rows = []
+        return _render_editor(template, rows)
+
+    rows = _rows_from_form(request.form)
+    schema, errors = _schema_from_rows(rows)
+    name = request.form.get("name", "").strip()
+    name_format = request.form.get("name_format", "").strip() or None
+    description = request.form.get("description", "").strip() or None
+    if name_format:
+        try:
+            name_format.format_map({k: "" for k in schema["properties"]})
+        except (KeyError, ValueError, IndexError) as e:
+            errors.append(f"Name format: uses an unknown parameter or is malformed ({e})")
+    if not errors:
+        try:
+            if template is None:
+                template = templates.save(name, [], schema, description, name_format,
+                                          current_user.id)
+                flash(f"Created template '{template.name}'.", "success")
+            else:
+                templates.update(template, name, description, name_format, schema)
+                flash(f"Saved template '{template.name}'.", "success")
+            return redirect(url_for('workflow.list_templates'))
+        except templates.TemplateError as e:
+            errors.append(str(e))
+    return _render_editor(template, rows, errors, request.form)
+
+
+@workflow_bp.route('/templates/<template_id>/delete', methods=['POST'])
+@login_required
+def delete_template(template_id):
+    template = TemplateWorkflow.query.get_or_404(template_id)
+    try:
+        templates.delete(template)
+        flash(f"Deleted template '{template.name}'.", "success")
+    except templates.TemplateError as e:
+        flash(str(e), "error")
+    return redirect(url_for('workflow.list_templates'))
+
+
+@workflow_bp.route('/templates/<template_id>/steps', methods=['POST'])
+@login_required
+def edit_template_steps(template_id):
+    """Open a user-saved template's steps in the builder, as a draft."""
+    template = TemplateWorkflow.query.get_or_404(template_id)
+    draft = TemporaryWorkflow()
+    draft.user_id = current_user.id
+    draft.name = template.name
+    db.session.add(draft)
+    _fill_from_template(draft, template)
+    params = {}
+    for key, prop in (_json_or(template.params_schema, {}) or {}).get("properties", {}).items():
+        params[key] = prop.get("default", f"<{key}>")
+    draft.params = json.dumps(params)
+    db.session.commit()
+    return redirect(url_for('workflow.builder', workflow_id=draft.id))
+
+
+@workflow_bp.route('/workflow/<workflow_id>/update-template', methods=['POST'])
+@login_required
+def update_template_from_draft(workflow_id):
+    """Write the builder draft's steps back into the template it came from."""
+    draft = TemporaryWorkflow.query.get_or_404(workflow_id)
+    template = templates.find(draft.template_id) if draft.template_id else None
+    if template is None:
+        flash("This draft did not come from a template.", "error")
+        return redirect(url_for('workflow.builder', workflow_id=workflow_id))
+    try:
+        templates.update_tasks(template, _draft_specs(draft))
+        flash(f"Updated the steps of template '{template.name}'.", "success")
+    except templates.TemplateError as e:
+        flash(str(e), "error")
+        return redirect(url_for('workflow.builder', workflow_id=workflow_id))
+    db.session.delete(draft)
+    db.session.commit()
+    return redirect(url_for('workflow.list_templates'))

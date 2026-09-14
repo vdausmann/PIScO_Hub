@@ -15,7 +15,11 @@
     <span class="muted">Step 3 of 3</span>
     <div class="actions">
         <button type="submit" form="discard" class="btn btn-danger" onclick="return confirm('Discard this draft?')">Discard</button>
+        {% if workflow.tasks %}
         <button type="submit" form="start" class="btn btn-primary">Start workflow ▶</button>
+        {% else %}
+        <a class="btn btn-primary" href="{{ url_for('workflow.builder', workflow_id=workflow.id) }}">Add steps in the builder &rarr;</a>
+        {% endif %}
     </div>
 </div>
 
@@ -37,6 +41,9 @@
 </div>
 
 <h3 class="pick-group">Steps</h3>
+{% if not workflow.tasks %}
+<p class="muted">This template has parameters but no steps yet. Add tools in the builder; their settings can reference the parameters above.</p>
+{% endif %}
 {% for task in workflow.tasks %}
 <details class="card step" {% if loop.first and workflow.tasks | length == 1 %}open{% endif %}>
     <summary>

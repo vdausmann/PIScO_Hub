@@ -39,6 +39,14 @@ hub workflow create --template process_profile \
     --param cruise=M203 --param station=012-01 --param frames=/mnt/pisco/incoming/M203_012-01/ --watch
 ```
 
+Templates are made in the GUI under **Templates**: pick parameters from the
+predefined list (cruise, station, instrument, position, frame directory,
+sensor log, …) or define your own with a type, a default, choices or bounds,
+and mark the ones that should be *remembered* between runs. A template can
+start as just its parameters; **Steps** opens it in the builder to add the
+tools, whose settings then reference the parameters. Templates shipped by a
+toolbox are read-only there — **Copy** makes an editable one.
+
 In the GUI, **+ New workflow** does the same thing guided: pick the template,
 fill in its parameters (values marked *remembered* are prefilled from the
 previous run of that template — cruise and instrument stay put across a

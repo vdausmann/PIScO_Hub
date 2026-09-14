@@ -133,6 +133,12 @@
                 <button type="submit" class="btn btn-danger" style="width: 100%;">Discard draft</button>
             </form>
 
+            {% if workflow.template_id and source_template and not source_template.provider_id %}
+            <form action="{{ url_for('workflow.update_template_from_draft', workflow_id=workflow.id) }}" method="POST" style="margin-bottom: 25px;"
+                  onsubmit="return confirm('Replace the steps of template \'{{ source_template.name }}\' with this draft\'s?')">
+                <button type="submit" class="btn" style="width: 100%;">Save steps into template "{{ source_template.name }}"</button>
+            </form>
+            {% endif %}
             <hr style="border: 0; border-top: 1px dashed var(--border); margin: 20px 0;">
 
             <form action="{{ url_for('workflow.save_as_template', workflow_id=workflow.id) }}" method="POST">

@@ -50,6 +50,8 @@
                {% if prop.get('minimum') is defined %}min="{{ prop['minimum'] }}"{% endif %}
                {% if prop.get('maximum') is defined %}max="{{ prop['maximum'] }}"{% endif %}
                value="{{ value if value is not none else '' }}">
+        {% elif prop.get('format') == 'date' %}
+        <input type="date" id="p_{{ key }}" name="p_{{ key }}" value="{{ value if value is not none else '' }}">
         {% elif prop.get('format') in ('directory', 'file') %}
         <div class="path-field">
             <input type="text" id="p_{{ key }}" name="p_{{ key }}" class="wide mono"

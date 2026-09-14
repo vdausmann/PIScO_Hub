@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}{{ template.name if template else 'New template' }} · PIScO Hub{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/processing.css') }}">
+{% endblock %}
+
+{% block content %}
+{% with section = 'templates' %}{% include "partials/processing_nav.html" %}{% endwith %}
+
+<div class="ph-header">
+    <h1>{{ template.name if template else 'New template' }}</h1>
+    {% if readonly %}<span class="muted">shipped by {{ template.provider.name }} · read-only</span>
+    {% elif template %}<span class="muted">parameters</span>{% endif %}
+    <div class="actions">
+        {% if readonly %}
+        <a class="btn" href="{{ url_for('workflow.edit_template', copy=template.id) }}">Copy to edit</a>
+        {% endif %}
+        <a class="btn" href="{{ url_for('workflow.list_templates') }}">&larr; Templates</a>
+    </div>
+</div>
+
+<form method="POST" class="wizard-form" style="max-width: 980px;" id="editor"
+      action="{{ url_for('workflow.edit_template', template_id=template.id) if template else url_for('workflow.edit_template') }}">
+    {% if errors %}
+    <div class="flash flash-error"><strong>Please check:</strong>
+        <ul style="margin: 0.4rem 0 0 1.2rem;">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>
+    {% endif %}
+    <fieldset class="card" style="border: 1px solid var(--border);" {% if readonly %}disabled{% endif %}>
+        <div class="input-group">
+            <label for="name">Name <span class="req">*</span></label>
+            <input type="text" id="name" name="name" class="wide" value="{{ name }}" required placeholder="process_profile">
+        </div>
+        <div class="input-group">
+            <label for="description">Description</label>
+            <input type="text" id="description" name="description" class="wide" value="{{ description }}">
+        </div>
+        <div class="input-group" style="margin-bottom: 0;">
+            <label for="name_format">Workflow name format</label>
+            <div class="muted small hint">How runs are named: parameter keys in braces, e.g. <span class="mono">{cruise}_{station}</span>. Leave empty for "template name + date".</div>
+            <input type="text" id="name_format" name="name_format" class="wide mono" value="{{ name_format }}">
+        </div>
+    </fieldset>
+
+    <h3 class="pick-group">Parameters</h3>
+    <div id="params"></div>
+    <input type="hidden" name="rows" id="rows">
+
+    {% if not readonly %}
+    <div class="filters" style="margin-top: 0.8rem;">
+        <select id="catalog-pick" class="btn">
+            <option value="">Add a predefined parameter…</option>
+            {% for entry in catalog %}
+            <option value="{{ entry.key }}">{{ entry.schema.title }} ({{ entry.key }})</option>
+            {% endfor %}
+        </select>
+        <button type="button" class="btn" id="add-custom">+ Custom parameter</button>
+    </div>
+    <div class="actions" style="justify-content: flex-end; margin-top: 1.5rem;">
+        <button type="submit" class="btn btn-primary">{{ 'Save template' if template else 'Create template' }}</button>
+    </div>
+    {% endif %}
+</form>
+
+<template id="row-template">
+<div class="param-row card">
+    <div class="param-head">
+        
+        <input type="text" class="mono key" placeholder="key" title="The parameter's key, used in settings as {&quot;$param&quot;: &quot;key&quot;}">
+        <input type="text" class="title" placeholder="Label shown in the form">
+        <select class="type">{% for t in types %}<option value="{{ t.id }}">{{ t.label }}</option>{% endfor %}</select>
+        <label class="small"><input type="checkbox" class="required"> required</label>
+        <label class="small" title="Prefilled from the previous run of this template"><input type="checkbox" class="sticky"> remembered</label>
+        <span style="margin-left: auto; display: flex; gap: 4px;">
+            <button type="button" class="btn btn-sm up" title="Move up">▲</button>
+            <button type="button" class="btn btn-sm down" title="Move down">▼</button>
+            <button type="button" class="btn btn-sm btn-danger remove" title="Remove">✕</button>
+        </span>
+    </div>
+    <div class="param-body">
+        <input type="text" class="description wide" placeholder="Description / help text">
+        <div class="param-extras">
+            <label class="small">default <input type="text" class="default"></label>
+            <label class="small extra-enum">choices <input type="text" class="choices" placeholder="comma-separated"></label>
+            <label class="small extra-range">min <input type="text" class="min" size="6"></label>
+            <label class="small extra-range">max <input type="text" class="max" size="6"></label>
+            <label class="small extra-text">pattern <input type="text" class="pattern mono" placeholder="regular expression, optional"></label>
+        </div>
+    </div>
+</div>
+</template>
+
+<script>
+(() => {
+    const initial = {{ rows | tojson }};
+    const catalog = {{ catalog | tojson }};
+    const typeExtra = {{ types | map(attribute='extra', default='') | list | tojson }};
+    const typeIds = {{ types | map(attribute='id') | list | tojson }};
+    const extraOf = Object.fromEntries(typeIds.map((id, i) => [id, typeExtra[i]]));
+    const readonly = {{ readonly | tojson }};
+    const container = document.getElementById("params");
+    const proto = document.getElementById("row-template");
+    let counter = 0;
+
+    function typeOf(prop) {
+        if (prop.enum) return "choice";
+        if (["directory", "file", "date"].includes(prop.format)) return prop.format;
+        return {number: "number", integer: "integer", boolean: "boolean"}[prop.type] || "text";
+    }
+    function rowFromCatalog(entry) {
+        const p = entry.schema;
+        return {key: entry.key, title: p.title || "", type: typeOf(p), required: entry.required,
+                sticky: !!p.sticky, default: p.default === undefined ? "" : String(p.default),
+                choices: (p.enum || []).join(", "), min: p.minimum ?? "", max: p.maximum ?? "",
+                pattern: p.pattern || "", description: p.description || ""};
+    }
+    function showExtras(row) {
+        const extra = extraOf[row.querySelector(".type").value];
+        const isText = row.querySelector(".type").value === "text";
+        row.querySelector(".extra-enum").hidden = extra !== "enum";
+        row.querySelectorAll(".extra-range").forEach(el => el.hidden = extra !== "range");
+        row.querySelector(".extra-text").hidden = !isText;
+    }
+    function addRow(data) {
+        const id = counter++;
+        const row = proto.content.firstElementChild.cloneNode(true);
+        row.dataset.id = id;
+        for (const field of ["key", "title", "type", "default", "choices", "min", "max", "pattern", "description"]) {
+            const el = row.querySelector("." + field);
+            el.name = `r${id}_${field}`;
+            el.value = data[field] ?? "";
+        }
+        for (const field of ["required", "sticky"]) {
+            const el = row.querySelector("." + field);
+            el.name = `r${id}_${field}`;
+            el.checked = !!data[field];
+        }
+        row.querySelector(".type").addEventListener("change", () => showExtras(row));
+        row.querySelector(".remove").onclick = () => { row.remove(); sync(); };
+        row.querySelector(".up").onclick = () => { if (row.previousElementSibling) container.insertBefore(row, row.previousElementSibling); sync(); };
+        row.querySelector(".down").onclick = () => { if (row.nextElementSibling) container.insertBefore(row.nextElementSibling, row); sync(); };
+        if (readonly) row.querySelectorAll("input, select, button").forEach(el => el.disabled = true);
+        container.appendChild(row);
+        showExtras(row);
+        sync();
+        return row;
+    }
+    function sync() {
+        document.getElementById("rows").value = [...container.children].map(r => r.dataset.id).join(",");
+        if (!container.children.length) container.innerHTML = '<p class="muted small" id="empty">No parameters yet.</p>';
+        else { const e = document.getElementById("empty"); if (e) e.remove(); }
+    }
+    initial.forEach(addRow);
+    sync();
+
+    const pick = document.getElementById("catalog-pick");
+    if (pick) pick.addEventListener("change", () => {
+        const entry = catalog.find(e => e.key === pick.value);
+        pick.value = "";
+        if (!entry) return;
+        const existing = [...container.querySelectorAll(".key")].map(el => el.value);
+        const data = rowFromCatalog(entry);
+        if (existing.includes(data.key)) data.key += "_2";
+        addRow(data).querySelector(".key").focus();
+    });
+    const custom = document.getElementById("add-custom");
+    if (custom) custom.onclick = () => addRow({type: "text"}).querySelector(".key").focus();
+    document.getElementById("editor").addEventListener("submit", sync);
+})();
+</script>
+{% endblock %}

@@ -12,6 +12,11 @@ import hashlib
 import json
 from datetime import datetime
 
+try:
+    import jsonschema
+except ImportError:  # pragma: no cover
+    jsonschema = None
+
 from . import settings_engine
 from .models import TemplateTask, TemplateWorkflow, Tool, db
 
@@ -97,31 +102,70 @@ def _check_schema(params_schema):
         return None
     if not isinstance(params_schema, dict):
         raise TemplateError("'params_schema' must be a JSON Schema object")
+    if jsonschema is not None:
+        try:
+            jsonschema.Draft202012Validator.check_schema(params_schema)
+        except jsonschema.SchemaError as e:
+            raise TemplateError(f"'params_schema' is not a valid JSON Schema: {e.message}")
     return json.dumps(params_schema, indent=2)
 
 
-def save(name, specs, params_schema=None, description=None,
+def _check_name(name, exclude=None):
+    name = (name or "").strip()
+    if not name:
+        raise TemplateError("'name' is required")
+    clash = TemplateWorkflow.query.filter_by(name=name).first()
+    if clash is not None and clash is not exclude:
+        raise TemplateError(f"A template named '{name}' already exists")
+    return name
+
+
+def save(name, specs=None, params_schema=None, description=None,
          name_format=None, user_id=None):
-    """Store a user-defined template."""
-    if not name or not specs:
-        raise TemplateError("'name' and a non-empty 'tasks' list are required")
+    """Store a user-defined template. `specs` may be empty: a template can
+    start as a set of parameters and get its steps later."""
     template = TemplateWorkflow()
-    template.name = name
+    template.name = _check_name(name)
     template.description = description
     template.params_schema = _check_schema(params_schema)
     template.name_format = name_format
     template.user_id = user_id
     db.session.add(template)
+    _store_tasks(template, specs or [])
+    db.session.commit()
+    return template
+
+
+def _editable(template):
+    if template.provider_id is not None:
+        raise TemplateError(
+            f"'{template.name}' is shipped by provider "
+            f"'{template.provider.name}'; edit its toolbox.json instead.")
+
+
+def update(template, name=None, description=None, name_format=None,
+           params_schema=None):
+    """Change a user-saved template's parameters and metadata."""
+    _editable(template)
+    if name is not None:
+        template.name = _check_name(name, exclude=template)
+    template.description = description
+    template.name_format = name_format
+    template.params_schema = _check_schema(params_schema)
+    db.session.commit()
+    return template
+
+
+def update_tasks(template, specs):
+    """Replace a user-saved template's steps (from a builder draft)."""
+    _editable(template)
     _store_tasks(template, specs)
     db.session.commit()
     return template
 
 
 def delete(template):
-    if template.provider_id is not None:
-        raise TemplateError(
-            f"'{template.name}' is shipped by provider "
-            f"'{template.provider.name}'; edit its toolbox.json instead.")
+    _editable(template)
     db.session.delete(template)
     db.session.commit()
 
@@ -144,9 +188,9 @@ def sync_provider(provider, entries, result):
             if name in seen:
                 raise TemplateError(f"workflow '{name}' listed twice")
             seen.add(name)
-            specs = entry.get("tasks")
-            if not isinstance(specs, list) or not specs:
-                raise TemplateError(f"workflow '{name}': 'tasks' must be a non-empty list")
+            specs = entry.get("tasks", [])
+            if not isinstance(specs, list):
+                raise TemplateError(f"workflow '{name}': 'tasks' must be a list")
             entry_hash = _entry_hash(entry)
             template = TemplateWorkflow.query.filter_by(
                 provider_id=provider.id, name=name).first()
