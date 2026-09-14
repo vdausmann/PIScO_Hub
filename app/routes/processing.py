@@ -5,6 +5,8 @@ something to watch; the partials decide themselves whether to keep
 polling, so a finished workflow stops hitting the server.
 """
 
+import csv
+import io
 import json
 import os
 from datetime import datetime
@@ -13,8 +15,8 @@ from flask import (Blueprint, Response, abort, current_app, flash, redirect,
                    render_template, request, url_for)
 from flask_login import login_required
 
-from ..backend import artifacts, settings_engine, workflows
-from ..backend.models import Machine, Task, Workflow, db
+from ..backend import artifacts, settings_engine, templates, workflows
+from ..backend.models import Machine, Task, TemplateWorkflow, Workflow, db
 from ..backend.task_manager import get_current_load
 
 processing_bp = Blueprint('processing', __name__)
@@ -130,6 +132,84 @@ def workflows_partial():
 @login_required
 def load_partial():
     return render_template("partials/load_pill.html")
+
+
+# ---- protocol ---------------------------------------------------------------
+
+def _protocol():
+    """Rows and columns for the protocol from the request's filters."""
+    query = Workflow.query.options(db.joinedload(Workflow.tasks))
+    template_name = request.args.get("template", "")
+    if template_name:
+        query = query.filter_by(template_name=template_name)
+        selected = templates.find(template_name)
+        column_sources = [selected] if selected else []
+    else:
+        column_sources = TemplateWorkflow.query.order_by(TemplateWorkflow.name).all()
+    status = request.args.get("status")
+    if status in STATUS_FILTERS:
+        query = query.filter_by(status=status)
+    q = request.args.get("q", "").strip()
+    if q:
+        query = query.filter(Workflow.name.ilike(f"%{q}%"))
+    rows_source = query.order_by(Workflow.created_at.desc()).all()
+    used = {w.template_name for w in rows_source}
+    column_sources = [t for t in column_sources if t.name in used]
+    columns, rows = workflows.protocol(rows_source, column_sources)
+    sort = request.args.get("sort") or "created_at"
+    descending = request.args.get("dir", "desc" if sort == "created_at" else "asc") == "desc"
+    rows = workflows.sort_protocol(rows, sort, descending)
+    return columns, rows, template_name, sort, descending
+
+
+@processing_bp.route('/protocol')
+@login_required
+def protocol():
+    columns, rows, template_name, sort, descending = _protocol()
+    names = [t.name for t in TemplateWorkflow.query.order_by(TemplateWorkflow.name).all()]
+    # Templates that no longer exist still name past runs.
+    for row in rows:
+        name = row["workflow"].template_name
+        if name and name not in names:
+            names.append(name)
+    return render_template('protocol.html', columns=columns, rows=rows,
+                           template_names=names, template_name=template_name,
+                           status_filters=STATUS_FILTERS,
+                           active_status=request.args.get("status", ""),
+                           q=request.args.get("q", ""), sort=sort, descending=descending)
+
+
+@processing_bp.route('/protocol.csv')
+@login_required
+def protocol_csv():
+    columns, rows, template_name, _, _ = _protocol()
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(["name", "status", "template", "created", "started", "completed",
+                     "tasks_finished", "tasks", "workflow_id"] + columns + ["outputs"])
+    for row in rows:
+        wf = row["workflow"]
+        writer.writerow([
+            wf.name, wf.status, wf.template_name or "",
+            wf.created_at.isoformat(sep=" ", timespec="seconds") if wf.created_at else "",
+            row["started_at"].isoformat(sep=" ", timespec="seconds") if row["started_at"] else "",
+            row["completed_at"].isoformat(sep=" ", timespec="seconds") if row["completed_at"] else "",
+            row["finished_count"], row["task_count"], wf.id,
+        ] + [_cell(row["params"].get(c)) for c in columns]
+          + ["; ".join(a.path for a in row["outputs"])])
+    filename = f"protocol{'-' + template_name if template_name else ''}.csv"
+    return Response(out.getvalue(), mimetype="text/csv", headers={
+        "Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+def _cell(value):
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (dict, list)):
+        return json.dumps(value)
+    return value
 
 
 @processing_bp.route('/workflow/<string:workflow_id>')

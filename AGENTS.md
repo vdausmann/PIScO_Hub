@@ -313,7 +313,7 @@ no cancel operation today; kill such a process manually over SSH.
 | GET | `/api/v1/providers` | read | list toolboxes |
 | POST | `/api/v1/providers` | full | register a toolbox |
 | DELETE | `/api/v1/providers/<id>` | full | remove (tools become unavailable) |
-| GET | `/api/v1/workflows` | read | list |
+| GET | `/api/v1/workflows` | read | list, each with `params` (`?status=`, `?template=`) |
 | POST | `/api/v1/workflows` | operate | create + queue (`tasks`, or `template` + `params`) |
 | GET | `/api/v1/workflows/<id>` | read | status detail incl. artifacts |
 | GET | `/api/v1/workflows/<id>/spec` | read | the run as a creation request, for resubmitting |

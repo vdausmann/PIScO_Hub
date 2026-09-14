@@ -110,13 +110,13 @@ def workflow_summary(workflow):
         "status": workflow.status,
         "created_at": workflow.created_at.isoformat() if workflow.created_at else None,
         "task_count": len(workflow.tasks),
+        "template": workflow.template_name,
+        "params": _json_or_default(workflow.params, {}),
     }
 
 
 def workflow_detail(workflow):
     data = workflow_summary(workflow)
-    data["params"] = _json_or_default(workflow.params, {})
-    data["template"] = workflow.template_name
     tasks = sorted(workflow.tasks, key=lambda t: t.workflow_position)
     data["tasks"] = [task_dict(t) for t in tasks]
     return data

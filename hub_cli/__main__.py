@@ -14,6 +14,7 @@ Exit codes: 0 success, 1 API/workflow failure, 2 usage error.
 """
 
 import argparse
+import csv
 import json
 import sys
 import time
@@ -232,15 +233,37 @@ def cmd_workflow_create(client, args):
 
 
 def cmd_workflow_list(client, args):
-    params = {"status": args.status} if args.status else {}
+    params = {}
+    if args.status:
+        params["status"] = args.status
+    if args.template:
+        params["template"] = args.template
     data = client.get("/workflows", params=params)
     if args.json:
         print_json(data)
         return
-    print_table(data["workflows"], [
-        ("ID", "id"), ("NAME", "name"), ("STATUS", "status"),
-        ("TASKS", "task_count"), ("CREATED", "created_at"),
-    ])
+    columns = [("ID", "id"), ("NAME", "name"), ("STATUS", "status"),
+               ("TASKS", "task_count"), ("CREATED", "created_at")]
+    rows = data["workflows"]
+    if args.params or args.template:
+        # The protocol view: one column per parameter, in order of first
+        # appearance across the runs.
+        keys = []
+        for row in rows:
+            for key in row.get("params", {}):
+                if key not in keys:
+                    keys.append(key)
+        columns = [("NAME", "name"), ("STATUS", "status"), ("CREATED", "created_at")]
+        columns += [(key, key) for key in keys]
+        rows = [dict(row, **{k: row.get("params", {}).get(k, "") for k in keys})
+                for row in rows]
+    if args.csv:
+        writer = csv.writer(sys.stdout)
+        writer.writerow([label for label, _ in columns])
+        for row in rows:
+            writer.writerow([row.get(field, "") for _, field in columns])
+        return
+    print_table(rows, columns)
 
 
 def _print_workflow(data):
@@ -473,6 +496,11 @@ def build_parser():
     p.set_defaults(func=cmd_workflow_create)
     p = workflow.add_parser("list")
     p.add_argument("--status", choices=["Pending", "Running", "Finished", "Failed"])
+    p.add_argument("--template", help="Only runs made from this template; "
+                                      "shows their parameters as columns")
+    p.add_argument("--params", action="store_true",
+                   help="Show workflow parameters as columns (the protocol)")
+    p.add_argument("--csv", action="store_true", help="Write CSV instead of a table")
     p.set_defaults(func=cmd_workflow_list)
     p = workflow.add_parser("status")
     p.add_argument("id")

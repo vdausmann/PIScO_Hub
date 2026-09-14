@@ -16,6 +16,9 @@ def list_workflows():
     status = request.args.get("status")
     if status:
         query = query.filter_by(status=status)
+    template = request.args.get("template")
+    if template:
+        query = query.filter_by(template_name=template)
     workflows = query.order_by(Workflow.created_at.desc()).all()
     return jsonify({"workflows": [workflow_summary(w) for w in workflows]})
 

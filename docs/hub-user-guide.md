@@ -47,6 +47,12 @@ start as just its parameters; **Steps** opens it in the builder to add the
 tools, whose settings then reference the parameters. Templates shipped by a
 toolbox are read-only there — **Copy** makes an editable one.
 
+**Protocol** in the sub-navigation is the run log: one row per workflow,
+the parameters as columns, with start and end times and where the outputs
+went. Filter by template, click a column to sort, **Download CSV** for the
+cruise report. The same table from the terminal:
+`hub workflow list --template profile [--csv]`.
+
 In the GUI, **+ New workflow** does the same thing guided: pick the template,
 fill in its parameters (values marked *remembered* are prefilled from the
 previous run of that template — cruise and instrument stay put across a

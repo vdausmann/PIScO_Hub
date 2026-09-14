@@ -356,8 +356,10 @@ def build_spec(server_url):
                                          "409": _json_resp(_ERROR, "Tasks running")}),
             },
             "/workflows": {
-                "get": _op("List workflows",
-                           params=[_q("status", "Pending|Running|Finished|Failed")]),
+                "get": _op("List workflows, each with its params — one row per "
+                           "run for a processing protocol",
+                           params=[_q("status", "Pending|Running|Finished|Failed"),
+                                   _q("template", "Only runs made from this template")]),
                 "post": _op(
                     "Create and queue a workflow",
                     scope="operate",

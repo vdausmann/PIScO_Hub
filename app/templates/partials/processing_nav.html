@@ -4,6 +4,8 @@
     <a class="ph-brand" href="{{ url_for('processing.dashboard') }}">Processing Hub</a>
     <a class="ph-link {% if section == 'workflows' %}active{% endif %}"
        href="{{ url_for('processing.dashboard') }}">Workflows</a>
+    <a class="ph-link {% if section == 'protocol' %}active{% endif %}"
+       href="{{ url_for('processing.protocol') }}">Protocol</a>
     <a class="ph-link {% if section == 'templates' %}active{% endif %}"
        href="{{ url_for('workflow.list_templates') }}">Templates</a>
     <span class="ph-spacer"></span>
