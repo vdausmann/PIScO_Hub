@@ -29,12 +29,15 @@ HUB = os.environ.get("HUB_URL", "http://10.11.11.110:5000")
 
 SOURCE = "/mnt/pisco/testdata/m202_a/"
 MODEL = "best_ssim_v5a_noGrad_ablation.pth"   # shipped with both tools
-# imageStackSize deliberately absent: the tool default (12) applies unless an
-# arm passes stack= explicitly. Sending 20 here is what silently undid the
-# first block-wise comparison.
+# imageStackSize and boundingBoxPadding deliberately absent: the Hub does not
+# merge schema defaults into settings a task supplies, so anything listed here
+# overrides the tool's own default. Sending imageStackSize=20 silently undid
+# the first block-wise comparison; sending boundingBoxPadding=10 undid the
+# first test of the rebuilt segmenter. Arms pass stack= / bbox_pad= explicitly
+# when they mean to.
 CPP = dict(numProcesses=4, allowedImageFileExtensions=".png",
            imageSizeX=2560, imageSizeY=2560,
-           threshold=10, minContourArea=10, boundingBoxPadding=10,
+           threshold=10, minContourArea=10,
            skipFirstNImages=0, skipLastNImages=0)
 
 PREFIX = "cmp m202_a "
@@ -118,7 +121,13 @@ ARMS = [("A1 python deconv=off", python_arm(False)),
         # Ground colour made no difference in the real tool. Two ways to give
         # each object more of its own real context instead:
         ("B2g cpp deconv=on texture gap40", cpp_arm(True, stack=12, procs=1, fill="texture", gap=40)),
-        ("B2p cpp deconv=on texture bboxpad30", cpp_arm(True, stack=12, procs=1, fill="texture", bbox_pad=30))]
+        ("B2p cpp deconv=on texture bboxpad30", cpp_arm(True, stack=12, procs=1, fill="texture", bbox_pad=30)),
+        # Rebuilt segmenter: padding 30 by default, own-contour masks, one
+        # extraction per object. Nothing overridden - this is production.
+        # (B2q/B1q/B2r/B1r all received boundingBoxPadding=10 from this dict
+        # and were deleted.) Explicit 30 so the settings file says what ran.
+        ("B2s cpp deconv=on rebuilt pad30", cpp_arm(True, procs=1, bbox_pad=30)),
+        ("B1s cpp deconv=off rebuilt pad30", cpp_arm(False, procs=1, bbox_pad=30))]
 
 # Arms already submitted are skipped by name, so this is safe to re-run.
 SKIP_EXISTING = True

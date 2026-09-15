@@ -698,14 +698,38 @@ matters: mask crops now hold neighbours (area ratio p90 3.9 — the own-contour
 issue, amplified), and a faint neighbour inside two overlapping padded boxes can
 be extracted twice.
 
-**Decisions**:
-- C++ `boundingBoxPadding` default 10 → 30 (`config.ini`, `toolbox.json`).
-- Pass 2: mask from the object's own contour (asked for; now necessary), and
-  de-duplicate objects across overlapping boxes — assign each to the ROI whose
-  *un-padded* box holds its centroid. Needs a rebuild.
-- `atlasFill` stays `texture` as the in-distribution choice; `atlasPadding`
-  stays 5 (40 runs out of memory because the tool holds every atlas before
-  writing).
+**Done (Veit's decision, 2026-09-15)** — `pisco_segmenter_cpp` `9c2e3ae` on
+`main` + `hub-integration`, rebuilt in the nix shell on gpuworker1 and
+installed on both workers:
+- `boundingBoxPadding` default 10 → 30 (config, manifest, compiled fallback);
+- pass 2 builds each mask from the object's own contour;
+- pass 2 extracts each object once: it belongs to the ROI whose *un-padded*
+  core holds its centroid; objects in no core are kept by the first ROI and
+  suppressed within 4 px thereafter;
+- TRIANGLE re-threshold kept.
+
+Result, rebuilt tool at its defaults (`B2s` / `B1s`):
+
+| | python | C++ | matched of python | matched of C++ | area p10 / median / p90 |
+|---|---|---|---|---|---|
+| deconvolved, before | 15 627 | 10 603 | 57.1% | 84.1% | 0.92 / 1.000 / 1.00 |
+| **deconvolved, rebuilt** | 15 627 | 13 020 | **74.9%** | **89.9%** | **0.99 / 1.000 / 1.01** |
+| undeconvolved, before | 4349 | 3556 | 58.1% | 71.1% | 0.55 / 0.762 / 1.00 |
+| **undeconvolved, rebuilt** | 4349 | 3687 | **68.7%** | **81.0%** | 0.63 / **1.000** / 1.00 |
+
+Lost area against whole-frame: median 0.0%, p90 3.8%. The neighbour inclusion
+(area p90 3.9 with padding 30 on the old pass 2) and the duplicates (16 326
+objects) are both gone. The collage on the same ten objects
+(`deconv_examples_rebuilt.png`, real stored masks, no emulation) has blue and
+orange coinciding on every row, copepod antenna included.
+
+Trap that cost two runs: the Hub does **not** merge schema defaults into
+settings a task supplies. Anything hardcoded in `comparison/arms.py`'s `CPP`
+dict silently overrides the tool's default — it did so for `imageStackSize`
+and again for `boundingBoxPadding`. Neither key is in that dict any more.
+
+`atlasFill` stays `texture` (in-distribution, no effect); `atlasPadding` stays 5
+(40 OOM-kills the tool, which holds every atlas before writing).
 
 ### Gate result: the deconvolution-only objects are real
 
