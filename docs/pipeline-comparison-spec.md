@@ -107,11 +107,13 @@ fixed-threshold area, p10 0.275 (`comparison/triangle_undeconv.py`). That is a
 locally adaptive threshold behaving very differently on the two kinds of input,
 and it is not a mechanism the python route has.
 
-**Decision needed**: the pass-2 re-threshold should be the fixed `threshold`,
-not `max(TRIANGLE, threshold)`, if the two routes are to use "the same
-mechanisms". One line in `detection.cpp`; needs a nix rebuild. Alternatively
-python adopts it, but replicating an adaptive step nobody chose deliberately is
-the wrong direction.
+**Decision (Veit, 2026-09-15): keep the TRIANGLE re-threshold in production;
+do not add it to the python route.** Looking at the overlays
+(`comparison/contours.py`), the tighter C++ contour may well be the more correct
+one — the python contour at 10 visibly includes halo. Which is right cannot be
+told by eye at this contrast; it needs a systematic ground-truth test, deferred.
+Until then the two routes are *known* to differ here, by a measured amount, and
+that is acceptable.
 
 ### The background estimators diverged by accident, not by design
 
