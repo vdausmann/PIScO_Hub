@@ -29,8 +29,11 @@ HUB = os.environ.get("HUB_URL", "http://10.11.11.110:5000")
 
 SOURCE = "/mnt/pisco/testdata/m202_a/"
 MODEL = "best_ssim_v5a_noGrad_ablation.pth"   # shipped with both tools
+# imageStackSize deliberately absent: the tool default (12) applies unless an
+# arm passes stack= explicitly. Sending 20 here is what silently undid the
+# first block-wise comparison.
 CPP = dict(numProcesses=4, allowedImageFileExtensions=".png",
-           imageStackSize=20, imageSizeX=2560, imageSizeY=2560,
+           imageSizeX=2560, imageSizeY=2560,
            threshold=10, minContourArea=10, boundingBoxPadding=10,
            skipFirstNImages=0, skipLastNImages=0)
 
@@ -63,8 +66,9 @@ def python_arm(deconv, fov_mask=True, stack=None):
     return [{"tool": "pisco_segment_py", "settings": settings}]
 
 
-def cpp_arm(deconv, stack=None):
-    cpp = dict(CPP, **({"imageStackSize": stack} if stack else {}))
+def cpp_arm(deconv, stack=None, procs=None):
+    cpp = dict(CPP, **({"imageStackSize": stack} if stack else {}),
+               **({"numProcesses": procs} if procs else {}))
     tasks = [{"tool": "pisco_segment", "settings": dict(
         cpp, sourcePath=SOURCE, targetPath="",
         mode="Mode::BACKGROUND_CORRECTION_AND_COMPRESSION")}]
@@ -93,7 +97,13 @@ ARMS = [("A1 python deconv=off", python_arm(False)),
         # python route now does what the C++ always did) and the same stack, so
         # detection is the only thing left that can differ.
         ("A1x python deconv=off bg12", python_arm(False, stack=12)),
-        ("B1x cpp deconv=off stack12", cpp_arm(False, stack=12))]
+        ("B1x cpp deconv=off stack12", cpp_arm(False, stack=12)),
+        # Block-wise on both sides, defaults (12), one C++ process so its
+        # blocks are really 12 frames on a 46-frame set rather than the
+        # 11-12 frame per-process chunks that made imageStackSize a no-op.
+        ("A1y python deconv=off blocks", python_arm(False)),
+        ("B1y cpp deconv=off blocks p1", cpp_arm(False, procs=1)),   # ran at stack 20 by mistake
+        ("B1z cpp deconv=off blocks12 p1", cpp_arm(False, stack=12, procs=1))]
 
 # Arms already submitted are skipped by name, so this is safe to re-run.
 SKIP_EXISTING = True

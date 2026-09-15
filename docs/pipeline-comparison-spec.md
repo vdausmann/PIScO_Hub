@@ -74,6 +74,45 @@ C++ moves to a sliding window, or python adopts block correction. That is a
 decision, not a setting, and it should be made on which is better science rather
 than on which is easier to match.
 
+### Background now pixel-identical; what remains is the TRIANGLE re-threshold (2026-09-15)
+
+Both routes block-wise (python `4af9b4d`, C++ default 12 in `bf3ad56`), deployed
+as git clones on CT 110/112/113. **Verified**: reconstructing the corrected
+frame (max of pairwise minima over the 12-frame block, frame included) and
+comparing it against the C++'s stored `cropPixelData` at every bounding box
+gives **1798/1798 crops identical, worst diff 0** (`comparison/bgcheck.py`).
+The earlier 70.3% figure was against a C++ run that `arms.py` had silently
+sent `imageStackSize = 20` to — caught only because that same check returned
+0/1813.
+
+With identical backgrounds (`A1y` vs `B1z`, both defaults, C++ one process):
+
+| | python | C++ | matched of python | matched of C++ | area C++/python |
+|---|---|---|---|---|---|
+| original | 6107 | 3494 | 19.3% | 33.8% | 0.622 |
+| formula aligned | 4930 | 3494 | 40.9% | 57.6% | 0.712 |
+| **background identical** | 4349 | 3556 | **58.1%** | **71.1%** | **0.762** |
+
+Of the 2527 matched pairs, 28.6% have *exactly* identical area — the same
+object found the same way. 56.6% have a C++ mask below 0.8x, and 0.2% above
+1.2x: the C++ shrinks masks, never grows them, on identical input.
+
+**The cause is the pass-2 TRIANGLE re-threshold** (`detection.cpp:141-149`,
+`max(TRIANGLE(roi), 10)`), and the earlier finding that it "explains nothing"
+was measured on *deconvolved* crops, where boosted contrast pushes TRIANGLE
+below the floor. On undeconvolved input — the counting domain under the
+directive — TRIANGLE lands **above** the floor for **71.3%** of objects
+(median 12, p90 19), and the stored mask is a median **0.671x** the
+fixed-threshold area, p10 0.275 (`comparison/triangle_undeconv.py`). That is a
+locally adaptive threshold behaving very differently on the two kinds of input,
+and it is not a mechanism the python route has.
+
+**Decision needed**: the pass-2 re-threshold should be the fixed `threshold`,
+not `max(TRIANGLE, threshold)`, if the two routes are to use "the same
+mechanisms". One line in `detection.cpp`; needs a nix rebuild. Alternatively
+python adopts it, but replicating an adaptive step nobody chose deliberately is
+the wrong direction.
+
 ### The background estimators diverged by accident, not by design
 
 Traced 2026-09-11. The python route's background calculation was **never
