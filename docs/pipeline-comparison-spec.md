@@ -620,6 +620,58 @@ below its floor, so the two routes agree on masks here. The count gap is the
 python route rendering more faint material into detectability, consistent with
 the ring measurement.
 
+### The atlas fades faint parts of objects — measured, dissected, and reversible (2026-09-15)
+
+Follow-up to the ring measurement above, prompted by the overlays: a copepod
+lost an antenna in the C++ output. **Not TRIANGLE** — emulating a fixed
+threshold of 10 with an own-contour mask on the stored crops
+(`comparison/deconv_side.py --fixed`) removes the stray fragments but the
+antenna is still absent. The pixels were never rendered.
+
+**Not a write-back bug either.** `pack_crops.py:145` records each placed crop
+as `(x+1, y+1, w-2, h-2)` under a `# TODO: remove this test` comment, which
+looked like a stride mismatch on write-back; tested (`comparison/shear.py`),
+the stored deconvolved ROIs match the whole-frame result at MAE p50 2.1 /
+p90 3.8 / max 9.0 when read exactly as pass 2 reads them, and the alternative
+reading is far worse. The map is evidently compensated upstream. Write-back
+position is also correct (`comparison/writeback.py`, modal shift 0,0).
+
+**Dissecting the worst object** (`comparison/dissect.py`, `dissect.png`): the
+whole-frame deconvolution of its ROI shows a large left lobe; the ROI
+`pisco_deconvolve` stored shows the same body with the lobe faded to near
+nothing; TRIANGLE was 4 so the floor of 10 applied; the stored crop equals the
+ROI cut at the box to MAE 0.00. **The atlas deconvolution renders faint parts
+of objects, especially near the crop edges, much weaker than whole-frame
+deconvolution does.** That is the ring-flatness result showing up as lost
+anatomy.
+
+How often, and is it fixable (`comparison/lost_features.py`, 682 matched
+objects, settled frames, threshold 10, own contour, "lost" = 1 - recovered /
+whole-frame area):
+
+| variant | median lost | p90 | >10% lost | >25% lost |
+|---|---|---|---|---|
+| **real atlas (what ships)** | **10.5%** | 29.1% | **51.0%** | 17.7% |
+| re-packed on white, sparse | -18.7% | -3.9% | 0% | 0% |
+| **re-packed on real background texture** | **-8.8%** | -0.7% | 0.1% | 0% |
+| texture, padding 30 | -11.1% | -0.9% | 0.4% | 0.1% |
+
+Half of all objects lose more than 10% of their area to the atlas, one in six
+loses more than a quarter. **Filling the atlas gaps with real background
+texture recovers all of it** — and slightly overshoots, which is the pedestal
+sensitivity again. (The sparse white re-pack overshoots more, so the model's
+response depends strongly on the surround: dense white suppresses, sparse white
+amplifies, real texture reproduces whole-frame. Texture is the training
+condition and the robust choice.)
+
+**Action**: fill the atlas background in `pack_crops.py` with real cleaned
+background texture — the tool is python, no rebuild. The `bg_pool` textures
+shipped with LUCYD are the natural source; the frame's own quiet regions work
+too. Then re-run and re-measure with the real tool.
+
+The two C++ changes asked for — fixed pass-2 threshold, own-contour masks —
+remain worthwhile (the fragments are real) but are secondary to this.
+
 ### Gate result: the deconvolution-only objects are real
 
 `comparison/snr_gate.py` applies `local_snr` verbatim to the six sparse frames.

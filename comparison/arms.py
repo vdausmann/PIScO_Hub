@@ -103,7 +103,11 @@ ARMS = [("A1 python deconv=off", python_arm(False)),
         # 11-12 frame per-process chunks that made imageStackSize a no-op.
         ("A1y python deconv=off blocks", python_arm(False)),
         ("B1y cpp deconv=off blocks p1", cpp_arm(False, procs=1)),   # ran at stack 20 by mistake
-        ("B1z cpp deconv=off blocks12 p1", cpp_arm(False, stack=12, procs=1))]
+        ("B1z cpp deconv=off blocks12 p1", cpp_arm(False, stack=12, procs=1)),
+        # Deconvolution on identical inputs: whole-frame (python) against the
+        # crop atlas (C++), same LUCYD weights.
+        ("A2y python deconv=on blocks", python_arm(True)),
+        ("B2z cpp deconv=on blocks12 p1", cpp_arm(True, stack=12, procs=1))]
 
 # Arms already submitted are skipped by name, so this is safe to re-run.
 SKIP_EXISTING = True

@@ -12,6 +12,9 @@ WF = [
     ("A2b python  on  nomask", "375ff63a-2d4b-4139-b858-dace4b027eb6"),
     ("B1  cpp     deconv=off", "2eda51b7-e837-4f1c-a6eb-147298e2e8b4"),
     ("B2  cpp     deconv=on ", "833c83b3-11c8-4f85-85fb-4d7607f46c79"),
+    ("A1y python  blocks  8c", "08198ba2-40f1-4f00-a3d3-f31bf756befe"),
+    ("B1y cpp     blocks  1p", "c62ed14e-e8e4-4b92-b8ad-274579cbfe34"),
+    ("B1z cpp     blocks12 1p", "634e7722-2be8-4af5-9f50-3218e3be14f2"),
 ]
 
 
