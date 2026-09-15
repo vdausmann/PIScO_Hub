@@ -66,16 +66,21 @@ def python_arm(deconv, fov_mask=True, stack=None):
     return [{"tool": "pisco_segment_py", "settings": settings}]
 
 
-def cpp_arm(deconv, stack=None, procs=None):
+def cpp_arm(deconv, stack=None, procs=None, fill=None, gap=None, bbox_pad=None):
     cpp = dict(CPP, **({"imageStackSize": stack} if stack else {}),
-               **({"numProcesses": procs} if procs else {}))
+               **({"numProcesses": procs} if procs else {}),
+               **({"boundingBoxPadding": bbox_pad} if bbox_pad else {}))
     tasks = [{"tool": "pisco_segment", "settings": dict(
         cpp, sourcePath=SOURCE, targetPath="",
         mode="Mode::BACKGROUND_CORRECTION_AND_COMPRESSION")}]
     if deconv:
-        tasks.append({"tool": "pisco_deconvolve", "settings": {
-            "targetPath": {"$from": {"task": 0, "output": "results"}},
-            "modelPath": MODEL}})
+        dsettings = {"targetPath": {"$from": {"task": 0, "output": "results"}},
+                     "modelPath": MODEL}
+        if fill:
+            dsettings["atlasFill"] = fill
+        if gap:
+            dsettings["atlasPadding"] = gap
+        tasks.append({"tool": "pisco_deconvolve", "settings": dsettings})
     # extraction is a second sweep over the correction directory, never a fresh one
     tasks.append({"tool": "pisco_segment", "settings": dict(
         cpp, sourcePath=SOURCE,
@@ -107,7 +112,13 @@ ARMS = [("A1 python deconv=off", python_arm(False)),
         # Deconvolution on identical inputs: whole-frame (python) against the
         # crop atlas (C++), same LUCYD weights.
         ("A2y python deconv=on blocks", python_arm(True)),
-        ("B2z cpp deconv=on blocks12 p1", cpp_arm(True, stack=12, procs=1))]
+        ("B2z cpp deconv=on blocks12 p1", cpp_arm(True, stack=12, procs=1)),   # white atlas
+        # Same, with the atlas ground tiled from real background texture.
+        ("B2t cpp deconv=on blocks12 p1 texture", cpp_arm(True, stack=12, procs=1, fill="texture")),
+        # Ground colour made no difference in the real tool. Two ways to give
+        # each object more of its own real context instead:
+        ("B2g cpp deconv=on texture gap40", cpp_arm(True, stack=12, procs=1, fill="texture", gap=40)),
+        ("B2p cpp deconv=on texture bboxpad30", cpp_arm(True, stack=12, procs=1, fill="texture", bbox_pad=30))]
 
 # Arms already submitted are skipped by name, so this is safe to re-run.
 SKIP_EXISTING = True

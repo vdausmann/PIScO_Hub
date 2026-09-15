@@ -664,13 +664,48 @@ response depends strongly on the surround: dense white suppresses, sparse white
 amplifies, real texture reproduces whole-frame. Texture is the training
 condition and the robust choice.)
 
-**Action**: fill the atlas background in `pack_crops.py` with real cleaned
-background texture — the tool is python, no rebuild. The `bg_pool` textures
-shipped with LUCYD are the natural source; the frame's own quiet regions work
-too. Then re-run and re-measure with the real tool.
+**Tested on the real tool, the ground was not the cause.** `pisco_deconvolve`
+gained `atlasFill` (texture from four shipped `bg_pool` M202 textures, or
+white) and `atlasPadding`; run `B2t` (texture) against `B2z` (white): stored
+ROIs differ by **MAE 0.05**, 10 611 vs 10 603 objects. The emulation above had
+re-packed one frame's crops sparsely, with acres of ground around each; the
+real tool packs crops from many frames 5 px apart, so an object's surround is
+mostly *other crops* and the ground barely reaches it. What the model lacks is
+the object's **own** frame context.
 
-The two C++ changes asked for — fixed pass-2 threshold, own-contour masks —
-remain worthwhile (the fragments are real) but are secondary to this.
+Measured on all pass-1 ROIs (`comparison/lost_real.py`, 22 settled frames,
+2162 ROIs, threshold 10, main component, against whole-frame):
+
+| run | median lost | p90 | >10% lost | >25% lost |
+|---|---|---|---|---|
+| white ground, bbox pad 10 | 62.7% | 99.4% | 86.6% | 76.6% |
+| texture ground, bbox pad 10 | 62.1% | 98.9% | 86.4% | 76.3% |
+| texture, atlas gap 40 | *(deconvolve OOM-killed, exit 137)* | | | |
+| **texture, `boundingBoxPadding` 30** | **0.0%** | **3.8%** | **4.1%** | 2.2% |
+
+On all ROIs the white atlas is far worse than the matched-object figure above
+suggested: a median 63% of each whole-frame object is missing, i.e. most faint
+objects that the whole-frame pass reveals never survive the atlas at all. That
+is the real source of the 15 627 vs 10 603 count gap. **Giving each crop 30 px
+of its own real surround instead of 10 recovers whole-frame output almost
+entirely.** The collage on the same ten objects
+(`deconv_examples_bboxpad30_fixed10.png`) shows blue and orange coinciding,
+copepod antenna included; |whole − atlas| inside objects 4.78 → 1.05.
+
+Object level, `A2y` vs `B2p` (de-padded 30): matched 75.1% / 71.9% (from 57.1%
+/ 84.1%), C++ now 16 326 objects (from 10 603). Two side effects, both pass-2
+matters: mask crops now hold neighbours (area ratio p90 3.9 — the own-contour
+issue, amplified), and a faint neighbour inside two overlapping padded boxes can
+be extracted twice.
+
+**Decisions**:
+- C++ `boundingBoxPadding` default 10 → 30 (`config.ini`, `toolbox.json`).
+- Pass 2: mask from the object's own contour (asked for; now necessary), and
+  de-duplicate objects across overlapping boxes — assign each to the ROI whose
+  *un-padded* box holds its centroid. Needs a rebuild.
+- `atlasFill` stays `texture` as the in-distribution choice; `atlasPadding`
+  stays 5 (40 runs out of memory because the tool holds every atlas before
+  writing).
 
 ### Gate result: the deconvolution-only objects are real
 

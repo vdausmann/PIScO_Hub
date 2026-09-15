@@ -25,6 +25,7 @@ SRC = "/mnt/pisco/testdata/m202_a"
 PY = sys.argv[1]      # python results dir (A2y)
 CPP = sys.argv[2]     # C++ result.h5 (B2z)
 MATCHES = sys.argv[3]
+FIXED = len(sys.argv) > 4 and sys.argv[4] == "--fixed"
 OUT = "/mnt/pisco/compare/deconv"
 MODEL = ("/opt/pisco/tools/pisco_segmenter_py/pisco_segmenter/models/"
          "best_ssim_v5a_noGrad_ablation.pth")
@@ -85,9 +86,14 @@ def cpp_objects(frame):
             m = masks[offs[k]:offs[k] + n]; c = crops[offs[k]:offs[k] + n]
             if m.size != n:
                 continue
+            m = m.reshape(int(bh[k]), int(bw[k])); c = c.reshape(int(bh[k]), int(bw[k]))
+            if FIXED:
+                # What pass 2 would store with a fixed threshold: the crop
+                # thresholded at 10. Which component is *this* object's own
+                # contour is decided later, by overlap with the python object.
+                m = ((c > 10) * 255).astype(np.uint8)
             out[k] = dict(x=int(bx[k]), y=int(by[k]), w=int(bw[k]), h=int(bh[k]),
-                          mask=m.reshape(int(bh[k]), int(bw[k])),
-                          deconv=c.reshape(int(bh[k]), int(bw[k])))   # bright on dark
+                          mask=m, deconv=c)   # bright on dark
     return out
 
 
@@ -101,12 +107,25 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 model = LUCYD(num_res=1).to(device); model.eval()
 model.load_state_dict(torch.load(MODEL, map_location=device))
 
-rows = [r for r in csv.DictReader(open(MATCHES)) if r["stratum"] == "matched"]
-# mid-sized, well-matched objects from the settled part of the profile
-rows = [r for r in rows if 200 < float(r["old_area"]) < 3000 and float(r["iou"]) > 0.6
-        and files.index(r["frame"] + ".png") >= 24]
-rng = np.random.default_rng(1)
-rng.shuffle(rows)
+def select(matches_csv):
+    rows = [r for r in csv.DictReader(open(matches_csv)) if r["stratum"] == "matched"]
+    # mid-sized, well-matched objects from the settled part of the profile
+    rows = [r for r in rows if 200 < float(r["old_area"]) < 3000 and float(r["iou"]) > 0.6
+            and files.index(r["frame"] + ".png") >= 24]
+    np.random.default_rng(1).shuffle(rows)
+    return rows
+
+REF = os.environ.get("REF_MATCHES")          # an earlier run's matches: reuse its objects
+if REF:
+    # the python side is unchanged between runs, so key on (frame, python idx)
+    keys = [(r["frame"], r["old_idx"]) for r in select(REF)]
+    cur = {(r["frame"], r["old_idx"]): r for r in csv.DictReader(open(MATCHES)) if r["stratum"] == "matched"}
+    rows = [cur[k] for k in keys if k in cur]
+    missing = sum(1 for k in keys[:10] if k not in cur)
+    if missing:
+        print(f"note: {missing} of the first 10 reference objects have no match in this run")
+else:
+    rows = select(MATCHES)
 
 # --- verify the whole-frame recomputation against what the python pipe stored
 whole_cache = {}
@@ -184,10 +203,18 @@ for r in rows:
         panels = [up(c_box), up(w_box), up(a_box), up(255 - diff)]
         # contours: python mask (blue) on the whole-frame panel, C++ mask (orange) on the atlas panel
         pc, _ = cv.findContours(pm, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)
-        cc, _ = cv.findContours((co["mask"] > 0).astype(np.uint8), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)
+        cmask = (co["mask"] > 0).astype(np.uint8)
+        if FIXED:
+            # own contour = the component overlapping the python object most
+            n_, lab, stats, _ = cv.connectedComponentsWithStats(cmask, connectivity=8)
+            if n_ > 1:
+                ov = [int(((lab == j) & (pm > 0)).sum()) for j in range(1, n_)]
+                j = 1 + int(np.argmax(ov)) if max(ov) > 0 else 1 + int(np.argmax(stats[1:, cv.CC_STAT_AREA]))
+                cmask = (lab == j).astype(np.uint8)
+        cc, _ = cv.findContours(cmask, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)
         cv.drawContours(panels[1], [c * S for c in pc], -1, BLUE, 1)
         cv.drawContours(panels[2], [c * S for c in cc], -1, ORANGE, 1)
-        for p_, label in zip(panels, ("corrected input", "whole-frame (python)", "atlas (C++)", "|diff| x4")):
+        for p_, label in zip(panels, ("corrected input", "whole-frame (python)", "atlas (C++)" + (" fixed 10, own contour" if FIXED else ""), "|diff| x4")):
             cv.putText(p_, label, (4, 12), cv.FONT_HERSHEY_SIMPLEX, .38, (30, 30, 30), 1, cv.LINE_AA)
         row_img = np.hstack([cv.copyMakeBorder(p_, 1, 1, 1, 1, cv.BORDER_CONSTANT, value=(160, 160, 160)) for p_ in panels])
         info = (f"{frame[:36]}  ring std whole {ring_whole[-1]:.1f} / atlas {ring_atlas[-1]:.1f}"
@@ -198,7 +225,8 @@ for r in rows:
 
 w = max(t.shape[1] for t in tiles)
 tiles = [cv.copyMakeBorder(t, 0, 0, 0, w - t.shape[1], cv.BORDER_CONSTANT, value=(255, 255, 255)) for t in tiles]
-cv.imwrite(f"{OUT}/deconv_examples.png", np.vstack(tiles))
+tag = os.environ.get("OUT_TAG", "")
+cv.imwrite(f"{OUT}/deconv_examples{tag}{'_fixed10' if FIXED else ''}.png", np.vstack(tiles))
 
 rw, ra = np.array(ring_whole), np.array(ring_atlas)
 print(f"recomputed whole-frame deconvolution vs python pipe's stored pixels: "
