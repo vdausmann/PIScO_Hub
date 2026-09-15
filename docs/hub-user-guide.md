@@ -73,6 +73,15 @@ if you re-run into a fresh workflow directory.
 /mnt/pisco/incoming/<your profile>/     # raw .png frames
 ```
 
+### 1b. Or build the profile dataset first
+
+The chain below reads a directory of named PNGs. During a cruise the frames
+come from the camera without metadata; `pisco_prepare_profile` (toolbox
+`pisco_profile_dataset`) turns the camera output plus the sensor log into
+`profile_dataset.h5`, and both segmenters accept its directory as
+`sourcePath` — `{"$from": {"task": 0, "output": "dataset"}}` in the next
+step. Its parameters are the ones the `profile` template asks for.
+
 ### 2. Write the workflow
 
 Save this as `wf.json`. It is the chain that was verified end to end: clean and
