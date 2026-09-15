@@ -594,6 +594,32 @@ follow:
   quiet region; sampling `bg_pool`-style textures with grain (sigma 2.8-3.8, as
   the generator adds) should do better.
 
+### Atlas vs whole-frame on identical input: no hallucination in the gaps (2026-09-15)
+
+Arms `A2y` (python, whole-frame LUCYD) and `B2z` (C++, atlas LUCYD), same v5a
+weights, block-wise backgrounds verified identical. `comparison/deconv_side.py`
+recomputes the whole-frame deconvolution and checks it against the python
+pipe's stored pixels: **0.000 mean difference** over 120 objects, so the
+recomputation *is* the python route's output and its surround can be examined.
+
+Veit's hypothesis: the flat white gaps in the atlas make the model hallucinate
+structure around objects. **Measured, it does the opposite.** Texture (std) in
+the ring around each object: whole-frame median **1.66**, atlas **1.21**, ratio
+0.94x per object (p10 0.30, p90 1.49); only 10% of objects have a busier atlas
+ring. The atlas surround is *flatter* — with white instead of real background
+texture around it, the model renders less faint structure, not more.
+
+Where the two do differ is at the **object's own edges** — mean |diff| 4.78
+inside the object, concentrated along its outline, not along the box
+(border 1.09 vs interior 2.25). Truncation at the box is rare: the python
+contour extends past the C++ box for **1.7%** of objects.
+
+Object-level: python 15627, C++ 10603, **84.1%** of C++ objects matched, mask
+area ratio **median 1.000** (p10 0.921) — on deconvolved crops TRIANGLE falls
+below its floor, so the two routes agree on masks here. The count gap is the
+python route rendering more faint material into detectability, consistent with
+the ring measurement.
+
 ### Gate result: the deconvolution-only objects are real
 
 `comparison/snr_gate.py` applies `local_snr` verbatim to the six sparse frames.
