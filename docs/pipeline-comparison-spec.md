@@ -731,6 +731,21 @@ and again for `boundingBoxPadding`. Neither key is in that dict any more.
 `atlasFill` stays `texture` (in-distribution, no effect); `atlasPadding` stays 5
 (40 OOM-kills the tool, which holds every atlas before writing).
 
+**Follow-up (2026-09-16): the crop handed downstream.** With 30 px of padding
+the stored `cropPixelData` box shows neighbours — Veit saw them in EcoTaxa, and
+the same box was reaching the classifier, which was trained on the python
+route's crops: a *tight* box with everything outside the contour white.
+`process_pisco_profiles` `de54436`: `crops.tight_masked()` derives that crop
+from the stored box and the (now own-contour) mask; the EcoTaxa exporter and
+`vit_classify_hdf5.py` both use it, `isolateCrops` defaults to **on** in both
+manifests, and the exporter shifts `object_x/y/width/height` to the tight box.
+Off writes/feeds the stored box as-is. On the rebuilt output, 461 of 17 480
+exported objects had a neighbour's pixels in their box before; none do now
+(`export_panel.png`). One nuance for the ground-truth session: the python
+route's crop occasionally kept pixels of an *earlier-processed* neighbour
+inside its tight box (its mask was an accumulator); the C++ crop is strictly
+the object alone — marginally cleaner than the training data.
+
 ### Gate result: the deconvolution-only objects are real
 
 `comparison/snr_gate.py` applies `local_snr` verbatim to the six sparse frames.
