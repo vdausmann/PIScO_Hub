@@ -420,7 +420,8 @@ Things the code does not do, so nobody has to rediscover them:
   polling.
 - **Web UI gaps**: no pages for tools, providers, machines or tokens (API
   and CLI only); the builder has no picker for `$from`/`$param`; the
-  Visualization Hub is an empty page; Hardware Control renders its config
+  Visualization Hub only frames external pages declared in `modules.json`
+  (`app/backend/modules.py`); Hardware Control renders its config
   but `parse_sensor_data` returns `{}`.
 - **Stale scripts**: `scripts/add_test_task.py` imports a module that no
   longer exists; `scripts/create_workflow.py` drives the deprecated

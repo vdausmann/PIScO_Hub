@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ module.title }}{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; margin-bottom: 0.75rem;">
+    <div>
+        <a href="{{ url_for('visualization.hub') }}" style="color: var(--accent); text-decoration: none;">&larr; Modules</a>
+        <strong style="margin-left: 1rem;">{{ module.title }}</strong>
+    </div>
+    <div style="font-size: 0.9em;">
+        {% if module.source %}<a href="{{ module.source }}" target="_blank" rel="noopener">Source</a> &middot; {% endif %}
+        {% if src %}<a href="{{ src }}" target="_blank" rel="noopener">Open in new tab &nearr;</a>{% endif %}
+    </div>
+</div>
+{% if src %}
+{# The framed site keeps its own styling; the Hub only lends it the window.
+   If it stays blank, the site refuses framing — switch its mode to "link". #}
+<iframe src="{{ src }}" title="{{ module.title }}"
+        style="width: 100%; height: calc(100vh - 9rem); border: 1px solid var(--border, #ccc); border-radius: 8px; background: white;"></iframe>
+{% else %}
+<p>Nothing to show yet: <code>{{ missing }}/index.html</code> does not exist.
+   It appears once the tool that writes this directory has run.</p>
+{% endif %}
+{% endblock %}

@@ -153,5 +153,6 @@ for the full list:
 - `$from` references are resolved inside objects, not inside lists;
 - the web builder has no picker for `$from`/`$param` references (typed as
   JSON); no Tools/Providers/Machines/Tokens pages yet;
-- the Visualization Hub and Hardware Control pages are placeholders;
+- the Visualization Hub only frames external pages (`modules.json`); the
+  Hardware Control page is a placeholder;
 - lifecycle hooks (run a command on `task.failed` etc.) are not implemented.

@@ -110,10 +110,11 @@ Hub and every worker), each on its `hub-integration` branch unless noted:
 | `pisco_segmenter_cpp` | `pisco_segment` | nix dev shell, built with CMake | INI settings. Two modes: `BACKGROUND_CORRECTION_AND_COMPRESSION` reads `sourcePath`, writes `checkpoint_correction_*.h5` into `targetPath`; `OBJECT_EXTRACTION` is a second pass over `targetPath` writing `result.h5`. Weight 8. |
 | `pisco_deconvolution_py` | `pisco_deconvolve` | official PyTorch wheel in `/opt/pisco/venvs/torch` (`$PISCO_PYTHON`), on the GPU workers | reads the correction checkpoints directly, so segment → deconvolve → extract is the chain; `modelPath` selects the LUCYD model. |
 | `pisco_segmenter_py` | `pisco_segment_py` | same torch venv | the legacy all-Python pipeline, kept for comparison; also writes `result.h5`; needs a timeout because a CUDA OOM hangs it. |
+| `msm147_satellite_nrt` | `satellite_nrt_gallery` | venv `/opt/pisco/venvs/satellite` built by its `setup_env.sh` (hash-locked; Natural Earth data pre-fetched) | Marco Schulz's cruise satellite gallery, pinned as a submodule and run in a `work_dir` laid out like his checkout; the gallery in `<work_dir>/public` is shown by a `static` module (web-ui.md). `requires: satellite-nrt`; the Copernicus credentials sit on the worker in `/opt/pisco/secrets/cmems.env`. |
 | `process_pisco_profiles` (`main`, `vit-retraining`) | `pisco_vit_classify`, `pisco_ecotaxa_export`, `pisco_ecotaxa_import`, `pisco_ecotaxa_features`, `pisco_ecotaxa_labels`, `pisco_vit_trainset`, `pisco_vit_train` | torch venv; the EcoTaxa import/features/labels tools `require: ecotaxa` so they run on the EcoTaxa machine, where the credentials are | the chain from crops to an annotated EcoTaxa project and back to a retrained model; [hub-user-guide.md](hub-user-guide.md) and [vit-retraining.md](vit-retraining.md) walk through it. |
 
 The `requires` tags in use: `pisco-tools` (the nix/venv toolchain is
-installed), `gpu`, `ecotaxa`. The Hub's own `local` machine carries none,
+installed), `gpu`, `ecotaxa`, `satellite-nrt`. The Hub's own `local` machine carries none,
 so nothing heavy is ever scheduled onto the Hub container.
 
 The pattern every one of these follows: `program_type: "binary"`, a

@@ -171,7 +171,48 @@ The two worth checking on a fresh install are `DATA_ROOT` and
 
 ## Visualization Hub — `/visualization/`
 
-A placeholder: the page lists visualization modules and none exist yet.
+Cards for **modules**: web pages that live elsewhere — a colleague's
+GitLab Pages site, a dashboard on another host — which the Hub shows
+inside its own layout. The Hub does not run or proxy them; it only knows
+the address. Each card has the title and description, a **Source** link
+(the repository behind it), **Open in new tab**, and **Open**, which
+frames the page at `/visualization/m/<name>` with a way back to the list.
+
+Modules are declared in the JSON file named by the `MODULES_FILE` setting
+(default `modules.json` in the Hub root; a relative path is taken from
+there). The file is read on every request, so an edit shows up on reload.
+One entry per module:
+
+```json
+[
+  {
+    "name": "msm147-satellite",
+    "title": "MSM147 satellite snapshots",
+    "description": "Near-real-time Copernicus data for the cruise …",
+    "url": "https://marco-schulz.pages.geomar.de/msm147_nrt_satellite_data/",
+    "source": "https://git.geomar.de/marco-schulz/msm147_nrt_satellite_data",
+    "contact": "Marco Schulz <mschulz@geomar.de>",
+    "mode": "embed"
+  }
+]
+```
+
+`name` is the slug in the Hub's URL (letters, digits, `-`, `_`); `title`,
+`description`, `source` and `contact` are for the card. `mode` is one of:
+
+- `embed` (default) — frames `url` inside the Hub;
+- `link` — sends the browser straight to `url`; for a site that refuses
+  to be framed (the embed page then stays blank — the site sends
+  `X-Frame-Options` or a `frame-ancestors` policy) or wants its own tab;
+- `static` — serves a directory on the Hub's disk, given as `path`
+  instead of `url`, and frames its `index.html`. This is how a site that a
+  tool *writes* is shown — the satellite gallery's `<work_dir>/public`,
+  say. Files are served at `/visualization/m/<name>/files/<file>`, login
+  required; before the tool has run once the page says so instead of
+  framing nothing.
+
+A malformed file is an error on the page, with the offending entry named,
+rather than a silently empty list.
 
 ## Hardware Control — `/hardware-control/`
 

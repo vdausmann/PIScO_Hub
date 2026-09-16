@@ -10,15 +10,23 @@
 
 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem;">
     {% for module in modules %}
-    <div style="background: var(--card); border-radius: 12px; padding: 1.5rem; border-top: 5px solid #10b981;">
-        <h3>{{ module.display_name }}</h3>
-        <p>{{ module.description }}</p>
-        <a href="{{ url_for('visualization.view_file', module_folder='hdf5_viewer', filename=file) }}" style="background: #10b981; color: white; display: block; text-align: center; padding: 10px; border-radius: 6px; text-decoration: none; font-weight: bold;">
-            Open Visualizer
+    <div style="background: var(--card); border-radius: 12px; padding: 1.5rem; border-top: 5px solid #10b981; display: flex; flex-direction: column;">
+        <h3 style="margin-top: 0;">{{ module.title }}</h3>
+        <p style="flex: 1;">{{ module.description }}</p>
+        <p style="font-size: 0.85em; opacity: 0.75; margin: 0 0 1rem;">
+            {% if module.source %}<a href="{{ module.source }}" target="_blank" rel="noopener">Source</a> &middot; {% endif %}
+            {% if module.mode == 'static' %}<a href="{{ url_for('visualization.module_file', name=module.name, filename='index.html') }}" target="_blank" rel="noopener">Open in new tab</a>
+            {% else %}<a href="{{ module.url }}" target="_blank" rel="noopener">Open in new tab</a>{% endif %}
+            {% if module.contact %}&middot; {{ module.contact }}{% endif %}
+        </p>
+        <a href="{{ url_for('visualization.module', name=module.name) }}"
+           {% if module.mode == 'link' %}target="_blank" rel="noopener"{% endif %}
+           style="background: #10b981; color: white; display: block; text-align: center; padding: 10px; border-radius: 6px; text-decoration: none; font-weight: bold;">
+            Open
         </a>
     </div>
     {% else %}
-    <p>No visualization modules found.</p>
+    <p>No modules declared. Add them to <code>{{ modules_file }}</code> (see docs/web-ui.md).</p>
     {% endfor %}
 </div>
 {% endblock %}
