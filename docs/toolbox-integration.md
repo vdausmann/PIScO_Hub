@@ -99,6 +99,7 @@ The Hub trusts the exit code completely. Before declaring a tool working:
 | Tool reads its input from the setting you did not expect | e.g. the segmenter's extraction mode iterates `targetPath`, not `sourcePath`; a fresh Hub-allocated directory yields empty output | read the reader code; bind `$from` to the key the tool really consumes |
 | Manifest registered by a path that only exists on the workers | `providers add` fails: the Hub reads `toolbox.json` on *its own* filesystem | put the checkout (or at least its manifest) at the same absolute path on the Hub; the `requires` tag keeps tasks off it |
 | GPU tool OOMs inside a worker thread | the process hangs instead of exiting | give the tool a `timeout` in the manifest |
+| Tool relies on a `default` in its `settings_schema` | the default is documentation; a workflow from a template that omits the key reaches the tool without it (the satellite tool ran without its credentials file) | the runner applies its own default for anything it needs |
 
 ## The PIScO toolboxes
 
