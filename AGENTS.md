@@ -169,10 +169,20 @@ requeues from the first failed task and discards the artifacts recorded
 from that point on, so downstream tasks cannot consume results of a run
 that did not complete.
 
-Equivalent CLI: `hub tools list`, `hub tools describe <name> --json`,
-`hub workflow create --file wf.json --watch`, `hub task logs <id>`.
-Every command supports `--json`; configuration comes from `--url/--token`,
-`$PISCO_HUB_URL`/`$PISCO_HUB_TOKEN`, or `~/.config/pisco-hub/config.json`.
+`POST /api/v1/workflows/<id>/cancel` stops a workflow: pending tasks are
+marked `Cancelled` at once; the running task gets SIGTERM — on its machine
+too, found by the settings file only it was given — and SIGKILL if it is
+still there 30 s later, and shows as `Cancelled` once it has stopped (the
+response's `winding_down` lists it until then). Retry works on a cancelled
+workflow the same way as on a failed one. Statuses are therefore
+`Pending`, `Running`, `Finished`, `Failed`, `Cancelled`.
+
+Equivalent CLI: `hub tools list`, `hub --json tools describe <name>`,
+`hub workflow create --file wf.json --watch`, `hub task logs <id>`, and
+`hub workflow list --template <name> --csv` for the protocol. `--json` is
+a global flag that every command supports; configuration comes from
+`--url/--token`, `$PISCO_HUB_URL`/`$PISCO_HUB_TOKEN`, or
+`~/.config/pisco-hub/config.json`. Full reference: `docs/cli.md`.
 
 ## Authoring a toolbox (`toolbox.json`)
 
@@ -317,11 +327,13 @@ no cancel operation today; kill such a process manually over SSH.
 | POST | `/api/v1/workflows` | operate | create + queue (`tasks`, or `template` + `params`) |
 | GET | `/api/v1/workflows/<id>` | read | status detail incl. artifacts |
 | GET | `/api/v1/workflows/<id>/spec` | read | the run as a creation request, for resubmitting |
-| POST | `/api/v1/workflows/<id>/retry` | operate | requeue from the first failed task |
+| POST | `/api/v1/workflows/<id>/cancel` | operate | stop: pending tasks cancelled, the running one signalled on its machine |
+| POST | `/api/v1/workflows/<id>/retry` | operate | requeue from the first failed or cancelled task |
 | DELETE | `/api/v1/workflows/<id>` | operate | delete (409 while Running) |
 | GET | `/api/v1/templates` | read | list templates |
 | GET | `/api/v1/templates/<id or name>` | read | params schema and steps |
 | POST | `/api/v1/templates` | operate | save a template (`tasks` or `from_workflow`) |
+| PATCH | `/api/v1/templates/<id>` | operate | change a user-saved template: `name`, `description`, `name_format`, `params_schema`, `tasks` |
 | DELETE | `/api/v1/templates/<id>` | operate | remove a user-saved template |
 | GET | `/api/v1/tasks/<id>` | read | task detail incl. stored settings |
 | GET | `/api/v1/tasks/<id>/artifacts` | read | what the task produced |
@@ -331,6 +343,7 @@ no cancel operation today; kill such a process manually over SSH.
 | PATCH | `/api/v1/machines/<id>` | full | update, enable or disable |
 | DELETE | `/api/v1/machines/<id>` | full | remove (409 with running tasks) |
 | GET | `/api/v1/system/load` | read | load vs capacity, per machine |
-| GET/POST | `/api/v1/tokens` | session | list / mint API tokens |
+| GET/POST | `/api/v1/tokens` | session | list / mint API tokens (`name`, `scope`) |
+| DELETE | `/api/v1/tokens/<id>` | session | revoke one of your tokens |
 | GET | `/api/v1/openapi.json` | — | OpenAPI 3.1 spec |
 | GET | `/api/v1/docs` | — | this document |

@@ -102,7 +102,7 @@ _TASK = {
         "workflow_position": {"type": "integer"},
         "tool": {"type": "string"},
         "status": {"type": "string",
-                   "enum": ["Pending", "Running", "Finished", "Failed"]},
+                   "enum": ["Pending", "Running", "Finished", "Failed", "Cancelled"]},
         "priority": {"type": "integer"},
         "weight": {"type": "integer"},
         "machine": {"type": ["string", "null"]},
@@ -119,7 +119,7 @@ _WORKFLOW = {
         "id": {"type": "string"},
         "name": {"type": "string"},
         "status": {"type": "string",
-                   "enum": ["Pending", "Running", "Finished", "Failed"]},
+                   "enum": ["Pending", "Running", "Finished", "Failed", "Cancelled"]},
         "created_at": {"type": ["string", "null"]},
         "task_count": {"type": "integer"},
         "params": {"type": "object",
@@ -358,7 +358,7 @@ def build_spec(server_url):
             "/workflows": {
                 "get": _op("List workflows, each with its params — one row per "
                            "run for a processing protocol",
-                           params=[_q("status", "Pending|Running|Finished|Failed"),
+                           params=[_q("status", "Pending|Running|Finished|Failed|Cancelled"),
                                    _q("template", "Only runs made from this template")]),
                 "post": _op(
                     "Create and queue a workflow",
@@ -380,9 +380,17 @@ def build_spec(server_url):
                 "tasks with stored settings) for resubmitting to POST /workflows",
                 params=[_p("id")],
                 responses={"200": _json_resp(_WORKFLOW_CREATE)})},
+            "/workflows/{id}/cancel": {"post": _op(
+                "Stop a pending or running workflow: pending tasks are cancelled, "
+                "the running one is signalled (SIGTERM, then SIGKILL) on its "
+                "machine and ends up Cancelled",
+                scope="operate", params=[_p("id")],
+                responses={"200": _json_resp(_WORKFLOW, "Cancelling; winding_down lists "
+                                                        "tasks still stopping"),
+                           "409": _json_resp(_ERROR, "Nothing to cancel")})},
             "/workflows/{id}/retry": {"post": _op(
-                "Requeue from the first failed task, discarding the artifacts "
-                "recorded from that point on",
+                "Requeue from the first failed or cancelled task, discarding the "
+                "artifacts recorded from that point on",
                 scope="operate", params=[_p("id")],
                 responses={"200": _json_resp(_WORKFLOW, "Requeued"),
                            "409": _json_resp(_ERROR, "Nothing to retry")})},

@@ -1,6 +1,7 @@
 {# Header and task table of one workflow. Polls itself while the workflow
    is still moving and stops once it reaches a terminal state. #}
-{% set active = workflow.status in ("Pending", "Running") %}
+{% set winding = workflow.tasks | selectattr("status", "equalto", "Running") | list | length %}
+{% set active = workflow.status in ("Pending", "Running") or winding %}
 <div id="workflow-detail"
      {% if active %}hx-get="{{ url_for('processing.workflow_partial', workflow_id=workflow.id) }}"
      hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
@@ -8,22 +9,28 @@
 <div class="ph-header">
     <span class="status-dot {{ workflow.status | status_class }}" style="width: 14px; height: 14px;"></span>
     <h1>{{ workflow.name }}</h1>
-    <span class="muted">{{ workflow.status }}</span>
+    <span class="muted">{{ workflow.status }}{% if workflow.status == "Cancelled" and winding %} · stopping…{% endif %}</span>
     <div class="actions">
+        {% if workflow.status in ("Pending", "Running") %}
+        <form action="{{ url_for('processing.cancel_workflow', workflow_id=workflow.id) }}" method="POST"
+              onsubmit="return confirm('Cancel workflow \'{{ workflow.name }}\'? The running task is stopped (SIGTERM, then SIGKILL) and the rest never starts.');">
+            <button type="submit" class="btn btn-danger" title="Stop the running task and cancel the rest">Cancel</button>
+        </form>
+        {% endif %}
         {% if workflow.template_id %}
         <a class="btn" href="{{ url_for('workflow.new_from_template', template_id=workflow.template_id, **{'from': workflow.id}) }}"
            title="New workflow from the same template, prefilled with these parameters">Run again…</a>
         {% endif %}
         <a class="btn" href="{{ url_for('processing.export_workflow', workflow_id=workflow.id) }}"
            title="Download as hub workflow create --file input">Export JSON</a>
-        {% if workflow.status == "Failed" %}
+        {% if workflow.status in ("Failed", "Cancelled") and not winding %}
         <form action="{{ url_for('processing.retry_workflow', workflow_id=workflow.id) }}" method="POST">
-            <button type="submit" class="btn btn-primary" title="Requeue from the first failed task">Retry</button>
+            <button type="submit" class="btn btn-primary" title="Requeue from the first failed or cancelled task">Retry</button>
         </form>
         {% endif %}
         <form action="{{ url_for('processing.delete_workflow', workflow_id=workflow.id) }}" method="POST"
               onsubmit="return confirm('Delete workflow \'{{ workflow.name }}\'? Its task records and artifact bookkeeping go with it; files on disk stay.');">
-            <button type="submit" class="btn btn-danger" {% if workflow.status == "Running" %}disabled title="Running workflows cannot be deleted"{% endif %}>Delete</button>
+            <button type="submit" class="btn btn-danger" {% if workflow.status == "Running" or winding %}disabled title="Wait for the running task to stop"{% endif %}>Delete</button>
         </form>
     </div>
 </div>

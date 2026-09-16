@@ -13,6 +13,7 @@ _MIGRATIONS = {
     "task": [
         ("machine_id", "INTEGER REFERENCES machine(id)"),
         ("terminated_at", "DATETIME"),
+        ("cancelled_at", "DATETIME"),
     ],
     "workflow": [
         ("params", "TEXT DEFAULT '{}'"),

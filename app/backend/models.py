@@ -54,6 +54,9 @@ class Task(db.Model):
     # When the Hub first signalled this task to stop, so it is signalled
     # once rather than on every poll while it winds down.
     terminated_at = db.Column(db.DateTime, nullable=True)
+    # Set by a cancel: a pending task never starts, a running one is
+    # stopped by the watcher and ends up Cancelled rather than Failed.
+    cancelled_at = db.Column(db.DateTime, nullable=True)
     # Null while pending means the scheduler still has to choose one.
     machine_id = db.Column(db.Integer, db.ForeignKey('machine.id'), nullable=True)
 

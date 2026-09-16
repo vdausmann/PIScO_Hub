@@ -318,7 +318,11 @@ settings as stored and as dispatched (with `$from` references resolved), and
 the artifacts with links into the File Explorer. A failed workflow has a
 **Retry** button, which requeues it from the first failed task exactly like
 `hub workflow retry`, and **Export JSON** downloads it in the form
-`hub workflow create --file` accepts.
+`hub workflow create --file` accepts. A running or pending workflow has
+**Cancel** (`hub workflow cancel <id> [--watch]`): pending tasks never start,
+the running one is asked to stop and killed if it does not within 30 s — on
+the worker as well, not just the Hub's ssh — and the workflow reads
+*Cancelled*; Retry picks it up again from there.
 
 **An empty log with a non-zero exit** usually means the tool's wrapper died
 before it ran anything — a missing required setting, or an interpreter that

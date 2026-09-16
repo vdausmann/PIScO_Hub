@@ -10,15 +10,23 @@
         <a class="workflow-name" href="{{ url_for('processing.workflow_detail', workflow_id=wf.id) }}">{{ wf.name }}</a>
         <span class="progress">{{ wf.status }} · {{ finished }}/{{ wf.tasks | length }} tasks</span>
         <span class="created">{{ wf.created_at | clock }}</span>
+        {% set winding = wf.tasks | selectattr("status", "equalto", "Running") | list | length %}
         <span class="actions">
-            {% if wf.status == "Failed" %}
+            {% if wf.status in ("Pending", "Running") %}
+            <form action="{{ url_for('processing.cancel_workflow', workflow_id=wf.id) }}" method="POST"
+                  onsubmit="return confirm('Cancel workflow \'{{ wf.name }}\'?');">
+                <input type="hidden" name="next" value="{{ url_for('processing.dashboard') }}">
+                <button type="submit" class="btn btn-sm btn-danger">Cancel</button>
+            </form>
+            {% endif %}
+            {% if wf.status in ("Failed", "Cancelled") and not winding %}
             <form action="{{ url_for('processing.retry_workflow', workflow_id=wf.id) }}" method="POST">
                 <button type="submit" class="btn btn-sm">Retry</button>
             </form>
             {% endif %}
             <form action="{{ url_for('processing.delete_workflow', workflow_id=wf.id) }}" method="POST"
                   onsubmit="return confirm('Delete workflow \'{{ wf.name }}\'? Its task records and artifact bookkeeping go with it; files on disk stay.');">
-                <button type="submit" class="btn btn-sm btn-danger" {% if wf.status == "Running" %}disabled title="Running workflows cannot be deleted"{% endif %}>Delete</button>
+                <button type="submit" class="btn btn-sm btn-danger" {% if wf.status == "Running" or winding %}disabled title="Wait for the running task to stop"{% endif %}>Delete</button>
             </form>
         </span>
     </div>

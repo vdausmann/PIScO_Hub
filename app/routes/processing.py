@@ -22,7 +22,7 @@ from ..backend.task_manager import get_current_load
 processing_bp = Blueprint('processing', __name__)
 
 ACTIVE_STATUSES = ("Pending", "Running")
-STATUS_FILTERS = ("Pending", "Running", "Finished", "Failed")
+STATUS_FILTERS = ("Pending", "Running", "Finished", "Failed", "Cancelled")
 
 
 # ---- template helpers -------------------------------------------------------
@@ -66,7 +66,7 @@ def explorer_dir_filter(artifact):
 @processing_bp.app_template_filter("status_class")
 def status_class_filter(status):
     return {"Running": "status-running", "Finished": "status-done",
-            "Failed": "status-failed"}.get(status, "status-pending")
+            "Failed": "status-failed", "Cancelled": "status-cancelled"}.get(status, "status-pending")
 
 
 @processing_bp.app_template_filter("from_json")
@@ -236,6 +236,20 @@ def retry_workflow(workflow_id):
     except workflows.WorkflowStateError as e:
         flash(str(e), "error")
     return redirect(url_for('processing.workflow_detail', workflow_id=workflow_id))
+
+
+@processing_bp.route('/workflow/<string:workflow_id>/cancel', methods=['POST'])
+@login_required
+def cancel_workflow(workflow_id):
+    workflow = Workflow.query.get_or_404(workflow_id)
+    try:
+        winding = workflows.cancel(workflow)
+        flash(f"Cancelled '{workflow.name}'."
+              + (" The running task is being stopped." if winding else ""), "success")
+    except workflows.WorkflowStateError as e:
+        flash(str(e), "error")
+    target = request.form.get("next") or url_for('processing.workflow_detail', workflow_id=workflow_id)
+    return redirect(target)
 
 
 @processing_bp.route('/workflow/<string:workflow_id>/delete', methods=['POST'])

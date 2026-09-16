@@ -6,8 +6,11 @@ outcome into a response.
 """
 
 import json
+from datetime import datetime
 
 from .models import Artifact, db
+
+TERMINAL = ("Finished", "Failed", "Cancelled")
 
 
 class WorkflowStateError(Exception):
@@ -15,7 +18,8 @@ class WorkflowStateError(Exception):
 
 
 def retry(workflow):
-    """Requeue a failed workflow from its first failed task onwards.
+    """Requeue a failed or cancelled workflow from its first failed or
+    cancelled task onwards.
 
     Anything after that point is reset too: those results were derived
     from a run that did not complete, so they cannot be trusted. Their
@@ -25,12 +29,14 @@ def retry(workflow):
     if workflow.status in ("Running", "Pending"):
         raise WorkflowStateError(
             f"Workflow is {workflow.status}; there is nothing to retry")
+    if any(t.status == "Running" for t in workflow.tasks):
+        raise WorkflowStateError("A task is still winding down; retry once it has stopped")
 
-    failed = [t for t in workflow.tasks if t.status == "Failed"]
-    if not failed:
-        raise WorkflowStateError("Workflow has no failed tasks")
+    stopped = [t for t in workflow.tasks if t.status in ("Failed", "Cancelled")]
+    if not stopped:
+        raise WorkflowStateError("Workflow has no failed or cancelled tasks")
 
-    from_position = min(t.workflow_position for t in failed)
+    from_position = min(t.workflow_position for t in stopped)
     for task in workflow.tasks:
         if task.workflow_position < from_position:
             continue
@@ -41,24 +47,51 @@ def retry(workflow):
         task.started_at = None
         task.completed_at = None
         task.terminated_at = None
+        task.cancelled_at = None
         task.machine_id = None
 
     workflow.status = "Pending"
     db.session.commit()
 
 
+def cancel(workflow):
+    """Stop a workflow: pending tasks never start, the running one is
+    signalled by the watcher (SIGTERM, then SIGKILL after the grace
+    period) and ends up Cancelled. Returns the tasks still winding down."""
+    if workflow.status not in ("Pending", "Running"):
+        raise WorkflowStateError(
+            f"Workflow is {workflow.status}; there is nothing to cancel")
+    now = datetime.now()
+    winding_down = []
+    for task in workflow.tasks:
+        if task.status == "Pending":
+            task.status = "Cancelled"
+            task.cancelled_at = now
+        elif task.status == "Running":
+            task.cancelled_at = now
+            winding_down.append(task)
+    workflow.status = "Cancelled"
+    db.session.commit()
+    return winding_down
+
+
 def delete(workflow):
-    """Remove a workflow and its tasks. A running one keeps its process
-    alive with nothing tracking it, so it has to finish first."""
-    if workflow.status == "Running":
-        raise WorkflowStateError("Cannot delete a running workflow")
+    """Remove a workflow and its tasks. A running task keeps its process
+    alive with nothing tracking it, so it has to stop first."""
+    if workflow.status == "Running" or any(t.status == "Running" for t in workflow.tasks):
+        raise WorkflowStateError("Cannot delete a workflow with a running task")
     db.session.delete(workflow)
     db.session.commit()
 
 
 def can_retry(workflow):
     return (workflow.status not in ("Running", "Pending")
-            and any(t.status == "Failed" for t in workflow.tasks))
+            and not any(t.status == "Running" for t in workflow.tasks)
+            and any(t.status in ("Failed", "Cancelled") for t in workflow.tasks))
+
+
+def can_cancel(workflow):
+    return workflow.status in ("Pending", "Running")
 
 
 def spec(workflow):
@@ -129,7 +162,7 @@ def protocol(workflows, templates=()):
         tasks = sorted(workflow.tasks, key=lambda t: t.workflow_position)
         started = [t.started_at for t in tasks if t.started_at]
         completed = [t.completed_at for t in tasks if t.completed_at]
-        finished = workflow.status in ("Finished", "Failed")
+        finished = workflow.status in TERMINAL
         rows.append({
             "workflow": workflow,
             "params": params,

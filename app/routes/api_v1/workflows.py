@@ -117,6 +117,25 @@ def retry_workflow(workflow_id):
     return jsonify(workflow_detail(workflow))
 
 
+@api_v1_bp.route("/workflows/<string:workflow_id>/cancel", methods=["POST"])
+@api_auth("operate")
+def cancel_workflow(workflow_id):
+    """Stop a pending or running workflow. Pending tasks are cancelled at
+    once; a running task gets SIGTERM, then SIGKILL after the grace
+    period, on its machine too, and shows as Cancelled once it has
+    stopped. The response lists what is still winding down."""
+    workflow = Workflow.query.get(workflow_id)
+    if workflow is None:
+        return jsonify({"error": "Workflow not found"}), 404
+    try:
+        winding_down = workflows.cancel(workflow)
+    except workflows.WorkflowStateError as e:
+        return jsonify({"error": str(e)}), 409
+    data = workflow_detail(workflow)
+    data["winding_down"] = [t.id for t in winding_down]
+    return jsonify(data)
+
+
 @api_v1_bp.route("/workflows/<string:workflow_id>", methods=["DELETE"])
 @api_auth("operate")
 def delete_workflow(workflow_id):

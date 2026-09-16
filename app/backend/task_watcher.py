@@ -1,10 +1,12 @@
 import os
+import shlex
 import signal
+import subprocess
 from threading import Thread
 import time
 from datetime import datetime
 from flask_sock import Sock
-from . import artifacts, process_registry
+from . import artifacts, machines, process_registry, settings_engine
 from .models import db, Task, Workflow, GlobalSetting, Tool
 
 # How long a terminated task gets to exit before it is killed outright.
@@ -33,7 +35,10 @@ class TaskWatcher:
                 
                 for task in running_tasks:
                     if task.pid:
-                        self.enforce_timeout(task)
+                        if task.cancelled_at is not None:
+                            self.enforce_cancel(task)
+                        else:
+                            self.enforce_timeout(task)
                         self.check_task_status(task)
 
                 sleep_time = GlobalSetting.get("POLL_INTERVAL", default=5)
@@ -62,6 +67,21 @@ class TaskWatcher:
         if elapsed < limit:
             return
 
+        self.terminate(task, f"Exceeded its {limit}s limit after {int(elapsed)}s")
+
+    def enforce_cancel(self, task):
+        """Stop a task whose workflow was cancelled."""
+        self.terminate(task, "Cancelled")
+
+    def terminate(self, task, reason):
+        """Ask the task to stop, then insist.
+
+        SIGTERM first; SIGKILL once the grace period has passed without it
+        exiting. A remote task is reached on its machine as well, by the
+        settings file only it was given -- killing the local ssh alone
+        would leave the program running there.
+        """
+        now = datetime.now()
         if task.terminated_at is None:
             sig, name = signal.SIGTERM, "SIGTERM"
         elif (now - task.terminated_at).total_seconds() > TERMINATE_GRACE_SECONDS:
@@ -70,16 +90,15 @@ class TaskWatcher:
         else:
             return  # already signalled, still winding down
 
-        note = (f"[hub] Exceeded its {limit}s limit after {int(elapsed)}s; "
-                f"sending {name}.")
-        if task.machine is not None and not task.machine.is_local:
-            note += (f" Running on {task.machine.name}: only the local ssh"
-                     " process can be signalled, so the remote program may"
-                     " keep going and need killing there.")
-
+        note = f"[hub] {reason}; sending {name}."
+        remote = task.machine is not None and not task.machine.is_local
+        if remote:
+            note += f" Signalling the program on {task.machine.name} as well."
         self._append_error_note(task, note)
         print(f"[!] Task {task.id}: {note}")
 
+        if remote:
+            self._signal_remote(task, name)
         try:
             os.killpg(os.getpgid(task.pid), sig)
         except (ProcessLookupError, PermissionError, OSError) as e:
@@ -87,6 +106,24 @@ class TaskWatcher:
 
         task.terminated_at = now
         db.session.commit()
+
+    def _signal_remote(self, task, signame):
+        """Signal the task's program on its machine.
+
+        The program was started with its settings file as the argument,
+        and that path is unique to the task, so pkill -f on it finds
+        exactly that process and nothing else (pkill never matches
+        itself, and there is no shell wrapper here to match either).
+        """
+        try:
+            workspace = artifacts.task_workspace(self.app, task)
+            settings_file = os.path.join(
+                workspace, "settings" + settings_engine.settings_file_extension(task.tool))
+            command = f"pkill -{signame.removeprefix('SIG')} -f -- {shlex.quote(settings_file)}"
+            subprocess.run(machines.ssh_command(task.machine, command),
+                           timeout=20, capture_output=True)
+        except Exception as e:  # an unreachable host must not stall the watcher
+            print(f"[!] Could not signal task {task.id} on {task.machine.name}: {e}")
 
     def _append_error_note(self, task, note):
         """Put the reason where whoever reads the logs will find it."""
@@ -128,7 +165,12 @@ class TaskWatcher:
 
     def finalize_task(self, task, exit_code):
         """Updates the task and checks if the workflow is complete."""
-        task.status = 'Finished' if exit_code == 0 else 'Failed'
+        if exit_code == 0:
+            task.status = 'Finished'      # it got there before the cancel took
+        elif task.cancelled_at is not None:
+            task.status = 'Cancelled'
+        else:
+            task.status = 'Failed'
         task.exit_code = exit_code
         task.completed_at = datetime.now()
         process_registry.forget(task.pid)
@@ -146,7 +188,9 @@ class TaskWatcher:
         if workflow is None:
             raise KeyError(f"Could not find workflow with id {task.workflow_id} in database.")
 
-        if all(t.status in ['Finished', 'Failed'] for t in all_tasks):
+        if workflow.status == 'Cancelled':
+            pass  # a cancel decides the outcome; the tasks just wind down
+        elif all(t.status in ['Finished', 'Failed', 'Cancelled'] for t in all_tasks):
             # check if a task failed:
             if any(t.status == 'Failed' for t in all_tasks):
                 workflow.status = 'Failed'

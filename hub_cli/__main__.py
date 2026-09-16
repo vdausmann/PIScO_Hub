@@ -22,7 +22,7 @@ import time
 from .client import ApiError, HubClient
 from .output import print_json, print_table
 
-TERMINAL_STATUSES = ("Finished", "Failed")
+TERMINAL_STATUSES = ("Finished", "Failed", "Cancelled")
 
 
 def _parse_task_arg(raw):
@@ -319,6 +319,30 @@ def cmd_workflow_retry(client, args):
         _watch(client, data["id"], as_json=args.json)
 
 
+def cmd_workflow_cancel(client, args):
+    data = client.post(f"/workflows/{args.id}/cancel")
+    if args.json and not args.watch:
+        print_json(data)
+        return
+    winding = data.get("winding_down", [])
+    print(f"Cancelled '{data['name']}' ({data['id']})."
+          + (f" {len(winding)} task(s) still stopping." if winding else ""))
+    if args.watch and winding:
+        _watch_tasks_stopped(client, data["id"])
+
+
+def _watch_tasks_stopped(client, workflow_id, interval=3):
+    """Wait until no task of the workflow is Running any more."""
+    while True:
+        data = client.get(f"/workflows/{workflow_id}")
+        running = [t["tool"] for t in data["tasks"] if t["status"] == "Running"]
+        if not running:
+            print("Stopped.")
+            return
+        print(f"waiting for {', '.join(running)} to stop…")
+        time.sleep(interval)
+
+
 def cmd_workflow_export(client, args):
     """Always JSON: the point is a file for `workflow create --file`."""
     print_json(client.get(f"/workflows/{args.id}/spec"))
@@ -495,7 +519,7 @@ def build_parser():
                    help="Wait until the workflow finishes")
     p.set_defaults(func=cmd_workflow_create)
     p = workflow.add_parser("list")
-    p.add_argument("--status", choices=["Pending", "Running", "Finished", "Failed"])
+    p.add_argument("--status", choices=["Pending", "Running", "Finished", "Failed", "Cancelled"])
     p.add_argument("--template", help="Only runs made from this template; "
                                       "shows their parameters as columns")
     p.add_argument("--params", action="store_true",
@@ -506,7 +530,13 @@ def build_parser():
     p.add_argument("id")
     p.add_argument("--watch", action="store_true")
     p.set_defaults(func=cmd_workflow_status)
-    p = workflow.add_parser("retry", help="Requeue from the first failed task")
+    p = workflow.add_parser("cancel", help="Stop a pending or running workflow "
+                                           "(SIGTERM, then SIGKILL after the grace period)")
+    p.add_argument("id")
+    p.add_argument("--watch", action="store_true",
+                   help="Wait until the running task has stopped")
+    p.set_defaults(func=cmd_workflow_cancel)
+    p = workflow.add_parser("retry", help="Requeue from the first failed or cancelled task")
     p.add_argument("id")
     p.add_argument("--watch", action="store_true")
     p.set_defaults(func=cmd_workflow_retry)
