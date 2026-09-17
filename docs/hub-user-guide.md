@@ -84,17 +84,28 @@ step. Its parameters are the ones the `profile` template asks for.
 
 ### 2. Write the workflow
 
-**The complete chain as it runs today is in
-[`examples/pisco_full_chain.json`](../examples/pisco_full_chain.json)** —
-segment, deconvolve, extract, both ViT stages, EcoTaxa export, import and
-features — with every setting written out even where it is the tool's default,
-so the file documents what a run means. Copy it, change `sourcePath`,
-`profileName` and the two model paths, and submit it. The settings it carries
-are the ones settled in `docs/pipeline-comparison-spec.md`: a 12-frame
-background block on both routes, 30 px of padding around each object so the
-deconvolution model sees enough of the frame, a texture-filled atlas, and
-crops handed to EcoTaxa and the classifier as the object alone in a tight box
-(`isolateCrops`). The walkthrough below is the same chain, explained.
+**The complete chain is the Hub's `profile` template** — defined in
+[`examples/profile_template.json`](../examples/profile_template.json) and
+installed with `scripts/install_template.py` (the Hub's database is not the
+source of truth; the file is). It asks for the profile's facts — cruise,
+station, instrument, position, the frame directory, the sensor log — and the
+two ViT models, and runs nine steps: `pisco_prepare_profile` builds
+`profile_dataset.h5` from the camera output and the sensor log, then segment,
+deconvolve, extract, both ViT stages, EcoTaxa export, import and features.
+Every setting is written out even where it is the tool's default, so the file
+says what a run means. The settings are the ones settled in
+`docs/pipeline-comparison-spec.md`: a 12-frame background block on both
+routes, 30 px of padding around each object so the deconvolution model sees
+enough of the frame, a texture-filled atlas, and crops handed to EcoTaxa and
+the classifier as the object alone in a tight box (`isolateCrops`).
+
+To run it from the API: `POST /api/v1/workflows` with
+`{"template": "profile", "params": {...}}`. The same chain with the parameters
+filled in for one test profile is
+[`examples/pisco_full_chain.json`](../examples/pisco_full_chain.json), for
+`hub workflow create --file`.
+
+The walkthrough below is the same chain, explained.
 
 
 Save this as `wf.json`. It is the chain that was verified end to end: clean and
