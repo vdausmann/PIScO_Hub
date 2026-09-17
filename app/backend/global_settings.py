@@ -15,6 +15,8 @@ def seed_settings(app):
         'HARDWARE_CONTROL_CONFIG_FILE': {'value':
                                          "hardware_control/hardware_control_config.json",
                                          'type': 'str', 'desc': "Config file for hardware control."},
+        'HARDWARE_DEVICES_FILE': {'value': 'hardware_control/devices.json', 'type': 'str',
+                                  'desc': 'Which instrument controllers the Hub polls for live sensor values, and where. Relative paths are taken from the Hub root.'},
         'MODULES_FILE': {'value': 'modules.json', 'type': 'str',
                          'desc': 'JSON list of external pages shown in the Visualization Hub. Relative paths are taken from the Hub root.'},
     }

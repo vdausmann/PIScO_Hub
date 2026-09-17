@@ -11,3 +11,6 @@ __pycache__/
 flake.lock
 data/
 .venv/
+
+# live sensor state written by the hardware poller
+hardware_control/state/

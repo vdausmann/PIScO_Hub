@@ -1,6 +1,6 @@
 from flask import Flask
 from .routes import (auth, processing, visualization, task_manager, global_settings,
-    workflow_builder, file_explorer, deep_link, hardware_control)
+    workflow_builder, file_explorer, deep_link, hardware_control, hardware_live)
 from .routes.api_v1 import api_v1_bp
 from .backend.models import db, login_manager
 from .backend.viewers import ViewerManager
@@ -58,6 +58,8 @@ def create_app(create_worker=True):
     app.register_blueprint(api_v1_bp, url_prefix='/api/v1')
     app.register_blueprint(hardware_control.hardware_control_bp,
                            url_prefix='/hardware-control')
+    app.register_blueprint(hardware_live.hardware_live_bp,
+                           url_prefix='/hardware-control/live')
     # Deliberately short: these URLs are stored per object in EcoTaxa's
     # object_link, which is only 255 characters wide.
     app.register_blueprint(deep_link.deep_link_bp, url_prefix='/v')
@@ -81,9 +83,11 @@ def create_app(create_worker=True):
         from .backend.machines import MachineMonitor
         from .backend.task_manager import TaskManager
         from .backend.task_watcher import TaskWatcher
+        from .backend.hardware_poller import HardwarePoller
         TaskManager(app)
         TaskWatcher(app)
         MachineMonitor(app)
+        HardwarePoller(app)
 
 
     return app

@@ -1,0 +1,33 @@
+{
+    "_comment": "One entry per device of hardware_control_config.json, same key. A device is polled when enabled and it has a host. sensor_file is rewritten by the controller every second; command_file is what the Hub copies over when a setting changes. os: windows -> paths are Windows paths. Only PIScO is real so far; the others are stubs in the same shape.",
+    "PIScO": {
+        "enabled": true,
+        "host": "10.11.11.160",
+        "user": "pisco",
+        "os": "windows",
+        "sensor_file": "C:\\Users\\pisco\\Documents\\pisco-controll-minix-nuc\\PiscoComputeSensors.txt",
+        "command_file": "C:\\Users\\pisco\\Documents\\pisco-controll-minix-nuc\\PiscoComputeCommands.txt",
+        "interval_s": 1.0,
+        "stale_after_s": 5
+    },
+    "Propel-Kamera1": {
+        "enabled": false, "host": null, "user": "pisco", "os": "linux",
+        "sensor_file": null, "command_file": null, "interval_s": 1.0, "stale_after_s": 5
+    },
+    "Propel-Kamera2": {
+        "enabled": false, "host": null, "user": "pisco", "os": "linux",
+        "sensor_file": null, "command_file": null, "interval_s": 1.0, "stale_after_s": 5
+    },
+    "BIOLUM-Kamera": {
+        "enabled": false, "host": null, "user": "pisco", "os": "linux",
+        "sensor_file": null, "command_file": null, "interval_s": 1.0, "stale_after_s": 5
+    },
+    "LIFI-Kamera": {
+        "enabled": false, "host": null, "user": "pisco", "os": "linux",
+        "sensor_file": null, "command_file": null, "interval_s": 1.0, "stale_after_s": 5
+    },
+    "PROPEL-AKKU": {
+        "enabled": false, "host": null, "user": "pisco", "os": "linux",
+        "sensor_file": null, "command_file": null, "interval_s": 1.0, "stale_after_s": 5
+    }
+}
