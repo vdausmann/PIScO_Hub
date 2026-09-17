@@ -6,7 +6,7 @@ from threading import Thread
 import time
 from datetime import datetime
 from flask_sock import Sock
-from . import artifacts, machines, process_registry, settings_engine
+from . import artifacts, machines, process_registry, settings_engine, task_manager
 from .models import db, Task, Workflow, GlobalSetting, Tool
 
 # How long a terminated task gets to exit before it is killed outright.
@@ -108,18 +108,30 @@ class TaskWatcher:
         db.session.commit()
 
     def _signal_remote(self, task, signame):
-        """Signal the task's program on its machine.
+        """Signal the task's whole process tree on its machine.
 
-        The program was started with its settings file as the argument,
-        and that path is unique to the task, so pkill -f on it finds
-        exactly that process and nothing else (pkill never matches
-        itself, and there is no shell wrapper here to match either).
+        The shell sshd started for the task wrote its pid to the workspace
+        at launch (task_manager.REMOTE_PGID_FILE); that pid is the process
+        group of everything the task spawned, so one kill reaches the
+        wrapper script, the program, and any worker processes it forked.
+        Matching on the command line does not work here: a wrapper rewrites
+        the arguments, so the settings path the Hub knows never appears in
+        the program's argv, and that is how cancelled classifiers survived
+        on the workers with their weight still booked.
+
+        Older tasks have no pgid file; for those, fall back to the
+        settings-file match, which at least finds unwrapped tools.
         """
+        sig = signame.removeprefix("SIG")
         try:
             workspace = artifacts.task_workspace(self.app, task)
+            pgid_file = os.path.join(workspace, task_manager.REMOTE_PGID_FILE)
             settings_file = os.path.join(
                 workspace, "settings" + settings_engine.settings_file_extension(task.tool))
-            command = f"pkill -{signame.removeprefix('SIG')} -f -- {shlex.quote(settings_file)}"
+            command = (
+                "if [ -s {pg} ]; then kill -{sig} -- -$(cat {pg}); "
+                "else pkill -{sig} -f -- {sf}; fi").format(
+                    pg=shlex.quote(pgid_file), sig=sig, sf=shlex.quote(settings_file))
             subprocess.run(machines.ssh_command(task.machine, command),
                            timeout=20, capture_output=True)
         except Exception as e:  # an unreachable host must not stall the watcher
