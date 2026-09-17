@@ -1,0 +1,77 @@
+{
+  "name": "pisco full chain m202_a",
+  "tasks": [
+    {"tool": "pisco_segment", "settings": {
+      "sourcePath": "/mnt/pisco/testdata/m202_a/",
+      "targetPath": "",
+      "mode": "Mode::BACKGROUND_CORRECTION_AND_COMPRESSION",
+      "numProcesses": 4,
+      "allowedImageFileExtensions": ".png",
+      "imageSizeX": 2560,
+      "imageSizeY": 2560,
+      "imageStackSize": 12,
+      "threshold": 10,
+      "minContourArea": 10,
+      "boundingBoxPadding": 30,
+      "skipFirstNImages": 0,
+      "skipLastNImages": 0}},
+
+    {"tool": "pisco_deconvolve", "settings": {
+      "targetPath": {"$from": {"task": 0, "output": "results"}},
+      "modelPath": "best_ssim_v5a_noGrad_ablation.pth",
+      "atlasFill": "texture",
+      "atlasPadding": 5}},
+
+    {"tool": "pisco_segment", "settings": {
+      "sourcePath": "/mnt/pisco/testdata/m202_a/",
+      "targetPath": {"$from": {"task": 0, "output": "results"}},
+      "mode": "Mode::OBJECT_EXTRACTION",
+      "numProcesses": 4,
+      "allowedImageFileExtensions": ".png",
+      "imageSizeX": 2560,
+      "imageSizeY": 2560,
+      "imageStackSize": 12,
+      "threshold": 10,
+      "minContourArea": 10,
+      "boundingBoxPadding": 30}},
+
+    {"tool": "pisco_vit_classify", "settings": {
+      "sourcePath": {"$from": {"task": 0, "output": "results"}},
+      "targetPath": "",
+      "modelPath": "<binary model, e.g. .../ViT_custom_size_sensitive_binary/best_model>",
+      "isolateCrops": true,
+      "emitEmbeddings": true,
+      "topK": 1}},
+
+    {"tool": "pisco_vit_classify", "settings": {
+      "sourcePath": {"$from": {"task": 0, "output": "results"}},
+      "targetPath": "",
+      "modelPath": "<taxon model, e.g. .../ViT_custom_size_sensitive_v5/best_model>",
+      "isolateCrops": true,
+      "restrictToPath": {"$from": {"task": 3, "output": "predictions"}},
+      "restrictLabels": "living",
+      "topK": 3}},
+
+    {"tool": "pisco_ecotaxa_export", "settings": {
+      "sourcePath": {"$from": {"task": 0, "output": "results"}},
+      "targetPath": "",
+      "profileName": "m202_a",
+      "isolateCrops": true,
+      "scaleBar": true,
+      "pixelSizeUm": 22.5,
+      "predictionsPath": {"$from": {"task": 4, "output": "predictions"}},
+      "taxonomyMapPath": "/opt/pisco/tools/process_pisco_profiles/ecotaxa_taxonomy_map.json",
+      "linkBase": "http://10.11.11.110:5000"}},
+
+    {"tool": "pisco_ecotaxa_import", "settings": {
+      "archivePath": {"$from": {"task": 5, "output": "export"}},
+      "targetPath": "",
+      "projectTitle": "m202_a full chain",
+      "instrument": "Other camera"}},
+
+    {"tool": "pisco_ecotaxa_features", "settings": {
+      "embeddingsPath": {"$from": {"task": 3, "output": "predictions"}},
+      "projectIdFrom": {"$from": {"task": 6, "output": "import"}},
+      "pcaPath": "/mnt/pisco/vit/pisco_pca50.npz"}}
+  ]
+}
