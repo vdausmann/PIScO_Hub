@@ -89,7 +89,7 @@
           }
         },
         "targetPath": "",
-        "modelPath": "<binary model, e.g. .../ViT_custom_size_sensitive_binary/best_model>",
+        "modelPath": "/mnt/pisco/models/vit/M181_binary",
         "isolateCrops": true,
         "emitEmbeddings": true,
         "topK": 1
@@ -105,7 +105,7 @@
           }
         },
         "targetPath": "",
-        "modelPath": "<taxon model, e.g. .../ViT_custom_size_sensitive_v5/best_model>",
+        "modelPath": "/mnt/pisco/models/vit/M181_multiclass",
         "isolateCrops": true,
         "restrictToPath": {
           "$from": {

@@ -71,14 +71,16 @@
       "binary_model": {
         "type": "string",
         "title": "Binary ViT",
-        "description": "Model directory or HF id of the living/not-living stage",
-        "sticky": true
+        "description": "Model directory or HF id of the living/not-living stage. Veit's public models are snapshotted under /mnt/pisco/models/vit/ (M181_* and ATAIIR2604_NorthSea_*).",
+        "sticky": true,
+        "default": "/mnt/pisco/models/vit/M181_binary"
       },
       "taxon_model": {
         "type": "string",
         "title": "Taxon ViT",
-        "description": "Model directory or HF id of the taxon stage, run on the living objects",
-        "sticky": true
+        "description": "Model directory or HF id of the taxon stage, run on the living objects. Its labels must all be in ecotaxa_taxonomy_map.json - M181_multiclass is; ATAIIR2604_NorthSea_multiclass still lacks four.",
+        "sticky": true,
+        "default": "/mnt/pisco/models/vit/M181_multiclass"
       },
       "pca_path": {
         "type": "string",
