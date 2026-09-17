@@ -31,6 +31,13 @@ class TaskWatcher:
         """
         with self.app.app_context():
             while True:
+                # This thread's session lives for the life of the process, and
+                # a query hands back the objects it already holds with the
+                # attributes it loaded last time. A cancel is a write from a
+                # request thread, so without this the watcher keeps seeing
+                # cancelled_at as None for as long as the task runs - which is
+                # exactly what happened. Expire first, then ask.
+                db.session.expire_all()
                 running_tasks = Task.query.filter_by(status='Running').all()
                 
                 for task in running_tasks:
