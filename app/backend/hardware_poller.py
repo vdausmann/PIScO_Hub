@@ -226,6 +226,9 @@ class HardwarePoller:
                 GlobalSetting.get("DATA_ROOT", os.path.join(app.config["HUB_ROOT"], "data")),
                 "sensor_logs")
         self.state_dir = os.path.join(app.config["HUB_ROOT"], "hardware_control", "state")
+        # The hardware-control page reads the last line of a data/*.dat
+        # file in the controller's own format; the latest line lands there.
+        self.dat_dir = os.path.join(app.config["HUB_ROOT"], "data")
         for name, config in self._load_devices().items():
             self.devices[name] = DeviceState(name, config)
             if config.get("enabled") and config.get("host"):
@@ -287,6 +290,14 @@ class HardwarePoller:
         with open(tmp, "w") as f:
             json.dump(state.snapshot(), f, indent=1)
         os.replace(tmp, path)
+        with state.lock:
+            raw = state.raw
+        if raw:
+            os.makedirs(self.dat_dir, exist_ok=True)
+            dat = os.path.join(self.dat_dir, f"{state.name}.dat")
+            with open(dat + ".tmp", "w") as f:
+                f.write(raw + "\n")
+            os.replace(dat + ".tmp", dat)
 
     # ---- for the routes ----
     def live(self):
