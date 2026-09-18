@@ -9,6 +9,11 @@ import threading
 from datetime import datetime
 
 
+# Written by the remote shell at launch; holds the process group a cancel
+# has to signal on the worker.
+REMOTE_PGID_FILE = "remote.pgid"
+
+
 def _validate_refs(tool, settings_obj, position, tools_so_far):
     """Check every $from reference against the workflow built so far.
 
@@ -52,20 +57,29 @@ def _validate_refs(tool, settings_obj, position, tools_so_far):
                 "has no settings_key, so its location is not tracked")
 
 
-def create_new_workflow(workflow_name: str, task_specs: list[dict]):
+def create_new_workflow(workflow_name: str, task_specs: list[dict],
+                        params: dict | None = None, template=None):
     """Create a workflow from task specs.
 
     Each spec: {"tool": <name>, "settings": <object or text, optional>,
     "priority": <int, optional>, "weight": <int, optional>}.
     Settings are stored as text (JSON text for structured formats) and
     validated against the tool's schema when one exists. Settings values
-    may be {"$from": {"task": <position>|"prev", "output": <name>}} to
-    consume an earlier task's output; those are resolved at dispatch.
+    may be references: {"$from": {"task": <position>|"prev", "output":
+    <name>}} consumes an earlier task's output, {"$param": <name>} and
+    {"$format": "...{name}..."} take from the workflow's params. All are
+    kept in the stored settings and resolved at dispatch; params are
+    validated here already, since they are known.
     Raises KeyError for unknown/unavailable tools and ValueError for
     invalid settings.
     """
+    params = dict(params or {})
     new_workflow = Workflow()
     new_workflow.name = workflow_name
+    new_workflow.params = json.dumps(params)
+    if template is not None:
+        new_workflow.template_id = template.id
+        new_workflow.template_name = template.name
 
     db.session.add(new_workflow)
     db.session.flush() # This gets us the workflow.id before committing
@@ -90,7 +104,7 @@ def create_new_workflow(workflow_name: str, task_specs: list[dict]):
             _validate_refs(tool, settings, i, tools_so_far)
 
             errors = settings_engine.validate(
-                tool, artifacts.validation_candidate(tool, settings))
+                tool, artifacts.validation_candidate(tool, settings, params))
             if errors:
                 raise ValueError(
                     f"Invalid settings for tool '{tool_name}': " + "; ".join(errors))
@@ -123,6 +137,13 @@ def create_new_workflow(workflow_name: str, task_specs: list[dict]):
     print(f"[*] Created workflow '{workflow_name}' with {len(task_specs)} tasks.")
 
     return new_workflow.id
+
+
+def _workflow_params(workflow):
+    try:
+        return json.loads(workflow.params) if workflow.params else {}
+    except (ValueError, TypeError):
+        return {}
 
 
 def get_current_load():
@@ -229,6 +250,7 @@ class TaskManager:
         if not isinstance(obj, dict):
             return task.settings
 
+        obj = settings_engine.resolve_params(obj, _workflow_params(task.workflow))
         for path, ref in settings_engine.extract_from_refs(obj):
             artifacts.set_setting(obj, path, self._resolve_ref(task, path, ref))
 
@@ -354,11 +376,20 @@ class TaskManager:
             # program's output to these same log files and exits with its
             # exit code, so nothing downstream needs to know the
             # difference. Paths are valid remotely because storage is
-            # shared. Note that killing this ssh would leave the remote
-            # program running; the Hub has no cancel feature today, and a
-            # worker daemon is the proper fix when it does.
-            remote_command = "cd {} && exec {}".format(
+            # shared.
+            #
+            # Killing the ssh alone leaves the program running on the
+            # worker, so the shell sshd starts for us first writes its own
+            # pid to the task's workspace. That shell is the process group
+            # of everything the task spawns - a non-interactive shell has
+            # no job control, so wrappers, the program and any workers it
+            # forks all inherit the group - and `exec` keeps the pid. A
+            # cancel signals that group; see task_watcher._signal_remote.
+            pgid_file = os.path.join(
+                artifacts.task_workspace(self.app, task), REMOTE_PGID_FILE)
+            remote_command = "cd {} && echo $$ > {} && exec {}".format(
                 shlex.quote(tool.working_directory),
+                shlex.quote(pgid_file),
                 " ".join(shlex.quote(part) for part
                          in execution_call + [settings_file_path]))
             popen_args = machines.ssh_command(machine, remote_command)

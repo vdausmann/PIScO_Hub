@@ -1,0 +1,10 @@
+{# Total running weight against the capacity of all enabled machines.
+   Polled by the sub-navigation; swaps itself. #}
+{% set capacity = capacity() %}
+{% set pct = (100 * capacity.load / capacity.max_weight) if capacity.max_weight else 0 %}
+<span id="load-pill" class="load-pill {% if capacity.max_weight and capacity.load >= capacity.max_weight %}full{% endif %}"
+      hx-get="{{ url_for('processing.load_partial') }}" hx-trigger="every 5s" hx-swap="outerHTML"
+      title="Running weight / capacity of enabled machines">
+    <span class="bar"><span style="width: {{ [pct, 100] | min }}%"></span></span>
+    load {{ capacity.load }}/{{ capacity.max_weight }}
+</span>

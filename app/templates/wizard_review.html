@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Review · {{ workflow.name }} · PIScO Hub{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/processing.css') }}">
+{% endblock %}
+
+{% block content %}
+{% with section = 'workflows' %}{% include "partials/processing_nav.html" %}{% endwith %}
+
+<form id="start" action="{{ url_for('workflow.finalize_workflow', workflow_id=workflow.id) }}" method="POST"></form>
+<form id="discard" action="{{ url_for('workflow.discard_draft', workflow_id=workflow.id) }}" method="POST"></form>
+
+<div class="ph-header">
+    <h1>Review</h1>
+    <span class="muted">Step 3 of 3</span>
+    <div class="actions">
+        <button type="submit" form="discard" class="btn btn-danger" onclick="return confirm('Discard this draft?')">Discard</button>
+        {% if workflow.tasks %}
+        <button type="submit" form="start" class="btn btn-primary">Start workflow ▶</button>
+        {% else %}
+        <a class="btn btn-primary" href="{{ url_for('workflow.builder', workflow_id=workflow.id) }}">Add steps in the builder &rarr;</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 1rem;">
+    <div class="input-group" style="margin-bottom: 1rem;">
+        <label for="workflow_name">Name</label>
+        <input type="text" id="workflow_name" name="workflow_name" form="start" class="wide" value="{{ workflow.name or '' }}" required>
+    </div>
+    <h3>Parameters{% if template %} · <span class="mono">{{ template.name }}</span>{% endif %}
+        {% if template %}<a class="btn btn-sm" style="margin-left: 8px;" href="{{ url_for('workflow.new_from_template', template_id=template.id, draft=workflow.id) }}">Edit</a>{% endif %}
+    </h3>
+    {% if params %}
+    <dl class="meta-grid">
+        {% for key, value in params.items() %}
+        <dt>{{ key }}</dt><dd>{{ value if value is string else value | tojson }}</dd>
+        {% endfor %}
+    </dl>
+    {% else %}<span class="muted small">none</span>{% endif %}
+</div>
+
+<h3 class="pick-group">Steps</h3>
+{% if not workflow.tasks %}
+<p class="muted">This template has parameters but no steps yet. Add tools in the builder; their settings can reference the parameters above.</p>
+{% endif %}
+{% for task in workflow.tasks %}
+<details class="card step" {% if loop.first and workflow.tasks | length == 1 %}open{% endif %}>
+    <summary>
+        <span class="mono muted">#{{ task.workflow_position }}</span>
+        <strong>{{ task.tool.name }}</strong>
+        <span class="muted small">priority {{ task.priority }} · weight {{ task.weight }}</span>
+        <a class="btn btn-sm" style="margin-left: auto;" href="{{ url_for('workflow.edit_settings', task_id=task.id, next='review') }}">Adjust</a>
+    </summary>
+    {% if task.tool.description %}<p class="muted small">{{ task.tool.description }}</p>{% endif %}
+    <pre class="code">{{ previews[task.id] }}</pre>
+</details>
+{% endfor %}
+
+<p class="muted small">Settings are shown with the parameters filled in; <span class="mono">← step N</span> marks a value taken from that step's output when it has run. Blank outputs get a location under the workflow's data directory.</p>
+{% endblock %}

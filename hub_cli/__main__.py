@@ -5,13 +5,16 @@ Examples:
     hub tools describe diplo_max_bg_calc --json
     hub providers add ~/PIScO_dev/DIPLO
     hub workflow create --name run1 --task tool=diplo_max_bg_calc settings=@s.json
+    hub workflow create --template process_profile --param cruise=M203 --param station=012-01
     hub workflow status <id> --watch
+    hub templates describe process_profile
     hub task logs <task-id> --stderr --tail 50
 
 Exit codes: 0 success, 1 API/workflow failure, 2 usage error.
 """
 
 import argparse
+import csv
 import json
 import sys
 import time
@@ -19,7 +22,7 @@ import time
 from .client import ApiError, HubClient
 from .output import print_json, print_table
 
-TERMINAL_STATUSES = ("Finished", "Failed")
+TERMINAL_STATUSES = ("Finished", "Failed", "Cancelled")
 
 
 def _parse_task_arg(raw):
@@ -134,17 +137,90 @@ def cmd_providers_remove(client, args):
           f"{', '.join(data.get('deactivated_tools', [])) or '(none)'}")
 
 
+# ---- templates ------------------------------------------------------------
+
+def cmd_templates_list(client, args):
+    data = client.get("/templates")
+    if args.json:
+        print_json(data)
+        return
+    rows = [dict(t, tools=" > ".join(t["tools"])) for t in data["templates"]]
+    print_table(rows, [
+        ("NAME", "name"), ("PROVIDER", "provider"), ("STEPS", "tools"),
+        ("DESCRIPTION", "description"),
+    ])
+
+
+def cmd_templates_describe(client, args):
+    data = client.get(f"/templates/{args.name}")
+    if args.json:
+        print_json(data)
+        return
+    for key in ("id", "name", "provider", "description", "name_format"):
+        print(f"{key:12} {data.get(key)}")
+    schema = data.get("params_schema") or {}
+    required = set(schema.get("required", []))
+    print("parameters:")
+    for name, prop in schema.get("properties", {}).items():
+        flags = []
+        if name in required:
+            flags.append("required")
+        if "default" in prop:
+            flags.append(f"default={prop['default']!r}")
+        if prop.get("enum"):
+            flags.append("one of " + ", ".join(map(str, prop["enum"])))
+        detail = f"  ({', '.join(flags)})" if flags else ""
+        print(f"  {name:14} {prop.get('type', 'any'):8} "
+              f"{prop.get('description') or prop.get('title') or ''}{detail}")
+    if not schema.get("properties"):
+        print("  (none)")
+    print("steps:")
+    for i, task in enumerate(data.get("tasks", [])):
+        print(f"  {i}  {task['tool']}")
+
+
+def cmd_templates_delete(client, args):
+    data = client.delete(f"/templates/{args.id}")
+    print_json(data) if args.json else print("Deleted.")
+
+
 # ---- workflows ------------------------------------------------------------
+
+def _parse_params(args):
+    """--params @file.json plus any --param key=value (text; the server
+    coerces to the template's declared types)."""
+    params = {}
+    if args.params:
+        source = args.params
+        if source.startswith("@"):
+            with open(source[1:]) as f:
+                source = f.read()
+        params.update(json.loads(source))
+    for item in args.param or []:
+        if "=" not in item:
+            raise SystemExit(f"--param expects key=value, got '{item}'")
+        key, value = item.split("=", 1)
+        params[key] = value
+    return params
+
 
 def cmd_workflow_create(client, args):
     if args.file:
         with open(args.file) as f:
             payload = json.load(f)
+    elif args.template:
+        payload = {"template": args.template}
+        if args.name:
+            payload["name"] = args.name
     else:
         if not args.name or not args.task:
-            raise SystemExit("Either --file or both --name and --task are required")
+            raise SystemExit("Either --file, --template, or both --name and "
+                             "--task are required")
         payload = {"name": args.name,
                    "tasks": [_parse_task_arg(t) for t in args.task]}
+    params = _parse_params(args)
+    if params:
+        payload["params"] = {**payload.get("params", {}), **params}
 
     data = client.post("/workflows", payload)
     if args.json and not args.watch:
@@ -157,19 +233,45 @@ def cmd_workflow_create(client, args):
 
 
 def cmd_workflow_list(client, args):
-    params = {"status": args.status} if args.status else {}
+    params = {}
+    if args.status:
+        params["status"] = args.status
+    if args.template:
+        params["template"] = args.template
     data = client.get("/workflows", params=params)
     if args.json:
         print_json(data)
         return
-    print_table(data["workflows"], [
-        ("ID", "id"), ("NAME", "name"), ("STATUS", "status"),
-        ("TASKS", "task_count"), ("CREATED", "created_at"),
-    ])
+    columns = [("ID", "id"), ("NAME", "name"), ("STATUS", "status"),
+               ("TASKS", "task_count"), ("CREATED", "created_at")]
+    rows = data["workflows"]
+    if args.params or args.template:
+        # The protocol view: one column per parameter, in order of first
+        # appearance across the runs.
+        keys = []
+        for row in rows:
+            for key in row.get("params", {}):
+                if key not in keys:
+                    keys.append(key)
+        columns = [("NAME", "name"), ("STATUS", "status"), ("CREATED", "created_at")]
+        columns += [(key, key) for key in keys]
+        rows = [dict(row, **{k: row.get("params", {}).get(k, "") for k in keys})
+                for row in rows]
+    if args.csv:
+        writer = csv.writer(sys.stdout)
+        writer.writerow([label for label, _ in columns])
+        for row in rows:
+            writer.writerow([row.get(field, "") for _, field in columns])
+        return
+    print_table(rows, columns)
 
 
 def _print_workflow(data):
     print(f"{data['name']} ({data['id']}): {data['status']}")
+    if data.get("template"):
+        print(f"template: {data['template']}")
+    for key, value in (data.get("params") or {}).items():
+        print(f"  {key} = {value}")
     print_table(data["tasks"], [
         ("POS", "workflow_position"), ("TOOL", "tool"), ("STATUS", "status"),
         ("MACHINE", "machine"), ("EXIT", "exit_code"), ("TASK ID", "id"),
@@ -215,6 +317,35 @@ def cmd_workflow_retry(client, args):
     print(f"Requeued '{data['name']}' ({data['id']}).")
     if args.watch:
         _watch(client, data["id"], as_json=args.json)
+
+
+def cmd_workflow_cancel(client, args):
+    data = client.post(f"/workflows/{args.id}/cancel")
+    if args.json and not args.watch:
+        print_json(data)
+        return
+    winding = data.get("winding_down", [])
+    print(f"Cancelled '{data['name']}' ({data['id']})."
+          + (f" {len(winding)} task(s) still stopping." if winding else ""))
+    if args.watch and winding:
+        _watch_tasks_stopped(client, data["id"])
+
+
+def _watch_tasks_stopped(client, workflow_id, interval=3):
+    """Wait until no task of the workflow is Running any more."""
+    while True:
+        data = client.get(f"/workflows/{workflow_id}")
+        running = [t["tool"] for t in data["tasks"] if t["status"] == "Running"]
+        if not running:
+            print("Stopped.")
+            return
+        print(f"waiting for {', '.join(running)} to stop…")
+        time.sleep(interval)
+
+
+def cmd_workflow_export(client, args):
+    """Always JSON: the point is a file for `workflow create --file`."""
+    print_json(client.get(f"/workflows/{args.id}/spec"))
 
 
 def cmd_workflow_delete(client, args):
@@ -372,28 +503,62 @@ def build_parser():
     workflow = sub.add_parser("workflow", help="Create and monitor workflows")\
         .add_subparsers(dest="cmd", required=True)
     p = workflow.add_parser("create")
-    p.add_argument("--file", help="JSON file with {name, tasks:[...]}")
-    p.add_argument("--name")
+    p.add_argument("--file", help="JSON file with {name, params?, tasks:[...]} "
+                                  "(what 'workflow export' writes)")
+    p.add_argument("--template", help="Instantiate a template by name or id")
+    p.add_argument("--name", help="Workflow name (a template supplies a "
+                                  "default from its name_format)")
     p.add_argument("--task", action="append", nargs="+", metavar="KEY=VALUE",
                    help="tool=NAME [settings=@file|json|text] [priority=N] "
                         "[weight=N] [machine=NAME]; repeat for multiple tasks")
+    p.add_argument("--param", action="append", metavar="KEY=VALUE",
+                   help="Workflow parameter; repeat for several")
+    p.add_argument("--params", metavar="@FILE|JSON",
+                   help="Workflow parameters as a JSON object")
     p.add_argument("--watch", action="store_true",
                    help="Wait until the workflow finishes")
     p.set_defaults(func=cmd_workflow_create)
     p = workflow.add_parser("list")
-    p.add_argument("--status", choices=["Pending", "Running", "Finished", "Failed"])
+    p.add_argument("--status", choices=["Pending", "Running", "Finished", "Failed", "Cancelled"])
+    p.add_argument("--template", help="Only runs made from this template; "
+                                      "shows their parameters as columns")
+    p.add_argument("--params", action="store_true",
+                   help="Show workflow parameters as columns (the protocol)")
+    p.add_argument("--csv", action="store_true", help="Write CSV instead of a table")
     p.set_defaults(func=cmd_workflow_list)
     p = workflow.add_parser("status")
     p.add_argument("id")
     p.add_argument("--watch", action="store_true")
     p.set_defaults(func=cmd_workflow_status)
-    p = workflow.add_parser("retry", help="Requeue from the first failed task")
+    p = workflow.add_parser("cancel", help="Stop a pending or running workflow "
+                                           "(SIGTERM, then SIGKILL after the grace period)")
+    p.add_argument("id")
+    p.add_argument("--watch", action="store_true",
+                   help="Wait until the running task has stopped")
+    p.set_defaults(func=cmd_workflow_cancel)
+    p = workflow.add_parser("retry", help="Requeue from the first failed or cancelled task")
     p.add_argument("id")
     p.add_argument("--watch", action="store_true")
     p.set_defaults(func=cmd_workflow_retry)
+    p = workflow.add_parser("export", help="Print the workflow as JSON that "
+                                           "'create --file' accepts")
+    p.add_argument("id")
+    p.set_defaults(func=cmd_workflow_export)
     p = workflow.add_parser("delete")
     p.add_argument("id")
     p.set_defaults(func=cmd_workflow_delete)
+
+    templates = sub.add_parser("templates", help="Reusable workflows and "
+                               "the parameters they take").add_subparsers(
+        dest="cmd", required=True)
+    p = templates.add_parser("list")
+    p.set_defaults(func=cmd_templates_list)
+    p = templates.add_parser("describe", help="Parameters and steps of a template")
+    p.add_argument("name")
+    p.set_defaults(func=cmd_templates_describe)
+    p = templates.add_parser("delete", help="Remove a user-saved template")
+    p.add_argument("id")
+    p.set_defaults(func=cmd_templates_delete)
 
     task = sub.add_parser("task", help="Inspect tasks").add_subparsers(
         dest="cmd", required=True)

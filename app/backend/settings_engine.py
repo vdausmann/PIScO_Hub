@@ -43,11 +43,42 @@ def parse_settings(tool, settings_text):
 
 
 FROM_KEY = "$from"
+PARAM_KEY = "$param"
+FORMAT_KEY = "$format"
+REF_KEYS = (FROM_KEY, PARAM_KEY, FORMAT_KEY)
 _PLACEHOLDER = "__hub_pending__"
 
 
+def ref_kind(value):
+    """Which kind of reference a settings value is, or None.
+
+    Three kinds: {"$from": {...}} consumes an earlier task's output,
+    {"$param": "name"} takes a workflow parameter as it is, and
+    {"$format": "{cruise}_{station}"} composes a string from several.
+    """
+    if isinstance(value, dict) and len(value) == 1:
+        key = next(iter(value))
+        if key in REF_KEYS:
+            return key
+    return None
+
+
 def _is_ref(value):
-    return isinstance(value, dict) and set(value.keys()) == {FROM_KEY}
+    return ref_kind(value) == FROM_KEY
+
+
+def extract_refs(obj, prefix=""):
+    """Find every reference in a settings object as [(dotted_path, kind, ref)]."""
+    found = []
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            path = f"{prefix}.{key}" if prefix else key
+            kind = ref_kind(value)
+            if kind is not None:
+                found.append((path, kind, value[kind]))
+            else:
+                found.extend(extract_refs(value, path))
+    return found
 
 
 def extract_from_refs(obj, prefix=""):
@@ -56,15 +87,8 @@ def extract_from_refs(obj, prefix=""):
     Returns [(dotted_path, ref)] so callers can validate the references
     up front and substitute resolved paths later.
     """
-    found = []
-    if isinstance(obj, dict):
-        for key, value in obj.items():
-            path = f"{prefix}.{key}" if prefix else key
-            if _is_ref(value):
-                found.append((path, value[FROM_KEY]))
-            else:
-                found.extend(extract_from_refs(value, path))
-    return found
+    return [(path, ref) for path, kind, ref in extract_refs(obj, prefix)
+            if kind == FROM_KEY]
 
 
 def substitute_from_refs(obj):
@@ -82,6 +106,103 @@ def substitute_from_refs(obj):
     if isinstance(obj, list):
         return [substitute_from_refs(value) for value in obj]
     return obj
+
+
+class _Params(dict):
+    def __missing__(self, key):
+        raise KeyError(key)
+
+
+def resolve_params(obj, params):
+    """Copy of the settings with $param and $format references filled in
+    from the workflow's params. $from references are left alone.
+
+    Raises ValueError naming the setting and the parameter it misses, so
+    a workflow with a typo is rejected when it is created.
+    """
+    params = _Params(params or {})
+
+    def walk(value, path):
+        kind = ref_kind(value)
+        if kind == PARAM_KEY:
+            name = value[PARAM_KEY]
+            if not isinstance(name, str):
+                raise ValueError(f"'{path}': $param must name a parameter")
+            if name not in params:
+                raise ValueError(
+                    f"'{path}': no workflow parameter '{name}'")
+            return params[name]
+        if kind == FORMAT_KEY:
+            template = value[FORMAT_KEY]
+            if not isinstance(template, str):
+                raise ValueError(f"'{path}': $format must be a string")
+            try:
+                return template.format_map(params)
+            except KeyError as e:
+                raise ValueError(
+                    f"'{path}': $format uses unknown parameter {e}")
+            except (ValueError, IndexError) as e:
+                raise ValueError(f"'{path}': bad $format string: {e}")
+        if isinstance(value, dict):
+            return {key: walk(inner, f"{path}.{key}" if path else key)
+                    for key, inner in value.items()}
+        if isinstance(value, list):
+            return [walk(inner, path) for inner in value]
+        return value
+
+    return walk(obj, "")
+
+
+def format_name(name_format, params):
+    """A workflow name from a template's name_format, or None if the
+    format needs a parameter that is missing."""
+    if not name_format:
+        return None
+    try:
+        return name_format.format_map(_Params(params or {}))
+    except (KeyError, ValueError, IndexError):
+        return None
+
+
+def validate_params(schema_text, params):
+    """Check workflow params against a template's JSON Schema.
+
+    Values that arrive as text (CLI flags, HTML forms) are coerced to the
+    declared type first, so "38.5" satisfies a number property. Defaults
+    are filled in. Returns (params, errors)."""
+    params = dict(params or {})
+    if not schema_text:
+        return params, []
+    schema = json.loads(schema_text) if isinstance(schema_text, str) else schema_text
+    properties = schema.get("properties", {})
+    for key, prop in properties.items():
+        if key not in params and "default" in prop:
+            params[key] = prop["default"]
+        elif key in params and isinstance(params[key], str):
+            params[key] = _coerce(prop.get("type"), params[key])
+    if jsonschema is None:
+        return params, []
+    errors = []
+    for error in jsonschema.Draft202012Validator(schema).iter_errors(params):
+        location = "/".join(str(p) for p in error.absolute_path) or "(root)"
+        errors.append(f"{location}: {error.message}")
+    return params, errors
+
+
+def _coerce(prop_type, text):
+    try:
+        if prop_type == "integer":
+            return int(text)
+        if prop_type == "number":
+            return float(text)
+        if prop_type == "boolean":
+            if text.lower() in ("true", "1", "yes", "on"):
+                return True
+            if text.lower() in ("false", "0", "no", "off", ""):
+                return False
+    except ValueError:
+        pass
+    return text
 
 
 def validate(tool, settings_obj):

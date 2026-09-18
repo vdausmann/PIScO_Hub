@@ -1,0 +1,301 @@
+{
+  "name": "profile",
+  "description": "One PISCO profile, camera output to EcoTaxa: build profile_dataset.h5 from the frames and the sensor log, segment, deconvolve, extract, classify with the dual ViT, export to EcoTaxa, import, attach embeddings. Settings are the ones settled in the pipeline comparison (Sept 2026): 12-frame background block, 30 px of context around each object, texture atlas, crops handed on as the object alone.",
+  "name_format": "{cruise}_{station}",
+  "params_schema": {
+    "type": "object",
+    "properties": {
+      "cruise": {
+        "type": "string",
+        "title": "Cruise",
+        "description": "Cruise identifier, e.g. M203",
+        "sticky": true
+      },
+      "station": {
+        "type": "string",
+        "title": "Station",
+        "description": "DSHIP station id, e.g. 012-01",
+        "pattern": "^\\d{3}-\\d{2}$"
+      },
+      "instrument": {
+        "type": "string",
+        "title": "Instrument",
+        "sticky": true,
+        "enum": [
+          "PISCO1",
+          "PISCO2",
+          "PISCO3"
+        ],
+        "default": "PISCO3"
+      },
+      "lat": {
+        "type": "number",
+        "title": "Latitude",
+        "description": "Decimal degrees, south negative",
+        "minimum": -90.0,
+        "maximum": 90.0
+      },
+      "lon": {
+        "type": "number",
+        "title": "Longitude",
+        "description": "Decimal degrees, west negative",
+        "minimum": -180.0,
+        "maximum": 180.0
+      },
+      "date": {
+        "type": "string",
+        "format": "date",
+        "title": "Deployment date"
+      },
+      "frames": {
+        "type": "string",
+        "format": "directory",
+        "title": "Frame directory",
+        "description": "Raw frames of this profile on /mnt/pisco"
+      },
+      "sensor_log": {
+        "type": "string",
+        "format": "file",
+        "title": "Sensor log",
+        "description": "Pressure/temperature log, matched to frames by time"
+      },
+      "operator": {
+        "type": "string",
+        "title": "Operator",
+        "sticky": true
+      },
+      "comment": {
+        "type": "string",
+        "title": "Comment"
+      },
+      "binary_model": {
+        "type": "string",
+        "title": "Binary ViT",
+        "description": "Model directory or HF id of the living/not-living stage. Veit's public models are snapshotted under /mnt/pisco/models/vit/ (M181_* and ATAIIR2604_NorthSea_*).",
+        "sticky": true,
+        "default": "/mnt/pisco/models/vit/M181_binary"
+      },
+      "taxon_model": {
+        "type": "string",
+        "title": "Taxon ViT",
+        "description": "Model directory or HF id of the taxon stage, run on the living objects. Its labels must all be in ecotaxa_taxonomy_map.json - M181_multiclass is; ATAIIR2604_NorthSea_multiclass still lacks four.",
+        "sticky": true,
+        "default": "/mnt/pisco/models/vit/M181_multiclass"
+      },
+      "pca_path": {
+        "type": "string",
+        "title": "PCA basis",
+        "description": "PCA basis for EcoTaxa similarity search; the same file for every project that should be comparable",
+        "default": "/mnt/pisco/vit/pisco_pca50.npz",
+        "sticky": true
+      }
+    },
+    "required": [
+      "binary_model",
+      "cruise",
+      "frames",
+      "instrument",
+      "station",
+      "taxon_model"
+    ]
+  },
+  "tasks": [
+    {
+      "tool": "pisco_prepare_profile",
+      "settings": {
+        "sourcePath": {
+          "$param": "frames"
+        },
+        "sensorLog": {
+          "$param": "sensor_log"
+        },
+        "targetPath": "",
+        "cruise": {
+          "$param": "cruise"
+        },
+        "station": {
+          "$param": "station"
+        },
+        "instrument": {
+          "$param": "instrument"
+        },
+        "lat": {
+          "$param": "lat"
+        },
+        "lon": {
+          "$param": "lon"
+        },
+        "date": {
+          "$param": "date"
+        }
+      }
+    },
+    {
+      "tool": "pisco_segment",
+      "settings": {
+        "sourcePath": {
+          "$from": {
+            "task": 0,
+            "output": "dataset"
+          }
+        },
+        "targetPath": "",
+        "mode": "Mode::BACKGROUND_CORRECTION_AND_COMPRESSION",
+        "numProcesses": 4,
+        "allowedImageFileExtensions": ".png",
+        "imageSizeX": 2560,
+        "imageSizeY": 2560,
+        "imageStackSize": 12,
+        "threshold": 10,
+        "minContourArea": 10,
+        "boundingBoxPadding": 30,
+        "skipFirstNImages": 0,
+        "skipLastNImages": 0
+      }
+    },
+    {
+      "tool": "pisco_deconvolve",
+      "settings": {
+        "targetPath": {
+          "$from": {
+            "task": 1,
+            "output": "results"
+          }
+        },
+        "modelPath": "best_ssim_v5a_noGrad_ablation.pth",
+        "atlasFill": "texture",
+        "atlasPadding": 5
+      }
+    },
+    {
+      "tool": "pisco_segment",
+      "settings": {
+        "sourcePath": {
+          "$from": {
+            "task": 0,
+            "output": "dataset"
+          }
+        },
+        "targetPath": {
+          "$from": {
+            "task": 1,
+            "output": "results"
+          }
+        },
+        "mode": "Mode::OBJECT_EXTRACTION",
+        "numProcesses": 4,
+        "allowedImageFileExtensions": ".png",
+        "imageSizeX": 2560,
+        "imageSizeY": 2560,
+        "imageStackSize": 12,
+        "threshold": 10,
+        "minContourArea": 10,
+        "boundingBoxPadding": 30
+      }
+    },
+    {
+      "tool": "pisco_vit_classify",
+      "settings": {
+        "sourcePath": {
+          "$from": {
+            "task": 1,
+            "output": "results"
+          }
+        },
+        "targetPath": "",
+        "modelPath": {
+          "$param": "binary_model"
+        },
+        "isolateCrops": true,
+        "emitEmbeddings": true,
+        "topK": 1
+      }
+    },
+    {
+      "tool": "pisco_vit_classify",
+      "settings": {
+        "sourcePath": {
+          "$from": {
+            "task": 1,
+            "output": "results"
+          }
+        },
+        "targetPath": "",
+        "modelPath": {
+          "$param": "taxon_model"
+        },
+        "isolateCrops": true,
+        "restrictToPath": {
+          "$from": {
+            "task": 4,
+            "output": "predictions"
+          }
+        },
+        "restrictLabels": "living",
+        "topK": 3
+      }
+    },
+    {
+      "tool": "pisco_ecotaxa_export",
+      "settings": {
+        "sourcePath": {
+          "$from": {
+            "task": 1,
+            "output": "results"
+          }
+        },
+        "targetPath": "",
+        "profileName": {
+          "$format": "{cruise}_{station}"
+        },
+        "isolateCrops": true,
+        "scaleBar": true,
+        "pixelSizeUm": 22.5,
+        "predictionsPath": {
+          "$from": {
+            "task": 5,
+            "output": "predictions"
+          }
+        },
+        "taxonomyMapPath": "/opt/pisco/tools/process_pisco_profiles/ecotaxa_taxonomy_map.json",
+        "linkBase": "http://10.11.11.110:5000"
+      }
+    },
+    {
+      "tool": "pisco_ecotaxa_import",
+      "settings": {
+        "archivePath": {
+          "$from": {
+            "task": 6,
+            "output": "export"
+          }
+        },
+        "targetPath": "",
+        "projectTitle": {
+          "$format": "{cruise}_{station}"
+        },
+        "instrument": "Other camera"
+      }
+    },
+    {
+      "tool": "pisco_ecotaxa_features",
+      "settings": {
+        "embeddingsPath": {
+          "$from": {
+            "task": 4,
+            "output": "predictions"
+          }
+        },
+        "projectIdFrom": {
+          "$from": {
+            "task": 7,
+            "output": "import"
+          }
+        },
+        "pcaPath": {
+          "$param": "pca_path"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+[
+  {
+    "name": "msm147-satellite",
+    "title": "MSM147 satellite snapshots",
+    "description": "Near-real-time Copernicus satellite data for the Merian cruise MSM147 — SLA, SST, chlorophyll and derived fields (Ekman buoyancy flux, frontogenetic tendency) with glider tracks and the ship's last position. Rebuilt automatically by its GitLab CI pipeline.",
+    "url": "https://marco-schulz.pages.geomar.de/msm147_nrt_satellite_data/",
+    "source": "https://git.geomar.de/marco-schulz/msm147_nrt_satellite_data",
+    "contact": "Marco Schulz <mschulz@geomar.de>",
+    "mode": "embed"
+  }
+]

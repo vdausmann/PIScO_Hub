@@ -1,10 +1,10 @@
 # Integrating a toolbox into the Hub
 
-The working plan for connecting any external repository (DIPLO, the
-segmenter, a future toolbox) to the Hub. [AGENTS.md](../AGENTS.md) is the
-formal contract — manifest keys, API endpoints; this document is the
-*procedure*: what to look at, in what order, and the traps that have
-already cost time.
+The working plan for connecting any external repository to the Hub.
+[AGENTS.md](../AGENTS.md) is the formal contract — manifest keys, API
+endpoints; this document is the *procedure*: what to look at, in what
+order, and the traps that have already cost time. `examples/chain_demo/`
+is a complete, minimal toolbox to copy from.
 
 ## The recipe
 
@@ -94,84 +94,47 @@ The Hub trusts the exit code completely. Before declaring a tool working:
 | Results only rendered in the GUI | headless run produces nothing on disk | the entry point must write outputs explicitly |
 | Stale local checkout | you rebuild something upstream already has | fetch all remotes and diff before designing |
 | Model downloads on first use | first task hangs or fails on a server | pre-warm caches; give the service user a writable `$HOME` |
+| `run.sh` greps an optional INI key under `set -euo pipefail` | the Hub omits unset optional settings; `grep` returns 1 and the wrapper dies before any output — a failed task with empty logs | guard the read with `\|\| true` |
+| Tool treats the output path as a filename prefix | files land *beside* the directory | the Hub appends a trailing separator to allocated directories; do the same in defaults |
+| Tool reads its input from the setting you did not expect | e.g. the segmenter's extraction mode iterates `targetPath`, not `sourcePath`; a fresh Hub-allocated directory yields empty output | read the reader code; bind `$from` to the key the tool really consumes |
+| Manifest registered by a path that only exists on the workers | `providers add` fails: the Hub reads `toolbox.json` on *its own* filesystem | put the checkout (or at least its manifest) at the same absolute path on the Hub; the `requires` tag keeps tasks off it |
+| GPU tool OOMs inside a worker thread | the process hangs instead of exiting | give the tool a `timeout` in the manifest |
+| Tool relies on a `default` in its `settings_schema` | the default is documentation; a workflow from a template that omits the key reaches the tool without it (the satellite tool ran without its credentials file) | the runner applies its own default for anything it needs |
 
-## Case: DIPLO (status as of 2026-08-03)
+## The PIScO toolboxes
 
-**DIPLO is intentionally unchanged in git** — nothing from this work is
-committed there. The Hub-side files that exist in the DIPLO working tree
-(`diplo_run.py`, `run.sh`, `toolbox.json`) are **untracked scratch** and
-should be treated as superseded, not as the integration.
+What is registered on the test cluster (`/opt/pisco/tools/<repo>` on the
+Hub and every worker), each on its `hub-integration` branch unless noted:
 
-What the current DIPLO line (`3e01d93`, on both GitLab and GitHub)
-already provides — the local checkout at `abd79ef` predates all of it:
+| repository | tools | environment | notes |
+|---|---|---|---|
+| `pisco_segmenter_cpp` | `pisco_segment` | nix dev shell, built with CMake | INI settings. Two modes: `BACKGROUND_CORRECTION_AND_COMPRESSION` reads `sourcePath`, writes `checkpoint_correction_*.h5` into `targetPath`; `OBJECT_EXTRACTION` is a second pass over `targetPath` writing `result.h5`. Weight 8. |
+| `pisco_deconvolution_py` | `pisco_deconvolve` | official PyTorch wheel in `/opt/pisco/venvs/torch` (`$PISCO_PYTHON`), on the GPU workers | reads the correction checkpoints directly, so segment → deconvolve → extract is the chain; `modelPath` selects the LUCYD model. |
+| `pisco_segmenter_py` | `pisco_segment_py` | same torch venv | the legacy all-Python pipeline, kept for comparison; also writes `result.h5`; needs a timeout because a CUDA OOM hangs it. |
+| `msm147_satellite_nrt` | `satellite_nrt_gallery` | venv `/opt/pisco/venvs/satellite` built by its `setup_env.sh` (hash-locked; Natural Earth data pre-fetched) | Marco Schulz's cruise satellite gallery, pinned as a submodule and run in a `work_dir` laid out like his checkout; the gallery in `<work_dir>/public` is shown by a `static` module (web-ui.md). `requires: satellite-nrt`; the Copernicus credentials sit on the worker in `/opt/pisco/secrets/cmems.env`. |
+| `process_pisco_profiles` (`main`, `vit-retraining`) | `pisco_vit_classify`, `pisco_ecotaxa_export`, `pisco_ecotaxa_import`, `pisco_ecotaxa_features`, `pisco_ecotaxa_labels`, `pisco_vit_trainset`, `pisco_vit_train` | torch venv; the EcoTaxa import/features/labels tools `require: ecotaxa` so they run on the EcoTaxa machine, where the credentials are | the chain from crops to an annotated EcoTaxa project and back to a retrained model; [hub-user-guide.md](hub-user-guide.md) and [vit-retraining.md](vit-retraining.md) walk through it. |
 
-- `diplo_lib/eval/workflow.py` — headless workflow loader
-  (`load_workflow` / `build_workflow`: workflow JSON → runnable `Graph`).
-- `diplo_lib/eval/runner.py` — dataset runner with a **Qt-free**
-  `DirectorySource`, closing the build/run/measure loop.
-- `diplo_lib/eval/` also has `metrics.py` (extensible metric registry),
-  `compare.py` (candidates vs. ground truth), `ecotaxa.py`,
-  `classify.py`, `dataset.py`.
-- `scripts/benchmark_demo.py`, `scripts/analyse_dataset.py` — existing
-  CLI entry points.
-- The node engine has been decoupled from Qt; a test suite exists.
+The `requires` tags in use: `pisco-tools` (the nix/venv toolchain is
+installed), `gpu`, `ecotaxa`, `satellite-nrt`. The Hub's own `local` machine carries none,
+so nothing heavy is ever scheduled onto the Hub container.
 
-So the benchmarking layer that earlier notes called "not implemented"
-**exists**. The scratch `diplo_run.py` duplicates the loader and runner,
-and does it worse (it still needs Qt).
+The pattern every one of these follows: `program_type: "binary"`, a
+`run.sh` that picks the interpreter (`$PISCO_PYTHON`, else the venv, else
+the nix shell), unsets `PYTHONPATH`, and execs the real entry point with
+the settings file; a `settings_schema` with a description on every key;
+`outputs` bound to the settings key the tool writes to, so the Hub can
+allocate the directory and the next task can `$from` it.
 
-### How the DIPLO integration should actually be done
+## DIPLO
 
-1. Update the local checkout to the current line first.
-2. Drop `diplo_run.py`. Point the manifest at DIPLO's own entry points —
-   `diplo_lib/eval/runner.py` and the `scripts/*.py` CLIs — adding a thin
-   settings-file adapter *in DIPLO* if those take argv flags rather than
-   a settings file. That adapter is a legitimate upstream contribution;
-   a reimplementation of the loader is not.
-3. Keep `run.sh` (the wrapper and its `PYTHONPATH` fix are still
-   correct) and keep the manifest shape below.
-4. Surface the benchmarking layer as its own tools — this is where the
-   Hub gets the most out of DIPLO: `diplo_benchmark_compare`,
-   `diplo_analyse_dataset`, `diplo_classify_export`.
-
-Manifest shape that worked (schema abbreviated):
-
-```json
-{
-  "manifest_version": 1,
-  "provider": {"name": "diplo", "description": "...", "version": "0.1.0"},
-  "tools": [{
-    "name": "diplo_run_workflow",
-    "description": "Run a DIPLO workflow over an image directory.",
-    "tags": ["diplo", "workflow"],
-    "program_path": "run.sh",
-    "program_type": "binary",
-    "working_directory": ".",
-    "default_priority": 3, "default_weight": 4, "failed_ok": false,
-    "settings_format": "json",
-    "settings_schema": {
-      "type": "object",
-      "required": ["workflow", "input_dir", "output_dir"],
-      "properties": {
-        "workflow":   {"type": "string", "description": "workflow JSON path"},
-        "input_dir":  {"type": "string", "description": "frame directory"},
-        "output_dir": {"type": "string", "description": "results directory"}
-      }
-    },
-    "inputs":  [{"name": "input_dir",  "kind": "directory"}],
-    "outputs": [{"name": "output_dir", "kind": "directory"}]
-  }]
-}
-```
-
-Verified working end-to-end against the Hub (scheduler → subprocess →
-Finished, with output on disk) using the `max_bg_calc` workflow — so the
-Hub-side contract is proven; only the DIPLO-side entry point needs to
-change from the scratch runner to the upstream one.
-
-### Environment note
-
-There is no `diplo` conda env on this machine. Miniconda **base**
-(`/home/veit/miniconda3/bin/python`) has the required dependencies, so
-`DIPLO_PYTHON=/home/veit/miniconda3/bin/python` is how tools were run
-during verification.
+DIPLO — the node-based workflow builder — was the first integration
+attempted (August 2026) and is still the intended *builder* in
+[MANIFEST.md](../MANIFEST.md). A three-tool manifest was validated
+end-to-end against the Hub, but nothing was committed to DIPLO and the
+scratch runner (`diplo_run.py`) has since been superseded by DIPLO's own
+headless layer (`diplo_lib/eval/workflow.py`, `runner.py`, and the
+`scripts/*.py` CLIs). When that integration is picked up again: point
+the manifest at those entry points, add a thin settings-file adapter
+*in DIPLO* if they take argv flags, and surface the benchmarking layer
+(`diplo_lib/eval/compare.py`, `metrics.py`) as tools of its own — that
+is where the Build → Run → Compare loop closes.

@@ -1,58 +1,63 @@
 {% extends "base.html" %}
+{% block title %}Workflow builder · PIScO Hub{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/processing.css') }}">
+{% endblock %}
 
 {% block content %}
+{% with section = 'workflows' %}{% include "partials/processing_nav.html" %}{% endwith %}
 <style>
-    .builder-container { 
-        display: grid; 
-        grid-template-columns: 300px 1fr; 
-        gap: 20px; 
-        font-family: monospace; 
-        max-width: 1200px; 
-        margin: 20px auto; 
+    .builder-container {
+        display: grid;
+        grid-template-columns: 300px 1fr;
+        gap: 20px;
+        font-family: monospace;
+        max-width: 1200px;
+        margin: 20px auto;
     }
-    .panel { 
-        border: 1px solid #ccc; 
-        padding: 15px; 
-        border-radius: 8px; 
-        background: #f9f9f9; 
+    .panel {
+        border: 1px solid var(--border);
+        padding: 15px;
+        border-radius: 8px;
+        background: var(--card);
     }
-    .tool-card, .task-card { 
-        border: 1px solid #ddd; 
-        padding: 10px; 
-        margin-bottom: 10px; 
-        background: white; 
-        display: flex; 
-        justify-content: space-between; 
+    .tool-card, .task-card {
+        border: 1px solid var(--border);
+        padding: 10px;
+        margin-bottom: 10px;
+        background: var(--surface);
+        display: flex;
+        justify-content: space-between;
         align-items: center;
     }
-    .btn { cursor: pointer; padding: 5px 10px; }
-    .btn-add { color: green; border-color: green; }
-    .btn-cfg { color: blue; border-color: blue; }
-    .btn-del { color: red; border-color: red; }
+    .btn-add { color: var(--ok); }
+    .btn-cfg { color: var(--accent); }
+    .btn-del { color: var(--bad); }
+    .builder-container input[type=text] { background: var(--card); color: var(--text); }
 </style>
 
 <div style="max-width: 1200px; margin: 0 auto; padding: 0 20px;">
-    <h1>Workflow Builder: {{ workflow.name }}</h1>
-    <p style="color: gray; font-size: 0.8rem;">ID: {{ workflow.id }}</p>
+    <h1>Workflow Builder{% if workflow.name %}: {{ workflow.name }}{% endif %}</h1>
+    <p class="muted mono small">Draft {{ workflow.id }}</p>
 </div>
 
 <div class="builder-container">
 
 	<div class="panel">
-		<div style="margin-bottom: 25px; border-bottom: 2px solid #ddd; padding-bottom: 15px;">
+		<div style="margin-bottom: 25px; border-bottom: 2px solid var(--border); padding-bottom: 15px;">
 			<h3>Load Template Preset</h3>
 			{% if not templates %}
-				<p style="color: #999; font-size: 0.8rem; font-style: italic;">No templates stored in registry yet.</p>
+				<p style="color: var(--muted); font-size: 0.8rem; font-style: italic;">No templates stored in registry yet.</p>
 			{% else %}
 				<div style="display: flex; flex-direction: column; gap: 8px;">
 					{% for template in templates %}
-					<div style="display: flex; justify-content: space-between; align-items: center; background: #eee; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+					<div style="display: flex; justify-content: space-between; align-items: center; background: var(--surface); padding: 8px; border-radius: 4px; border: 1px solid var(--border);">
 						<div style="display: flex; flex-direction: column;">
 							<span style="font-weight: bold; font-size: 0.8rem;">{{ template.name }}</span>
-							<small style="color: #666; font-size: 0.65rem;">Steps: {{ template.tasks|length }}</small>
+							<small class="muted" style="font-size: 0.65rem;">Steps: {{ template.tasks|length }}</small>
 						</div>
 						<form action="{{ url_for('workflow.apply_template_to_draft', workflow_id=workflow.id, template_id=template.id) }}" method="POST" onsubmit="return confirm('Applying this preset will overwrite current workspace progress. Continue?');" style="margin:0;">
-							<button type="submit" class="btn" style="color: #2563eb; border-color: #2563eb; padding: 3px 8px; font-size: 0.75rem;">LOAD</button>
+							<button type="submit" class="btn" style="color: var(--accent); padding: 3px 8px; font-size: 0.75rem;">LOAD</button>
 						</form>
 					</div>
 					{% endfor %}
@@ -75,14 +80,14 @@
     <div class="panel">
         <h3>Sequence Order</h3>
         {% if not workflow.tasks %}
-            <p style="color: #999; text-align: center; margin-top: 50px;">No tools added yet. Select from the toolbox.</p>
+            <p style="color: var(--muted); text-align: center; margin-top: 50px;">No tools added yet. Select from the toolbox.</p>
         {% endif %}
 
 		{% for task in workflow.tasks %}
-		<div class="task-card" style="border: 1px solid #ddd; padding: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; background: white;">
+		<div class="task-card">
 			<div>
 				<strong>#{{ task.workflow_position + 1 }} {{ task.tool.name }}</strong>
-				<div style="font-size: 0.7rem; color: #666;">Priority: {{ task.priority }} | Weight: {{ task.weight }}</div>
+				<div class="muted" style="font-size: 0.7rem;">Priority: {{ task.priority }} | Weight: {{ task.weight }}</div>
 			</div>
 			
 			<div style="display: flex; gap: 8px; align-items: center;">
@@ -95,37 +100,54 @@
 					</form>
 				</div>
 
-				<a href="{{ url_for('workflow.edit_settings', task_id=task.id) }}" class="btn btn-cfg" style="text-decoration: none; border: 1px solid blue; padding: 5px;">CFG</a>
+				<a href="{{ url_for('workflow.edit_settings', task_id=task.id, next='builder') }}" class="btn btn-cfg">CFG</a>
 				
 				<form action="{{ url_for('workflow.delete_task', task_id=task.id) }}" method="POST" style="margin:0;">
-					<button type="submit" class="btn btn-del" style="border: 1px solid red; color: red; background: none;">DEL</button>
+					<button type="submit" class="btn btn-del">DEL</button>
 				</form>
 			</div>
 		</div>
 		{% endfor %}
 
-		<div class="panel" style="margin-top: 30px; border-top: 2px solid #2563eb; padding-top: 20px;">
+		<div class="panel" style="margin-top: 20px;">
+			<h3 style="margin-top: 0;">Workflow parameters <span class="muted" style="font-weight: normal; font-size: 0.75rem;">(JSON object; settings refer to them with $param / $format)</span></h3>
+			<form action="{{ url_for('workflow.set_draft_params', workflow_id=workflow.id) }}" method="POST">
+				<textarea name="params" rows="4" class="mono" style="width: 100%; box-sizing: border-box; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 8px;">{{ params_text }}</textarea>
+				<button type="submit" class="btn" style="margin-top: 6px;">Save parameters</button>
+			</form>
+		</div>
+
+		<div class="panel" style="margin-top: 30px; border-top: 2px solid var(--accent); padding-top: 20px;">
             
             <form action="{{ url_for('workflow.finalize_workflow', workflow_id=workflow.id) }}" method="POST" style="margin-bottom: 25px;">
                 <div style="margin-bottom: 10px;">
                     <label style="display: block; font-weight: bold; margin-bottom: 5px;">MISSION NAME (PRODUCTION)</label>
-                    <input type="text" name="workflow_name" placeholder="Enter final name..." required 
-                           style="width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
+                    <input type="text" name="workflow_name" placeholder="Enter final name..." value="{{ workflow.name or '' }}" required 
+                           style="width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box;">
                 </div>
-                <button type="submit" style="width: 100%; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.9rem;">
-                    SAVE & DEPLOY WORKFLOW
+                <button type="submit" style="width: 100%; padding: 12px; background: var(--accent); color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.9rem;">
+                    START WORKFLOW
                 </button>
             </form>
+            <form action="{{ url_for('workflow.discard_draft', workflow_id=workflow.id) }}" method="POST" onsubmit="return confirm('Discard this draft?')" style="margin-bottom: 25px;">
+                <button type="submit" class="btn btn-danger" style="width: 100%;">Discard draft</button>
+            </form>
 
-            <hr style="border: 0; border-top: 1px dashed #ccc; margin: 20px 0;">
+            {% if workflow.template_id and source_template and not source_template.provider_id %}
+            <form action="{{ url_for('workflow.update_template_from_draft', workflow_id=workflow.id) }}" method="POST" style="margin-bottom: 25px;"
+                  onsubmit="return confirm('Replace the steps of template \'{{ source_template.name }}\' with this draft\'s?')">
+                <button type="submit" class="btn" style="width: 100%;">Save steps into template "{{ source_template.name }}"</button>
+            </form>
+            {% endif %}
+            <hr style="border: 0; border-top: 1px dashed var(--border); margin: 20px 0;">
 
             <form action="{{ url_for('workflow.save_as_template', workflow_id=workflow.id) }}" method="POST">
                 <div style="margin-bottom: 10px;">
-                    <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #555;">TEMPLATE PRESET NAME</label>
+                    <label style="display: block; font-weight: bold; margin-bottom: 5px; color: var(--muted);">TEMPLATE PRESET NAME</label>
                     <input type="text" name="template_name" placeholder="e.g., Standard QC Filtering Preset" required 
-                           style="width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
+                           style="width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box;">
                 </div>
-                <button type="submit" style="width: 100%; padding: 12px; background: #4b5563; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.9rem;">
+                <button type="submit" style="width: 100%; padding: 12px; background: var(--muted); color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.9rem;">
                     STORE AS SYSTEM TEMPLATE
                 </button>
             </form>

@@ -2,6 +2,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_login import UserMixin
 import uuid
+from datetime import datetime
 
 
 db = SQLAlchemy()
@@ -23,9 +24,16 @@ class Workflow(db.Model):
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name = db.Column(db.String(100))
     status = db.Column(db.String(20), default='Pending') 
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=datetime.now)
     tasks = db.relationship('Task', backref='workflow', lazy=True, cascade="all, delete-orphan")
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    # Workflow-level values (a profile's metadata, shared paths) that task
+    # settings pull in through $param / $format references. JSON object.
+    params = db.Column(db.Text, default="{}")
+    # Which template this was instantiated from, if any; plain text so a
+    # deleted template leaves the history readable.
+    template_id = db.Column(db.String(36), nullable=True)
+    template_name = db.Column(db.String(100), nullable=True)
 
 
 class Task(db.Model):
@@ -46,6 +54,9 @@ class Task(db.Model):
     # When the Hub first signalled this task to stop, so it is signalled
     # once rather than on every poll while it winds down.
     terminated_at = db.Column(db.DateTime, nullable=True)
+    # Set by a cancel: a pending task never starts, a running one is
+    # stopped by the watcher and ends up Cancelled rather than Failed.
+    cancelled_at = db.Column(db.DateTime, nullable=True)
     # Null while pending means the scheduler still has to choose one.
     machine_id = db.Column(db.Integer, db.ForeignKey('machine.id'), nullable=True)
 
@@ -80,7 +91,7 @@ class Artifact(db.Model):
     path = db.Column(db.String(512), nullable=False)
     exists = db.Column(db.Boolean, nullable=True)  # None until the task finishes
     size_bytes = db.Column(db.Integer, nullable=True)
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=datetime.now)
 
     task = db.relationship('Task', backref=db.backref(
         'artifacts', cascade="all, delete-orphan"))
@@ -152,7 +163,7 @@ class ApiToken(db.Model):
     # read < operate < full; tokens predating scopes read as full
     scope = db.Column(db.String(20), default='full')
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=datetime.now)
     last_used_at = db.Column(db.DateTime, nullable=True)
     user = db.relationship('User')
 
@@ -161,11 +172,15 @@ class ApiToken(db.Model):
 class TemporaryWorkflow(db.Model):
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name = db.Column(db.String(100))
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=datetime.now)
     tasks = db.relationship('TemporaryTask', backref='workflow',
                             cascade="all, delete-orphan",
                             order_by="TemporaryTask.workflow_position")
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    # Same as on Workflow: the draft carries what the run will carry.
+    params = db.Column(db.Text, default="{}")
+    template_id = db.Column(db.String(36), nullable=True)
+    template_name = db.Column(db.String(100), nullable=True)
 
 
 class TemporaryTask(db.Model):
@@ -180,13 +195,26 @@ class TemporaryTask(db.Model):
     tool = db.relationship('Tool')
 
 class TemplateWorkflow(db.Model):
+    """A reusable workflow: its steps plus the parameters a run needs.
+
+    Either saved by a user on this Hub, or shipped in a toolbox manifest
+    (then provider_id is set and the row is rewritten on every scan).
+    """
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name = db.Column(db.String(100))
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    description = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now)
     tasks = db.relationship('TemplateTask', backref='workflow',
                             cascade="all, delete-orphan",
                             order_by="TemplateTask.workflow_position")
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    # JSON Schema for the params a workflow made from this template takes.
+    params_schema = db.Column(db.Text, nullable=True)
+    # Default workflow name, formatted with the params: "{cruise}_{station}".
+    name_format = db.Column(db.String(200), nullable=True)
+    provider_id = db.Column(db.Integer, db.ForeignKey('tool_provider.id'), nullable=True)
+    provider = db.relationship('ToolProvider')
+    manifest_hash = db.Column(db.String(64), nullable=True)
 
 
 class TemplateTask(db.Model):

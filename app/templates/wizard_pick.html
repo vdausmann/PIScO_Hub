@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}New workflow · PIScO Hub{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/processing.css') }}">
+{% endblock %}
+
+{% block content %}
+{% with section = 'workflows' %}{% include "partials/processing_nav.html" %}{% endwith %}
+
+<div class="ph-header">
+    <h1>New workflow</h1>
+    <span class="muted">Step 1 of 3 · what to run</span>
+</div>
+
+{% macro template_card(t) %}
+<a class="pick-card" href="{{ url_for('workflow.new_from_template', template_id=t.id) }}">
+    <div class="pick-title">{{ t.name }}</div>
+    {% if t.description %}<div class="muted small">{{ t.description }}</div>{% endif %}
+    <div class="pick-steps mono small">{{ t.tasks | map(attribute='tool.name') | join(' → ') }}</div>
+    <div class="muted small">
+        {% set n = schemas[t.id].get('properties', {}) | length %}
+        {{ n }} parameter{{ 's' if n != 1 }}{% if t.provider %} · from {{ t.provider.name }}{% endif %}
+    </div>
+</a>
+{% endmacro %}
+
+{% if shipped %}
+<h3 class="pick-group">Standard chains</h3>
+<div class="pick-grid">{% for t in shipped %}{{ template_card(t) }}{% endfor %}</div>
+{% endif %}
+
+{% if saved %}
+<h3 class="pick-group">Saved on this Hub</h3>
+<div class="pick-grid">{% for t in saved %}{{ template_card(t) }}{% endfor %}</div>
+{% endif %}
+
+{% if not shipped and not saved %}
+<p class="muted">No templates registered yet. Toolboxes ship them in their <span class="mono">toolbox.json</span>;
+   any workflow can be saved as one from the builder.</p>
+{% endif %}
+
+<h3 class="pick-group">Or</h3>
+<form action="{{ url_for('workflow.init_workflow') }}" method="POST" class="pick-grid">
+    <button type="submit" class="pick-card pick-scratch">
+        <div class="pick-title">Start from scratch</div>
+        <div class="muted small">Pick tools one by one and set every option yourself.</div>
+    </button>
+</form>
+{% endblock %}

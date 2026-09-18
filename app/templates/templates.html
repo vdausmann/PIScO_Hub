@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Templates · PIScO Hub{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/processing.css') }}">
+{% endblock %}
+
+{% block content %}
+{% with section = 'templates' %}{% include "partials/processing_nav.html" %}{% endwith %}
+
+<div class="ph-header">
+    <h1>Templates</h1>
+    <span class="muted">reusable workflows and the parameters they take</span>
+    <div class="actions">
+        <a class="btn btn-primary" href="{{ url_for('workflow.edit_template') }}">+ New template</a>
+    </div>
+</div>
+
+{% macro row(t, shipped) %}
+<tr class="task-row">
+    <td><a href="{{ url_for('workflow.edit_template', template_id=t.id) }}"><strong>{{ t.name }}</strong></a>
+        {% if t.description %}<div class="muted small">{{ t.description }}</div>{% endif %}</td>
+    <td class="muted">{{ counts[t.id] }}</td>
+    <td class="mono small">{% if t.tasks %}{{ t.tasks | map(attribute='tool.name') | join(' → ') }}{% else %}<span class="muted">no steps yet</span>{% endif %}</td>
+    <td class="mono small muted">{{ t.name_format or '' }}</td>
+    <td style="white-space: nowrap;">
+        <a class="btn btn-sm" href="{{ url_for('workflow.new_from_template', template_id=t.id) }}">Use</a>
+        {% if shipped %}
+        <a class="btn btn-sm" href="{{ url_for('workflow.edit_template', copy=t.id) }}" title="A user-saved copy you can edit">Copy</a>
+        {% else %}
+        <a class="btn btn-sm" href="{{ url_for('workflow.edit_template', template_id=t.id) }}">Parameters</a>
+        <form action="{{ url_for('workflow.edit_template_steps', template_id=t.id) }}" method="POST" style="display: inline;">
+            <button type="submit" class="btn btn-sm" title="Open the steps in the builder">Steps</button>
+        </form>
+        <form action="{{ url_for('workflow.delete_template', template_id=t.id) }}" method="POST" style="display: inline;"
+              onsubmit="return confirm('Delete template \'{{ t.name }}\'? Workflows made from it are not affected.')">
+            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+        </form>
+        {% endif %}
+    </td>
+</tr>
+{% endmacro %}
+
+{% for title, group, shipped in [("Shipped by toolboxes", shipped, true), ("Saved on this Hub", saved, false)] %}
+<h3 class="pick-group">{{ title }}</h3>
+{% if group %}
+<div class="table-scroll">
+<table class="ph-table">
+    <thead><tr><th>Name</th><th>Params</th><th>Steps</th><th>Name format</th><th></th></tr></thead>
+    <tbody>{% for t in group %}{{ row(t, shipped) }}{% endfor %}</tbody>
+</table>
+</div>
+{% else %}
+<p class="muted small">{% if shipped %}None registered. A toolbox's <span class="mono">toolbox.json</span> can carry a <span class="mono">workflows</span> list.{% else %}None yet.{% endif %}</p>
+{% endif %}
+{% endfor %}
+{% endblock %}

@@ -1,31 +1,49 @@
 {% extends "base.html" %}
+{% block title %}Task settings · PIScO Hub{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/processing.css') }}">
+{% endblock %}
 
 {% block content %}
+{% with section = 'workflows' %}{% include "partials/processing_nav.html" %}{% endwith %}
 <style>
-    .editor-container { max-width: 900px; margin: 40px auto; font-family: monospace; }
-    .form-section { background: #f8fafc; border: 1px solid #e2e8f0; padding: 2rem; border-radius: 8px; }
+    .editor-container { max-width: 900px; margin: 20px auto; font-family: monospace; }
+    .form-section { background: var(--card); border: 1px solid var(--border); padding: 2rem; border-radius: 8px; }
     .input-group { margin-bottom: 1.5rem; }
-    label { display: block; font-weight: bold; margin-bottom: 0.5rem; color: #475569; }
-    
-    input[type="number"] { width: 120px; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; }
-    textarea { 
-        width: 100%; height: 400px; padding: 1rem; border: 1px solid #cbd5e1; 
-        border-radius: 4px; font-family: 'Courier New', monospace; background: #fff;
+    label { display: block; font-weight: bold; margin-bottom: 0.5rem; color: var(--muted); }
+
+    .form-section input[type="number"], .form-section input[type="text"], .form-section select {
+        padding: 8px; border: 1px solid var(--border); border-radius: 4px;
+        background: var(--surface); color: var(--text);
     }
-    
+    .form-section input[type="number"] { width: 120px; }
+    textarea {
+        width: 100%; height: 400px; padding: 1rem; border: 1px solid var(--border);
+        border-radius: 4px; font-family: 'Courier New', monospace; background: var(--surface); color: var(--text);
+    }
+
     .actions { display: flex; justify-content: space-between; margin-top: 2rem; }
-    .btn { padding: 10px 20px; cursor: pointer; font-weight: bold; border-radius: 4px; text-decoration: none; }
-    .btn-save { background: #2563eb; color: white; border: none; }
-    .btn-cancel { background: #64748b; color: white; border: none; }
+    .btn-save { background: var(--accent); color: white; border: none; }
+    .btn-cancel { background: var(--muted); color: white; border: none; }
 </style>
 
 <div class="editor-container">
-    <div style="margin-bottom: 2rem;">
-        <h1 style="margin: 0;">Task Settings: {{ task.tool.name }}</h1>
-        <p style="color: #64748b;">Step #{{ task.workflow_position + 1 }} in Workflow {{ task.workflow_id[:8] }}</p>
+    <div style="margin-bottom: 1.5rem;">
+        <h1 style="margin: 0;">{{ task.tool.name }}</h1>
+        <p class="muted">Step #{{ task.workflow_position }}{% if task.workflow.name %} of {{ task.workflow.name }}{% endif %}</p>
     </div>
 
-    <form action="{{ url_for('workflow.edit_settings', task_id=task.id) }}" method="POST" class="form-section">
+    {% if structured and schema %}
+    <div class="filters" style="margin-bottom: 1rem;">
+        <a class="chip {% if mode == 'form' %}active{% endif %}"
+           href="{{ url_for('workflow.edit_settings', task_id=task.id, mode='form', next=next) }}">Form</a>
+        <a class="chip {% if mode == 'json' %}active{% endif %}"
+           href="{{ url_for('workflow.edit_settings', task_id=task.id, mode='json', next=next) }}">JSON</a>
+        <span class="muted small">JSON is where <span class="mono">$from</span>, <span class="mono">$param</span> and <span class="mono">$format</span> references are written.</span>
+    </div>
+    {% endif %}
+
+    <form action="{{ url_for('workflow.edit_settings', task_id=task.id, mode=mode, next=next) }}" method="POST" class="form-section">
         <div style="display: flex; gap: 2rem;">
             <div class="input-group">
                 <label for="priority">Execution Priority</label>
@@ -38,28 +56,34 @@
             </div>
         </div>
 
-        {% if schema %}
-        {% from "partials/schema_form.html" import schema_form %}
         {% if errors %}
-        <div style="background: #fef2f2; border: 1px solid #fca5a5; color: #b91c1c;
-                    padding: 1rem; border-radius: 4px; margin-bottom: 1.5rem;">
+        <div class="flash flash-error">
             <strong>Invalid settings:</strong>
             <ul style="margin: 0.5rem 0 0 1rem;">
                 {% for error in errors %}<li>{{ error }}</li>{% endfor %}
             </ul>
         </div>
         {% endif %}
-        <input type="hidden" name="form_mode" value="schema">
+
+        {% if mode == 'form' %}
+        {% from "partials/schema_form.html" import schema_form %}
         {{ schema_form(schema, values) }}
         {% else %}
         <div class="input-group">
-            <label for="settings_string">Configuration</label>
-            <textarea id="settings_string" name="settings_string">{{ task.settings }}</textarea>
+            <label for="settings_string">{% if mode == 'json' %}Settings (JSON){% else %}Configuration{% endif %}</label>
+            <textarea id="settings_string" name="settings_string">{{ text }}</textarea>
         </div>
+        {% if params %}
+        <div class="muted small" style="margin-top: -1rem; margin-bottom: 1.5rem;">
+            Workflow parameters available: {% for key in params %}<span class="mono">{{ key }}</span>{{ ", " if not loop.last }}{% endfor %}
+            — e.g. <span class="mono">{"$param": "{{ params | first }}"}</span>
+        </div>
+        {% endif %}
         {% endif %}
 
         <div class="actions">
-            <a href="{{ url_for('workflow.builder', workflow_id=task.workflow_id) }}" class="btn btn-cancel">CANCEL</a>
+            {% set back = url_for('workflow.review', workflow_id=task.workflow_id) if (next == 'review' or (next != 'builder' and task.workflow.template_id)) else url_for('workflow.builder', workflow_id=task.workflow_id) %}
+            <a href="{{ back }}" class="btn btn-cancel">CANCEL</a>
             <button type="submit" class="btn btn-save">APPLY & RETURN</button>
         </div>
     </form>

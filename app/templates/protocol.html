@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Protocol · PIScO Hub{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/processing.css') }}">
+{% endblock %}
+
+{% block content %}
+{% with section = 'protocol' %}{% include "partials/processing_nav.html" %}{% endwith %}
+
+{% macro sort_link(key, label) %}
+{% set is_sorted = sort == key %}
+<a class="sort {% if is_sorted %}sorted{% endif %}"
+   href="{{ url_for('processing.protocol', template=template_name or None, status=active_status or None, q=q or None, sort=key, dir='asc' if (is_sorted and descending) else ('desc' if is_sorted else None)) }}">
+    {{ label }}{% if is_sorted %} {{ '▼' if descending else '▲' }}{% endif %}
+</a>
+{% endmacro %}
+
+<div class="ph-header">
+    <h1>Protocol</h1>
+    <span class="muted">one row per run, the parameters as columns</span>
+    <div class="actions">
+        <a class="btn" href="{{ url_for('processing.protocol_csv', template=template_name or None, status=active_status or None, q=q or None, sort=sort, dir='desc' if descending else 'asc') }}">Download CSV</a>
+    </div>
+</div>
+
+<form class="filters" method="GET" action="{{ url_for('processing.protocol') }}">
+    <select name="template" class="btn" onchange="this.form.submit()">
+        <option value="">All templates</option>
+        {% for name in template_names %}
+        <option value="{{ name }}" {% if name == template_name %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+    </select>
+    {% for status in status_filters %}
+    <a class="chip {% if active_status == status %}active{% endif %}"
+       href="{{ url_for('processing.protocol', template=template_name or None, status=(None if active_status == status else status), q=q or None) }}">{{ status }}</a>
+    {% endfor %}
+    <input type="search" name="q" value="{{ q }}" placeholder="Search by name…">
+</form>
+
+<div class="table-scroll">
+<table class="ph-table protocol">
+    <thead>
+        <tr>
+            <th class="pin">{{ sort_link('name', 'Run') }}</th>
+            <th>{{ sort_link('status', 'Status') }}</th>
+            <th>{{ sort_link('started_at', 'Started') }}</th>
+            <th>{{ sort_link('completed_at', 'Completed') }}</th>
+            <th>Tasks</th>
+            {% for column in columns %}<th class="param">{{ sort_link(column, column) }}</th>{% endfor %}
+            <th>Outputs</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+    {% set wf = row.workflow %}
+    <tr class="task-row">
+        <td class="pin"><a href="{{ url_for('processing.workflow_detail', workflow_id=wf.id) }}">{{ wf.name }}</a>
+            {% if wf.template_name and not template_name %}<div class="muted small mono">{{ wf.template_name }}</div>{% endif %}</td>
+        <td><span class="status-text"><span class="status-dot {{ wf.status | status_class }}"></span>{{ wf.status }}</span></td>
+        <td class="muted small">{{ row.started_at | clock if row.started_at else (wf.created_at | clock) ~ ' (queued)' }}</td>
+        <td class="muted small">{{ row.completed_at | clock }}</td>
+        <td class="muted small">{{ row.finished_count }}/{{ row.task_count }}</td>
+        {% for column in columns %}
+        {% set value = row.params.get(column) %}
+        <td class="param mono small">{% if value is none %}<span class="muted">—</span>{% elif value is string %}{{ value }}{% else %}{{ value | tojson }}{% endif %}</td>
+        {% endfor %}
+        <td class="small">
+            {% for artifact in row.outputs %}
+            <div class="artifact"><span class="name">{{ artifact.name }}</span>
+                <a href="{{ url_for('file-explorer.hub', path=artifact | explorer_dir) }}" title="{{ artifact.path }}">{{ artifact.path | truncate(48, true, '…', 24) }}</a>
+                {% if artifact.exists is sameas false %}<span class="missing">MISSING</span>{% endif %}</div>
+            {% endfor %}
+        </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="{{ 6 + columns | length }}" class="empty">No runs match.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+<p class="muted small">{{ rows | length }} run{{ 's' if rows | length != 1 }}{% if template_name %} from <span class="mono">{{ template_name }}</span>{% endif %}. Click a column to sort; the CSV has the same rows and columns.</p>
+{% endblock %}

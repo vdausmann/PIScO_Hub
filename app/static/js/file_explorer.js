@@ -37,6 +37,14 @@ async function loadDirectory(path="")
 
     const data = await response.json();
 
+    if (!response.ok) {
+        // Outside the explorer root, or gone: fall back to the root
+        // rather than leaving an empty page.
+        alert(data.error || "Cannot open " + path);
+        if (path !== "") return loadDirectory("");
+        return;
+    }
+
 	updateBreadcrumbs();
 
     renderFiles(data);
@@ -320,7 +328,12 @@ function renderFiles(data)
 
 document.addEventListener(
     "DOMContentLoaded",
-    () => loadDirectory("")
+    () => {
+        // Links from the Processing Hub open the explorer on a given
+        // directory; get_files() accepts absolute paths under the root.
+        const wanted = new URLSearchParams(window.location.search).get("path");
+        loadDirectory(wanted || "");
+    }
 );
 
 

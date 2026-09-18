@@ -22,6 +22,9 @@ def create_app(create_worker=True):
     hub_root = str(Path(__file__).resolve().parent.parent)
     load_dotenv(os.path.join(hub_root, ".env"))
     app = Flask(__name__)
+    # Key order carries meaning in places (a template's parameters are
+    # shown in the order they were defined), so responses keep it.
+    app.json.sort_keys = False
 
     app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY")
     if not app.config["SECRET_KEY"]:

@@ -121,5 +121,55 @@
                 }
             }
         }
+    ],
+    "workflows": [
+        {
+            "name": "demo_chain",
+            "description": "Produce then consume, with the label taken from a workflow parameter.",
+            "name_format": "demo {label}",
+            "params_schema": {
+                "type": "object",
+                "required": [
+                    "label"
+                ],
+                "properties": {
+                    "label": {
+                        "type": "string",
+                        "title": "Label",
+                        "description": "Text written into the result file"
+                    },
+                    "fail": {
+                        "type": "boolean",
+                        "title": "Fail the first step",
+                        "default": false
+                    }
+                }
+            },
+            "tasks": [
+                {
+                    "tool": "demo_produce",
+                    "settings": {
+                        "output_dir": "",
+                        "label": {
+                            "$format": "{label}!"
+                        },
+                        "fail": {
+                            "$param": "fail"
+                        }
+                    }
+                },
+                {
+                    "tool": "demo_consume",
+                    "settings": {
+                        "input_dir": {
+                            "$from": {
+                                "task": 0,
+                                "output": "results"
+                            }
+                        }
+                    }
+                }
+            ]
+        }
     ]
 }

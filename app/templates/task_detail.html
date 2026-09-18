@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}{{ task.tool.name }} · {{ task.workflow.name }} · PIScO Hub{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/processing.css') }}">
+{% endblock %}
+
+{% block content %}
+{% with section = 'workflows' %}{% include "partials/processing_nav.html" %}{% endwith %}
+
+<div class="ph-header">
+    <span class="status-dot {{ task.status | status_class }}" style="width: 14px; height: 14px;"></span>
+    <h1>{{ task.tool.name }}</h1>
+    <span class="muted">{{ task.status }}{% if task.exit_code is not none %} · exit {{ task.exit_code }}{% endif %}</span>
+    <div class="actions">
+        <a class="btn" href="{{ url_for('processing.workflow_detail', workflow_id=task.workflow_id) }}">&larr; {{ task.workflow.name }}</a>
+    </div>
+</div>
+<p class="muted small" style="margin-top: -0.5rem;">Step #{{ task.workflow_position }} of workflow <span class="mono">{{ task.workflow_id }}</span></p>
+
+<div class="two-col">
+    <div class="card">
+        <h3>Task</h3>
+        <dl class="meta-grid">
+            <dt>Task id</dt><dd>{{ task.id }}</dd>
+            <dt>Machine</dt><dd>{{ task.machine.name if task.machine else "—" }}</dd>
+            <dt>Priority / weight</dt><dd>{{ task.priority }} / {{ task.weight }}</dd>
+            <dt>Started</dt><dd>{{ task.started_at | clock or "—" }}</dd>
+            <dt>Completed</dt><dd>{{ task.completed_at | clock or "—" }}</dd>
+            <dt>Duration</dt><dd>{{ task | duration or "—" }}</dd>
+            {% if task.pid %}<dt>PID</dt><dd>{{ task.pid }}</dd>{% endif %}
+            <dt>Workspace</dt><dd><a href="{{ url_for('file-explorer.hub', path=workspace) }}">{{ workspace }}</a></dd>
+            {% if task.log_prefix %}<dt>Logs</dt><dd>{{ task.log_prefix }}.log / .err</dd>{% endif %}
+        </dl>
+    </div>
+    <div class="card">
+        <h3>Artifacts</h3>
+        {% for artifact in task.artifacts %}
+            {% include "partials/artifact.html" %}
+        {% else %}
+            <span class="muted small">{% if task.tool.outputs and task.tool.outputs != "[]" %}Recorded once the task is dispatched.{% else %}This tool declares no outputs.{% endif %}</span>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="two-col">
+    <div class="card">
+        <h3>Settings (as stored{% if '$from' in (task.settings or '') %}, with $from references{% endif %})</h3>
+        <pre class="code">{{ task.settings | pretty_json }}</pre>
+    </div>
+    <div class="card">
+        <h3>Settings file (as dispatched)</h3>
+        {% if dispatched_settings is not none %}
+        <pre class="code">{{ dispatched_settings }}</pre>
+        <div class="muted small mono" style="margin-top: 6px;">{{ settings_path }}</div>
+        {% else %}
+        <span class="muted small">Written when the task is dispatched.</span>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="log-toolbar">
+        <div class="tabs">
+            <button type="button" class="btn btn-sm {% if stream == 'stdout' %}active{% endif %}" data-stream="stdout">stdout</button>
+            <button type="button" class="btn btn-sm {% if stream == 'stderr' %}active{% endif %}" data-stream="stderr">stderr</button>
+        </div>
+        <label>tail <input type="number" id="tail" name="tail" value="{{ tail }}" min="0" step="50"> lines (0 = all)</label>
+        <label><input type="checkbox" id="follow" {% if task.status in ('Pending', 'Running') %}checked{% endif %}> follow</label>
+        <input type="hidden" id="stream-value" name="stream" value="{{ stream }}">
+    </div>
+    {# The log panel refreshes on load, whenever a control changes, and
+       every 2 s while "follow" is ticked. Its query comes from the controls. #}
+    <div id="log-panel"
+         hx-get="{{ url_for('processing.task_logs_partial', task_id=task.id) }}"
+         hx-trigger="load, refresh, every 2s [document.getElementById('follow').checked]"
+         hx-include="#tail, #stream-value"
+         hx-swap="innerHTML"></div>
+</div>
+
+<script>
+(() => {
+    const panel = document.getElementById("log-panel");
+    const streamValue = document.getElementById("stream-value");
+    const tabs = document.querySelectorAll(".log-toolbar .tabs button");
+    const refresh = () => htmx.trigger(panel, "refresh");
+
+    tabs.forEach(btn => btn.addEventListener("click", () => {
+        tabs.forEach(b => b.classList.toggle("active", b === btn));
+        streamValue.value = btn.dataset.stream;
+        refresh();
+    }));
+    document.getElementById("tail").addEventListener("change", refresh);
+    document.getElementById("follow").addEventListener("change", (e) => { if (e.target.checked) refresh(); });
+
+    // Pin the view to the end while following.
+    document.body.addEventListener("htmx:afterSwap", (event) => {
+        if (event.target.id !== "log-panel") return;
+        const box = panel.querySelector("pre.log-box");
+        if (box && document.getElementById("follow").checked) box.scrollTop = box.scrollHeight;
+    });
+})();
+</script>
+{% endblock %}

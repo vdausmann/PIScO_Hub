@@ -18,12 +18,48 @@ path (`/mnt/pisco`), so a task can hand its output to the next one by path.
 
 | | good for | not good for |
 |---|---|---|
-| **Web GUI** at `http://10.11.11.110:5000` | browsing results, watching progress, reading logs, one-off tasks | chaining tasks — there is no "use the output of step 2" picker |
+| **Web GUI** at `http://10.11.11.110:5000` | starting a run from a template (guided: pick → parameters → review), watching progress, live logs, artifacts, retrying failed runs, exporting a run as JSON | building a new chain from scratch — references (`$from`, `$param`) are typed as JSON there, with no picker yet |
 | **CLI** (`hub`, on the Hub machine) | everything, especially repeatable runs from a file | nothing much |
 | **REST API** | scripting, other programs | interactive use |
 
 **The practical answer: build chains as a JSON file and submit them with the
-CLI.** Use the GUI to watch them and to look at the results.
+CLI, or instantiate a template.** Use the GUI to watch them and to look at
+the results.
+
+Values that several steps share — the frame directory, cruise and station,
+a model path — go once into the workflow's `params` and are referenced from
+settings as `{"$param": "frames"}` or `{"$format": "{cruise}_{station}"}`.
+A *template* is such a chain with a schema for its parameters; the standard
+ones are shipped with the toolboxes and `hub templates list` shows what is
+registered:
+
+```
+hub templates describe process_profile        # which parameters it needs
+hub workflow create --template process_profile \
+    --param cruise=M203 --param station=012-01 --param frames=/mnt/pisco/incoming/M203_012-01/ --watch
+```
+
+Templates are made in the GUI under **Templates**: pick parameters from the
+predefined list (cruise, station, instrument, position, frame directory,
+sensor log, …) or define your own with a type, a default, choices or bounds,
+and mark the ones that should be *remembered* between runs. A template can
+start as just its parameters; **Steps** opens it in the builder to add the
+tools, whose settings then reference the parameters. Templates shipped by a
+toolbox are read-only there — **Copy** makes an editable one.
+
+**Protocol** in the sub-navigation is the run log: one row per workflow,
+the parameters as columns, with start and end times and where the outputs
+went. Filter by template, click a column to sort, **Download CSV** for the
+cruise report. The same table from the terminal:
+`hub workflow list --template profile [--csv]`.
+
+In the GUI, **+ New workflow** does the same thing guided: pick the template,
+fill in its parameters (values marked *remembered* are prefilled from the
+previous run of that template — cruise and instrument stay put across a
+station), review the steps with everything filled in, adjust one if you must,
+start. A finished run's page has **Run again…**, which opens the form
+prefilled with that run's parameters, and **Export JSON**, which gives a file
+that recreates the run from the CLI. See AGENTS.md for the reference syntax.
 
 The GUI cannot express `{"$from": ...}` references, so a chain built there needs
 every path typed by hand. That works, but it is easy to get wrong and it breaks
@@ -37,7 +73,40 @@ if you re-run into a fresh workflow directory.
 /mnt/pisco/incoming/<your profile>/     # raw .png frames
 ```
 
+### 1b. Or build the profile dataset first
+
+The chain below reads a directory of named PNGs. During a cruise the frames
+come from the camera without metadata; `pisco_prepare_profile` (toolbox
+`pisco_profile_dataset`) turns the camera output plus the sensor log into
+`profile_dataset.h5`, and both segmenters accept its directory as
+`sourcePath` — `{"$from": {"task": 0, "output": "dataset"}}` in the next
+step. Its parameters are the ones the `profile` template asks for.
+
 ### 2. Write the workflow
+
+**The complete chain is the Hub's `profile` template** — defined in
+[`examples/profile_template.json`](../examples/profile_template.json) and
+installed with `scripts/install_template.py` (the Hub's database is not the
+source of truth; the file is). It asks for the profile's facts — cruise,
+station, instrument, position, the frame directory, the sensor log — and the
+two ViT models, and runs nine steps: `pisco_prepare_profile` builds
+`profile_dataset.h5` from the camera output and the sensor log, then segment,
+deconvolve, extract, both ViT stages, EcoTaxa export, import and features.
+Every setting is written out even where it is the tool's default, so the file
+says what a run means. The settings are the ones settled in
+`docs/pipeline-comparison-spec.md`: a 12-frame background block on both
+routes, 30 px of padding around each object so the deconvolution model sees
+enough of the frame, a texture-filled atlas, and crops handed to EcoTaxa and
+the classifier as the object alone in a tight box (`isolateCrops`).
+
+To run it from the API: `POST /api/v1/workflows` with
+`{"template": "profile", "params": {...}}`. The same chain with the parameters
+filled in for one test profile is
+[`examples/pisco_full_chain.json`](../examples/pisco_full_chain.json), for
+`hub workflow create --file`.
+
+The walkthrough below is the same chain, explained.
+
 
 Save this as `wf.json`. It is the chain that was verified end to end: clean and
 compress the frames, deblur the crops, extract them, classify them, and write
@@ -189,6 +258,19 @@ variant's pieces are each verified — stage chaining and restriction, and the
 prediction merge — but no run has used a real binary model yet, since only one
 stand-in was available.
 
+### 6. Closing the loop: retraining on what was validated
+
+Once a human has validated objects in EcoTaxa, three more tools turn that work
+back into models — `pisco_ecotaxa_labels`, `pisco_vit_trainset` and
+`pisco_vit_train` — and `pisco_vit_classify` takes a training task's output
+directory straight as its `modelPath`. So the next run classifies with a model
+trained on the corrections made to the last one, without anyone moving crops
+between machines.
+
+See [vit-retraining.md](vit-retraining.md) for the workflow and, more
+importantly, for the couplings that make a retrained model valid or worthless:
+crop isolation, the deconvolution model, and validated-versus-predicted labels.
+
 ## How work gets distributed
 
 Each tool declares what it needs (`requires`) and how heavy it is (`weight`).
@@ -253,7 +335,18 @@ GET /api/v1/tasks/<task-id>/logs?stream=stderr&tail=100
 On disk, on the Hub machine: `/opt/pisco-hub/app/logs/<tool>/<task-id>.log`
 and `.err`. The Hub's own service log is `journalctl -u pisco-hub`.
 
-In the GUI: the task manager page links each task to its log.
+In the GUI: open the workflow from the Processing Hub, then a task's **Logs**
+button. The task page shows stdout and stderr with a tail length and a
+*follow* toggle that refreshes every two seconds while the task runs, the
+settings as stored and as dispatched (with `$from` references resolved), and
+the artifacts with links into the File Explorer. A failed workflow has a
+**Retry** button, which requeues it from the first failed task exactly like
+`hub workflow retry`, and **Export JSON** downloads it in the form
+`hub workflow create --file` accepts. A running or pending workflow has
+**Cancel** (`hub workflow cancel <id> [--watch]`): pending tasks never start,
+the running one is asked to stop and killed if it does not within 30 s — on
+the worker as well, not just the Hub's ssh — and the workflow reads
+*Cancelled*; Retry picks it up again from there.
 
 **An empty log with a non-zero exit** usually means the tool's wrapper died
 before it ran anything — a missing required setting, or an interpreter that

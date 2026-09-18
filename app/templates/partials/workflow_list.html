@@ -1,0 +1,51 @@
+{# One card per workflow; the header is the summary, the task list unfolds
+   beneath it. Re-rendered every 2 s by the dashboard. #}
+<div class="workflow-list">
+{% for wf in workflows %}
+{% set finished = wf.tasks | selectattr("status", "equalto", "Finished") | list | length %}
+<div class="workflow-card">
+    <div class="workflow-header" onclick="toggle(this, event)" data-id="wf-{{ wf.id }}">
+        <span class="caret">▸</span>
+        <span class="status-dot {{ wf.status | status_class }}"></span>
+        <a class="workflow-name" href="{{ url_for('processing.workflow_detail', workflow_id=wf.id) }}">{{ wf.name }}</a>
+        <span class="progress">{{ wf.status }} · {{ finished }}/{{ wf.tasks | length }} tasks</span>
+        <span class="created">{{ wf.created_at | clock }}</span>
+        {% set winding = wf.tasks | selectattr("status", "equalto", "Running") | list | length %}
+        <span class="actions">
+            {% if wf.status in ("Pending", "Running") %}
+            <form action="{{ url_for('processing.cancel_workflow', workflow_id=wf.id) }}" method="POST"
+                  onsubmit="return confirm('Cancel workflow \'{{ wf.name }}\'?');">
+                <input type="hidden" name="next" value="{{ url_for('processing.dashboard') }}">
+                <button type="submit" class="btn btn-sm btn-danger">Cancel</button>
+            </form>
+            {% endif %}
+            {% if wf.status in ("Failed", "Cancelled") and not winding %}
+            <form action="{{ url_for('processing.retry_workflow', workflow_id=wf.id) }}" method="POST">
+                <button type="submit" class="btn btn-sm">Retry</button>
+            </form>
+            {% endif %}
+            <form action="{{ url_for('processing.delete_workflow', workflow_id=wf.id) }}" method="POST"
+                  onsubmit="return confirm('Delete workflow \'{{ wf.name }}\'? Its task records and artifact bookkeeping go with it; files on disk stay.');">
+                <button type="submit" class="btn btn-sm btn-danger" {% if wf.status == "Running" or winding %}disabled title="Wait for the running task to stop"{% endif %}>Delete</button>
+            </form>
+        </span>
+    </div>
+    <div class="task-list">
+        {% for task in wf.tasks | sort(attribute="workflow_position") %}
+        <div class="task-row">
+            <span class="pos">#{{ task.workflow_position }}</span>
+            <a href="{{ url_for('processing.task_detail', task_id=task.id) }}">{{ task.tool.name }}</a>
+            {% if task.machine %}<span class="machine">on {{ task.machine.name }}</span>{% endif %}
+            <span class="right">
+                {% if task.started_at %}<span class="muted small">{{ task | duration }}</span>{% endif %}
+                {% if task.exit_code is not none and task.exit_code != 0 %}<span class="small" style="color: var(--bad)">exit {{ task.exit_code }}</span>{% endif %}
+                <span class="status-text small">{{ task.status }} <span class="status-dot {{ task.status | status_class }}"></span></span>
+            </span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% else %}
+<div class="empty">No workflows match.</div>
+{% endfor %}
+</div>

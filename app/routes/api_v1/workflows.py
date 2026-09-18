@@ -1,6 +1,7 @@
 from flask import jsonify, request
 
-from ...backend.models import Artifact, Task, Workflow, db
+from ...backend import settings_engine, templates, workflows
+from ...backend.models import Workflow, db
 from ...backend.task_manager import create_new_workflow
 from . import api_v1_bp
 from .auth import api_auth
@@ -15,6 +16,9 @@ def list_workflows():
     status = request.args.get("status")
     if status:
         query = query.filter_by(status=status)
+    template = request.args.get("template")
+    if template:
+        query = query.filter_by(template_name=template)
     workflows = query.order_by(Workflow.created_at.desc()).all()
     return jsonify({"workflows": [workflow_summary(w) for w in workflows]})
 
@@ -25,8 +29,11 @@ def list_workflows():
 def create_workflow():
     """Create and queue a workflow.
 
-    Body: {"name": str, "tasks": [{"tool": str, "settings": object|str,
-    "priority": int?, "weight": int?}, ...]}
+    Body: {"name": str, "params": object?, "tasks": [{"tool": str,
+    "settings": object|str, "priority": int?, "weight": int?}, ...]}
+    or, from a template: {"template": str, "params": object, "name": str?}.
+    With both "template" and "tasks" (an exported workflow), the tasks
+    are used and the template only records provenance and checks params.
     Settings given as an object are validated against the tool's schema;
     a string is stored verbatim (opaque); omitted uses the tool defaults.
     """
@@ -35,7 +42,27 @@ def create_workflow():
         return jsonify({"error": "JSON body required"}), 400
 
     name = data.get("name")
+    params = data.get("params") or {}
+    if not isinstance(params, dict):
+        return jsonify({"error": "'params' must be an object"}), 400
     tasks = data.get("tasks")
+    template = None
+    if data.get("template"):
+        template = templates.find(data["template"])
+        if template is None and not tasks:
+            return jsonify({"error": f"Template '{data['template']}' not found"}), 404
+    if template is not None:
+        try:
+            if tasks:
+                params, errors = settings_engine.validate_params(
+                    template.params_schema, params)
+                if errors:
+                    raise templates.TemplateError(
+                        "Invalid parameters: " + "; ".join(errors))
+            else:
+                name, params, tasks = templates.instantiate(template, params, name)
+        except templates.TemplateError as e:
+            return jsonify({"error": str(e)}), 400
     if not name or not isinstance(tasks, list) or not tasks:
         return jsonify({"error": "'name' and a non-empty 'tasks' list are required"}), 400
     for i, spec in enumerate(tasks):
@@ -43,7 +70,7 @@ def create_workflow():
             return jsonify({"error": f"tasks[{i}] must be an object with a 'tool' key"}), 400
 
     try:
-        workflow_id = create_new_workflow(name, tasks)
+        workflow_id = create_new_workflow(name, tasks, params, template)
     except KeyError as e:
         db.session.rollback()
         return jsonify({"error": str(e).strip("'\"")}), 404
@@ -64,43 +91,49 @@ def get_workflow(workflow_id):
     return jsonify(workflow_detail(workflow))
 
 
-@api_v1_bp.route("/workflows/<string:workflow_id>/retry", methods=["POST"])
-@api_auth("operate")
-def retry_workflow(workflow_id):
-    """Requeue a failed workflow from its first failed task onwards.
-
-    Anything after that point is reset too: those results were derived
-    from a run that did not complete, so they cannot be trusted. Their
-    recorded artifacts go as well, so references resolve against the new
-    run rather than the abandoned one.
-    """
+@api_v1_bp.route("/workflows/<string:workflow_id>/spec", methods=["GET"])
+@api_auth()
+def workflow_spec(workflow_id):
+    """The workflow as a creation request (name, params, template, tasks
+    with their stored settings), so a run can be repeated or edited and
+    resubmitted to POST /workflows."""
     workflow = Workflow.query.get(workflow_id)
     if workflow is None:
         return jsonify({"error": "Workflow not found"}), 404
-    if workflow.status in ("Running", "Pending"):
-        return jsonify({"error": f"Workflow is {workflow.status}; "
-                                 "there is nothing to retry"}), 409
+    return jsonify(workflows.spec(workflow))
 
-    failed = [t for t in workflow.tasks if t.status == "Failed"]
-    if not failed:
-        return jsonify({"error": "Workflow has no failed tasks"}), 409
 
-    from_position = min(t.workflow_position for t in failed)
-    for task in workflow.tasks:
-        if task.workflow_position < from_position:
-            continue
-        Artifact.query.filter_by(task_id=task.id).delete()
-        task.status = "Pending"
-        task.pid = None
-        task.exit_code = None
-        task.started_at = None
-        task.completed_at = None
-        task.terminated_at = None
-        task.machine_id = None
-
-    workflow.status = "Pending"
-    db.session.commit()
+@api_v1_bp.route("/workflows/<string:workflow_id>/retry", methods=["POST"])
+@api_auth("operate")
+def retry_workflow(workflow_id):
+    """Requeue a failed workflow from its first failed task onwards."""
+    workflow = Workflow.query.get(workflow_id)
+    if workflow is None:
+        return jsonify({"error": "Workflow not found"}), 404
+    try:
+        workflows.retry(workflow)
+    except workflows.WorkflowStateError as e:
+        return jsonify({"error": str(e)}), 409
     return jsonify(workflow_detail(workflow))
+
+
+@api_v1_bp.route("/workflows/<string:workflow_id>/cancel", methods=["POST"])
+@api_auth("operate")
+def cancel_workflow(workflow_id):
+    """Stop a pending or running workflow. Pending tasks are cancelled at
+    once; a running task gets SIGTERM, then SIGKILL after the grace
+    period, on its machine too, and shows as Cancelled once it has
+    stopped. The response lists what is still winding down."""
+    workflow = Workflow.query.get(workflow_id)
+    if workflow is None:
+        return jsonify({"error": "Workflow not found"}), 404
+    try:
+        winding_down = workflows.cancel(workflow)
+    except workflows.WorkflowStateError as e:
+        return jsonify({"error": str(e)}), 409
+    data = workflow_detail(workflow)
+    data["winding_down"] = [t.id for t in winding_down]
+    return jsonify(data)
 
 
 @api_v1_bp.route("/workflows/<string:workflow_id>", methods=["DELETE"])
@@ -109,8 +142,8 @@ def delete_workflow(workflow_id):
     workflow = Workflow.query.get(workflow_id)
     if workflow is None:
         return jsonify({"error": "Workflow not found"}), 404
-    if workflow.status == "Running":
-        return jsonify({"error": "Cannot delete a running workflow"}), 409
-    db.session.delete(workflow)
-    db.session.commit()
+    try:
+        workflows.delete(workflow)
+    except workflows.WorkflowStateError as e:
+        return jsonify({"error": str(e)}), 409
     return jsonify({"status": "deleted"})

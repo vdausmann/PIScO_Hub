@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}{{ template.name }} · New workflow · PIScO Hub{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/processing.css') }}">
+{% endblock %}
+
+{% block content %}
+{% with section = 'workflows' %}{% include "partials/processing_nav.html" %}{% endwith %}
+
+<div class="ph-header">
+    <h1>{{ template.name }}</h1>
+    <span class="muted">Step 2 of 3 · parameters</span>
+    <div class="actions">
+        <a class="btn" href="{{ url_for('workflow.new_workflow') }}">&larr; Choose another</a>
+    </div>
+</div>
+{% if template.description %}<p class="muted" style="margin-top: -0.5rem;">{{ template.description }}</p>{% endif %}
+
+{% set required = schema.get('required', []) %}
+<form method="POST" class="card wizard-form"
+      action="{{ url_for('workflow.new_from_template', template_id=template.id, draft=draft.id if draft else None) }}">
+    {% if errors %}
+    <div class="flash flash-error">
+        <strong>Please check:</strong>
+        <ul style="margin: 0.4rem 0 0 1.2rem;">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+
+    {% for key, prop in schema.get('properties', {}).items() %}
+    {% set value = values.get(key) %}
+    <div class="input-group">
+        <label for="p_{{ key }}">
+            {{ prop.get('title', key) }}{% if key in required %} <span class="req" title="required">*</span>{% endif %}
+            {% if prop.get('sticky') %}<span class="muted small" title="Prefilled from the previous run of this template"> · remembered</span>{% endif %}
+        </label>
+        {% if prop.get('description') %}<div class="muted small hint">{{ prop['description'] }}</div>{% endif %}
+
+        {% if prop.get('enum') %}
+        <select id="p_{{ key }}" name="p_{{ key }}">
+            {% if key not in required %}<option value="">—</option>{% endif %}
+            {% for option in prop['enum'] %}
+            <option value="{{ option }}" {% if value == option or value|string == option|string %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+        </select>
+        {% elif prop.get('type') == 'boolean' %}
+        <input type="checkbox" id="p_{{ key }}" name="p_{{ key }}" {% if value %}checked{% endif %}>
+        {% elif prop.get('type') in ('integer', 'number') %}
+        <input type="number" id="p_{{ key }}" name="p_{{ key }}"
+               {% if prop.get('type') == 'number' %}step="any"{% endif %}
+               {% if prop.get('minimum') is defined %}min="{{ prop['minimum'] }}"{% endif %}
+               {% if prop.get('maximum') is defined %}max="{{ prop['maximum'] }}"{% endif %}
+               value="{{ value if value is not none else '' }}">
+        {% elif prop.get('format') == 'date' %}
+        <input type="date" id="p_{{ key }}" name="p_{{ key }}" value="{{ value if value is not none else '' }}">
+        {% elif prop.get('format') in ('directory', 'file') %}
+        <div class="path-field">
+            <input type="text" id="p_{{ key }}" name="p_{{ key }}" class="wide mono"
+                   value="{{ value if value is not none else '' }}" placeholder="/mnt/pisco/…">
+            <button type="button" class="btn btn-sm" data-browse="p_{{ key }}" data-kind="{{ prop['format'] }}">Browse…</button>
+        </div>
+        {% else %}
+        <input type="text" id="p_{{ key }}" name="p_{{ key }}" class="wide"
+               {% if prop.get('pattern') %}pattern="{{ prop['pattern'] }}"{% endif %}
+               value="{{ value if value is not none else '' }}">
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    {% if not schema.get('properties') %}
+    <p class="muted">This template takes no parameters.</p>
+    {% endif %}
+
+    <div class="input-group" style="border-top: 1px solid var(--border); padding-top: 1rem;">
+        <label for="workflow_name">Workflow name <span class="muted small">· optional</span></label>
+        <input type="text" id="workflow_name" name="workflow_name" class="wide" value="{{ name or '' }}"
+               placeholder="{{ template.name_format or template.name ~ ' <date>' }}">
+    </div>
+
+    <div class="actions" style="justify-content: flex-end;">
+        <button type="submit" class="btn btn-primary">Review &rarr;</button>
+    </div>
+</form>
+
+{# A small directory picker over the File Explorer's listing endpoint. #}
+<div id="picker" class="picker" hidden>
+    <div class="picker-box">
+        <div class="picker-head">
+            <span id="picker-path" class="mono small"></span>
+            <button type="button" class="btn btn-sm" id="picker-close">✕</button>
+        </div>
+        <div id="picker-list" class="picker-list"></div>
+        <div class="picker-foot">
+            <button type="button" class="btn btn-sm" id="picker-up">↑ Up</button>
+            <button type="button" class="btn btn-sm btn-primary" id="picker-use">Use this folder</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(() => {
+    const picker = document.getElementById("picker");
+    const list = document.getElementById("picker-list");
+    const pathLabel = document.getElementById("picker-path");
+    let target = null, kind = "directory", current = "";
+
+    async function open(path) {
+        const r = await fetch(`/file-explorer/files?path=${encodeURIComponent(path)}`, {showLoader: false});
+        const data = await r.json();
+        if (!r.ok) {
+            if (path !== "") return open("");
+            list.innerHTML = `<div class="muted small">${data.error || "cannot list"}</div>`;
+            return;
+        }
+        current = path;
+        pathLabel.textContent = path || "(root)";
+        list.innerHTML = "";
+        const entries = Array.isArray(data) ? data : (data.entries || data.files || []);
+        for (const e of entries) {
+            if (kind === "directory" && e.type !== "directory") continue;
+            const row = document.createElement("div");
+            row.className = "picker-row" + (e.type === "directory" ? " dir" : "");
+            row.textContent = (e.type === "directory" ? "📁 " : "📄 ") + e.name;
+            row.onclick = () => e.type === "directory" ? open(e.path) : choose(e.path);
+            list.appendChild(row);
+        }
+        if (!list.children.length) list.innerHTML = '<div class="muted small">(empty)</div>';
+    }
+    function choose(path) {
+        target.value = path.endsWith("/") || kind !== "directory" ? path : path + "/";
+        picker.hidden = true;
+    }
+    document.querySelectorAll("[data-browse]").forEach(btn => btn.addEventListener("click", () => {
+        target = document.getElementById(btn.dataset.browse);
+        kind = btn.dataset.kind;
+        document.getElementById("picker-use").hidden = kind !== "directory";
+        picker.hidden = false;
+        const start = target.value.trim();
+        open(kind === "directory" ? start : start.replace(/[^/]*$/, ""));
+    }));
+    document.getElementById("picker-close").onclick = () => picker.hidden = true;
+    document.getElementById("picker-up").onclick = () => open(current.replace(/\/?[^/]+\/?$/, ""));
+    document.getElementById("picker-use").onclick = () => choose(current);
+})();
+</script>
+{% endblock %}
