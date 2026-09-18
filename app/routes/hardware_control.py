@@ -7,7 +7,7 @@ from ..backend.models import GlobalSetting
 from pathlib import Path
 
 
-DATA_DIR = Path("data")
+DATA_DIR = Path("hardware_control")
 
 
 hardware_control_bp = Blueprint('hardware-control', __name__)
@@ -29,7 +29,7 @@ def get_files():
 
     files = sorted(
         file.name
-        for file in DATA_DIR.glob("*.dat")
+        for file in DATA_DIR.glob("*.txt")
         if file.is_file()
     )
 
@@ -39,7 +39,6 @@ def get_files():
 @hardware_control_bp.route('/sensor-data')
 @login_required
 def get_sensor_data():
-
     filename = request.args.get("file")
 
     if not filename:

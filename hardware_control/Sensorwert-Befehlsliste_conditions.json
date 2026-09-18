@@ -1,0 +1,1687 @@
+{
+    "PIScO": {
+        "sensors": [
+            {
+                "shorthand": "Pi-ExPres",
+                "name": "External Pressure",
+                "group": "(Gruppe PIScO)",
+                "format": "float xxxx.xx (dbar)",
+                "min": null,
+                "max": "6000",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-InPresCam",
+                "name": "Internal Pressure  Camera-Pipe",
+                "group": "(Gruppe PIScO)",
+                "format": "float xxxx.xx (dbar)",
+                "min": null,
+                "max": "12",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-InPresCom",
+                "name": "Internal Pressure  Computer-Pipe",
+                "group": "(Gruppe PIScO)",
+                "format": "float xxxx.xx (dbar)",
+                "min": null,
+                "max": "12",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-HuCam",
+                "name": "Humidity Camera-Pipe",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (%)",
+                "min": null,
+                "max": "75",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-HuCom",
+                "name": "Humidity Computer-Pipe",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (%)",
+                "min": null,
+                "max": "75",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-TeCam",
+                "name": "Temperature Camera",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (°C)",
+                "min": null,
+                "max": "65",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-TeCom",
+                "name": "Temperature Computer",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (°C)",
+                "min": null,
+                "max": "65",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-TeHeat1",
+                "name": "Temperature Heater1",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (°C)",
+                "min": null,
+                "max": "30",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-TeHeat2",
+                "name": "Temperature Heater2",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (°C)",
+                "min": null,
+                "max": "30",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-TeTAG",
+                "name": "Temperature TAG",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (°C)",
+                "min": "15",
+                "max": "30",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-PFAmpHeat",
+                "name": "Power-FET Amp. Heater",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (A)",
+                "min": null,
+                "max": "4",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-PFAmpCam",
+                "name": "Power-FET Amp. Camera",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (A)",
+                "min": null,
+                "max": "4",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-PFAmpTAG",
+                "name": "Power-FET Amp. TAG-CONTrOL",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (A)",
+                "min": null,
+                "max": "4",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-PFAmpLED",
+                "name": "Power-FET Amp. DCDC LED",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (A)",
+                "min": null,
+                "max": "4",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-PFVoltHeat",
+                "name": "Power-FET Volt. Heater",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (V)",
+                "min": "11",
+                "max": "13",
+                "alarm condition": "Pa-PiPwr==1"
+            },
+            {
+                "shorthand": "Pi-PFVoltCam",
+                "name": "Power-FET Volt. Camera",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (V)",
+                "min": "11,5",
+                "max": "13",
+                "alarm condition": "Pa-PiPwr==1"
+            },
+            {
+                "shorthand": "Pi-PFVoltTAG",
+                "name": "Power-FET Volt. TAG-CONTrOL",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (V)",
+                "min": "11,5",
+                "max": "13",
+                "alarm condition": "Pa-PiPwr==1"
+            },
+            {
+                "shorthand": "Pi-PFVoltLED",
+                "name": "Power-FET Volt. DCDC LED",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (V)",
+                "min": "11",
+                "max": "13",
+                "alarm condition": "Pa-PiPwr==1"
+            },
+            {
+                "shorthand": "Pi-PFTeHeat",
+                "name": "Power-FET Temperature Heater",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (°C)",
+                "min": null,
+                "max": "65",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-PFTeCam",
+                "name": "Power-FET Temperature Camera",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (°C)",
+                "min": null,
+                "max": "65",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-PFTeTAG",
+                "name": "Power-FET Temperature TAG-Control",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (°C)",
+                "min": null,
+                "max": "65",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-PFTeLED",
+                "name": "Power-FET Temperature DCDC LED",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (°C)",
+                "min": null,
+                "max": "65",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-TAGFreq",
+                "name": "TAG-Frequency",
+                "group": "(Gruppe PIScO)",
+                "format": "int  (khz)",
+                "min": "65",
+                "max": "75",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-TAGLock",
+                "name": "TAG-Lockstate",
+                "group": "(Gruppe PIScO)",
+                "format": "button red green",
+                "min": "1",
+                "max": null,
+                "alarm condition": "Pi-Record==1"
+            },
+            {
+                "shorthand": "Pi-TAGAmp",
+                "name": "TAG-Amplitude",
+                "group": "(Gruppe PIScO)",
+                "format": "Int xxx",
+                "min": "60",
+                "max": "100",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-NUCPwr",
+                "name": "NUC Power ON",
+                "group": "(Gruppe PIScO)",
+                "format": "button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-JetPwr",
+                "name": "JETSON Power ON",
+                "group": "(Gruppe PIScO)",
+                "format": "button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-FrameCnt",
+                "name": "Frame Count",
+                "group": "(Gruppe PIScO)",
+                "format": "int xxxxxx",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-CamTeIn",
+                "name": "Camera Temperature-Inside",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (°C)",
+                "min": null,
+                "max": "65",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-FPS",
+                "name": "Framerate",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx",
+                "min": null,
+                "max": "13",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-Record",
+                "name": "Record",
+                "group": "(Gruppe PIScO)",
+                "format": "button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-Stream",
+                "name": "Stream",
+                "group": "(Gruppe PIScO)",
+                "format": "button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-Storage",
+                "name": "Storage Used (%)",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx",
+                "min": null,
+                "max": "90",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-FPGAConn",
+                "name": "FPGA Connected",
+                "group": "(Gruppe PIScO)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-DPSOn",
+                "name": "DPS Power ON",
+                "group": "(Gruppe PIScO)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-LEDDCDCUOut",
+                "name": "LED DCDC Output Voltage",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (V)",
+                "min": null,
+                "max": "1.9",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-LEDDCDCIOut",
+                "name": "LED DCDC Output Current",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (A)",
+                "min": null,
+                "max": "0.3",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-TAGSw",
+                "name": "D1 TAG-CONTrOL Switch State",
+                "group": "(Gruppe PIScO)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-LEDSw",
+                "name": "D1 DCDC LED Switch State",
+                "group": "(Gruppe PIScO)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            }
+        ],
+        "commands": [
+            {
+                "shorthand": "Pi-StartRec",
+                "name": "start Recording  ",
+                "group": "(Gruppe PIScO)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-StopRec",
+                "name": "stop Recording ",
+                "group": "(Gruppe PIScO)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-DeckMode",
+                "name": "switch to Deckmode",
+                "group": "(Gruppe PIScO)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-StartDown",
+                "name": "start Download ",
+                "group": "(Gruppe PIScO)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-DeployMode",
+                "name": "switch to Deploymode",
+                "group": "(Gruppe PIScO)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-Stream",
+                "name": "start / stop Stream",
+                "group": "(Gruppe PIScO)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-CamPwr",
+                "name": "Power on/off Camera",
+                "group": "(Gruppe PIScO)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-TAGPwr",
+                "name": "Power on/off TAG cntrl",
+                "group": "(Gruppe PIScO)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-LEDPwr",
+                "name": "Power on/off DCDC LED",
+                "group": "(Gruppe PIScO)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-LED_DCDC_con",
+                "name": "connect / disconnect TAG Controller",
+                "group": "(Gruppe PIScO)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-LED_DCDC",
+                "name": "LED DCDC on/off",
+                "group": "(Gruppe PIScO)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-SetLEDAmp",
+                "name": "set Led Power Amp",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (A)",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-SetLEDV",
+                "name": "set Led Power Volt",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (A)",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-FlashDur",
+                "name": "set Flash duration",
+                "group": "(Gruppe PIScO)",
+                "format": "int xxxx (us)",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-SetFPS",
+                "name": "set Framerate",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx ",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-TrigLen",
+                "name": "set Trigger length",
+                "group": "(Gruppe PIScO)",
+                "format": "int xxxx (us)",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-FlashMode",
+                "name": "set Flash Mode",
+                "group": "(Gruppe PIScO)",
+                "format": "int xx ",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-TAGCon",
+                "name": "connect / disconnect TAG Controller",
+                "group": "(Gruppe PIScO)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-TAGOnOff",
+                "name": "Taglens on off",
+                "group": "(Gruppe PIScO)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-TAGFlashPh",
+                "name": "set TAG Flash 1 Phase",
+                "group": "(Gruppe PIScO)",
+                "format": "int xxxx (us)",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-TAGFlashdur",
+                "name": "set TAG Flash 1 duration",
+                "group": "(Gruppe PIScO)",
+                "format": "int xx (ns)",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-TAGTrigger",
+                "name": "start / stop TAG Trigger mode",
+                "group": "(Gruppe PIScO)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-TAGAmp",
+                "name": "set TAG Amplitude ",
+                "group": "(Gruppe PIScO)",
+                "format": "int xxxx (%)",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-TAGSetFreq",
+                "name": "set TAG Frequency",
+                "group": "(Gruppe PIScO)",
+                "format": "int xxxxx (hz)",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-TAGLock",
+                "name": "TAG Lock On-OFF",
+                "group": "(Gruppe PIScO)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-TAGLockMinFreq",
+                "name": "set TAG Lock min. Frequency (hz)",
+                "group": "(Gruppe PIScO)",
+                "format": "int xxxxx (hz)",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-TAGLockMaxFreq",
+                "name": "set TAG Lock min. Frequency (hz)",
+                "group": "(Gruppe PIScO)",
+                "format": "int xxxxx (hz)",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-TAGLockStep",
+                "name": "set TAG Lock  Frequency Step (hz)",
+                "group": "(Gruppe PIScO)",
+                "format": "int xxxxx (hz)",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-SetPIDmaxTAG",
+                "name": "set PID max Temperatur TAG-Lense ",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (°C)",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-SetPIDmaxBED",
+                "name": "set PID max Temperatur Heat-Bed ",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx (°C)",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-SetPIDkp",
+                "name": "set PID kp ",
+                "group": "(Gruppe PIScO)",
+                "format": "float xxx.xx ",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-SetPIDkp",
+                "name": "set PID ki ",
+                "group": "(Gruppe PIScO)",
+                "format": "float xxx.xx ",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-SetPIDkp",
+                "name": "set PID kd ",
+                "group": "(Gruppe PIScO)",
+                "format": "float xxx.xx ",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-SetGain",
+                "name": "set Gain",
+                "group": "(Gruppe PIScO)",
+                "format": "float xx.xx ",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pi-AcqTime",
+                "name": "set Aquisition Time",
+                "group": "(Gruppe PIScO)",
+                "format": "int xxxx (us)",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            }
+        ]
+    },
+    "Propel-Kameras": {
+        "Propel-Kamera1": {
+            "sensors": [
+                {
+                    "shorthand": "Pk1-JetPwr",
+                    "name": "JETSON Power ON",
+                    "group": "(Gruppe Propel-Kamera1)",
+                    "format": "Bool button red green",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk1-FrameCnt",
+                    "name": "Frame Count",
+                    "group": "(Gruppe Propel-Kamera1)",
+                    "format": "int xxxxxx",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk1-CamTeIn",
+                    "name": "Camera Temperature-Inside",
+                    "group": "(Gruppe Propel-Kamera1)",
+                    "format": "float xx.xx (°C)",
+                    "min": null,
+                    "max": "65",
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk1-FPS",
+                    "name": "Framerate",
+                    "group": "(Gruppe Propel-Kamera1)",
+                    "format": "float xx.xx ",
+                    "min": null,
+                    "max": "20",
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk1-Record",
+                    "name": "Record",
+                    "group": "(Gruppe Propel-Kamera1)",
+                    "format": "Bool button red green",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk1-Stream",
+                    "name": "Stream",
+                    "group": "(Gruppe Propel-Kamera1)",
+                    "format": "Bool button red green",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk1-Storage",
+                    "name": "Storage Used (%)",
+                    "group": "(Gruppe Propel-Kamera1)",
+                    "format": "float xx.xx",
+                    "min": null,
+                    "max": "90",
+                    "alarm condition": null
+                }
+            ],
+            "commands": [
+                {
+                    "shorthand": "Pk1-StartRec",
+                    "name": "start Recording ",
+                    "group": "(Gruppe Propel-Kamera1)",
+                    "format": "Bool button red green",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk1-StopRec",
+                    "name": "stop Recording ",
+                    "group": "(Gruppe Propel-Kamera1)",
+                    "format": "Bool button red green",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk1-DeckMode",
+                    "name": "switch to Deckmode",
+                    "group": "(Gruppe Propel-Kamera1)",
+                    "format": "Bool button red green",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk1-StartDown",
+                    "name": "start Download ",
+                    "group": "(Gruppe Propel-Kamera1)",
+                    "format": "Bool button red green",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk1-DeployMode",
+                    "name": "switch to Deploymode",
+                    "group": "(Gruppe Propel-Kamera1)",
+                    "format": "Bool button red green",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk1-Stream",
+                    "name": "start / stop Stream",
+                    "group": "(Gruppe Propel-Kamera1)",
+                    "format": "Bool button red green",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk1-SetGain",
+                    "name": "set Gain",
+                    "group": "(Gruppe Propel-Kamera1)",
+                    "format": "float xx.xx ",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk1-AcqTime",
+                    "name": "set Aquisition Time",
+                    "group": "(Gruppe Propel-Kamera1)",
+                    "format": "int xxxxx (us)",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk1-CamMode",
+                    "name": "set Cameraeramode  lalala",
+                    "group": "(Gruppe Propel-Kamera1)",
+                    "format": "tba",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                }
+            ]
+        },
+        "Propel-Kamera2": {
+            "sensors": [
+                {
+                    "shorthand": "Pk2-JetPwr",
+                    "name": "JETSON Power ON",
+                    "group": "(Gruppe Propel-Kamera2)",
+                    "format": "Bool button red green",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk2-FrameCnt",
+                    "name": "Frame Count",
+                    "group": "(Gruppe Propel-Kamera2)",
+                    "format": "int xxxxxx",
+                    "min": null,
+                    "max": "65",
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk2-CamTeIn",
+                    "name": "Camera Temperature-Inside",
+                    "group": "(Gruppe Propel-Kamera2)",
+                    "format": "float xx.xx (°C)",
+                    "min": null,
+                    "max": "20",
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk2-FPS",
+                    "name": "Framerate",
+                    "group": "(Gruppe Propel-Kamera2)",
+                    "format": "float xx.xx ",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk2-Record",
+                    "name": "Record",
+                    "group": "(Gruppe Propel-Kamera2)",
+                    "format": "Bool button red green",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk2-Stream",
+                    "name": "Stream",
+                    "group": "(Gruppe Propel-Kamera2)",
+                    "format": "Bool button red green",
+                    "min": null,
+                    "max": "90",
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk2-Storage",
+                    "name": "Storage Used (%)",
+                    "group": "(Gruppe Propel-Kamera2)",
+                    "format": "float xx.xx",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                }
+            ],
+            "commands": [
+                {
+                    "shorthand": "Pk2-StartRec",
+                    "name": "start Recording ",
+                    "group": "(Gruppe Propel-Kamera2)",
+                    "format": "Bool button red green",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk2-StopRec",
+                    "name": "stop Recording ",
+                    "group": "(Gruppe Propel-Kamera2)",
+                    "format": "Bool button red green",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk2-DeckMode",
+                    "name": "switch to Deckmode",
+                    "group": "(Gruppe Propel-Kamera2)",
+                    "format": "Bool button red green",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk2-StartDown",
+                    "name": "start Download ",
+                    "group": "(Gruppe Propel-Kamera2)",
+                    "format": "Bool button red green",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk2-DeployMode",
+                    "name": "switch to Deploymode",
+                    "group": "(Gruppe Propel-Kamera2)",
+                    "format": "Bool button red green",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk2-Stream",
+                    "name": "start / stop Stream",
+                    "group": "(Gruppe Propel-Kamera2)",
+                    "format": "Bool button red green",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk2-SetGain",
+                    "name": "set Gain",
+                    "group": "(Gruppe Propel-Kamera2)",
+                    "format": "float xx.xx ",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk2-AcqTime",
+                    "name": "set Aquisition Time",
+                    "group": "(Gruppe Propel-Kamera2)",
+                    "format": "int xxxxx (us)",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                },
+                {
+                    "shorthand": "Pk2-CamMode",
+                    "name": "set Cameraeramode  lalala",
+                    "group": "(Gruppe Propel-Kamera2)",
+                    "format": "tba",
+                    "min": null,
+                    "max": null,
+                    "alarm condition": null
+                }
+            ]
+        }
+    },
+    "BIOLUM-Kamera": {
+        "sensors": [
+            {
+                "shorthand": "Bl-JetPwr",
+                "name": "JETSON Power ON",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-FrameCnt",
+                "name": "Frame Count",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "int xxxxxx",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-CamTeIn",
+                "name": "Camera Temperature-Inside",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "float xx.xx (°C)",
+                "min": null,
+                "max": "65",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-FPS",
+                "name": "Framerate",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "float xx.xx ",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-Record",
+                "name": "Record",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-Stream",
+                "name": "Stream",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-Storage",
+                "name": "Storage Used (%)",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "float xx.xx",
+                "min": null,
+                "max": "90",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-ExPres",
+                "name": "External Pressure",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "float xxxx.xx (dbar)",
+                "min": null,
+                "max": "6000",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-InPresCam",
+                "name": "Internal Pressure Camera",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "float xxxx.xx (dbar)",
+                "min": null,
+                "max": "15",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-HuCam",
+                "name": "Humidity Camera",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "float xx.xx (%)",
+                "min": null,
+                "max": "75",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-TeCam",
+                "name": "Temperature Camera",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "float xx.xx (°C)",
+                "min": null,
+                "max": "65",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-PFAmpCam",
+                "name": "Power-FET Amp. Camera",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "float xx.xx (A)",
+                "min": null,
+                "max": "4",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-PFVoltCam",
+                "name": "Power-FET Volt. Camera",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "float xx.xx (V)",
+                "min": "11,5",
+                "max": "13",
+                "alarm condition": "Pa-BlPwr==1"
+            },
+            {
+                "shorthand": "Bl-PFTeCam",
+                "name": "Power-FET Temperature Camera",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "float xx.xx (°C)",
+                "min": null,
+                "max": "65",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-PFAmpLIFI",
+                "name": "Power-FET Amp. LIFI",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "float xx.xx (A)",
+                "min": null,
+                "max": "8",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-PFVoltLIFI",
+                "name": "Power-FET Volt. LIFI",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "float xx.xx (V)",
+                "min": "11,5",
+                "max": "13",
+                "alarm condition": "Pa-BlPwr==1"
+            },
+            {
+                "shorthand": "Bl-PFTeLIFI",
+                "name": "Power-FET Temperature LIFI",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "float xx.xx (°C)",
+                "min": null,
+                "max": "65",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-PFAmpGENL",
+                "name": "Power-FET Amp. GENL",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "float xx.xx (A)",
+                "min": null,
+                "max": "4",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-PFVoltGENL",
+                "name": "Power-FET Volt. GENL",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "float xx.xx (V)",
+                "min": "11,5",
+                "max": "13",
+                "alarm condition": "Pa-BlPwr==1"
+            },
+            {
+                "shorthand": "Bl-PFTeGENL",
+                "name": "Power-FET Temperature GENL",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "float xx.xx (°C)",
+                "min": null,
+                "max": "65",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-FrameCnt2",
+                "name": "Frame Count",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "int xxxxxx",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            }
+        ],
+        "commands": [
+            {
+                "shorthand": "Bl-StartRec",
+                "name": "start Recording ",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-StopRec",
+                "name": "stop Recording ",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-DeckMode",
+                "name": "switch to Deckmode",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-StartDown",
+                "name": "start Download ",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-DeployMode",
+                "name": "switch to Deploymode",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-Stream",
+                "name": "start / stop Stream",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-CamPwr",
+                "name": "Power on/off Camera",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-LIFIPwr",
+                "name": "Power on/off LIFI",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-GENLPwr",
+                "name": "Power on/off GENL",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-TrigLen",
+                "name": "set Trigger length",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "int xxxxx (us)",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-TrigDelay",
+                "name": "set Trigger Delay",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "int xxxxx (us)",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-FlashDur",
+                "name": "set Flash duration",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "int xxxxx (us)",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-FlashDelay",
+                "name": "set Flash Delay",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "int xxxxx (us)",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Bl-SetFPS",
+                "name": "set FPS",
+                "group": "(Gruppe BIOLUMl)",
+                "format": "float xx.xx ",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            }
+        ]
+    },
+    "LIFI-Kamera": {
+        "sensors": [
+            {
+                "shorthand": "Li-JetPwr",
+                "name": "JETSON Power ON",
+                "group": "(Gruppe LIFI)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Li-FrameCnt",
+                "name": "Frame Count",
+                "group": "(Gruppe LIFI)",
+                "format": "int xxxxxx",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Li-CamTeIn",
+                "name": "Camera Temperature-Inside",
+                "group": "(Gruppe LIFI)",
+                "format": "float xx.xx (°C)",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Li-FPS",
+                "name": "Framerate",
+                "group": "(Gruppe LIFI)",
+                "format": "float xx.xx ",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Li-Record",
+                "name": "Record",
+                "group": "(Gruppe LIFI)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Li-Stream",
+                "name": "Stream",
+                "group": "(Gruppe LIFI)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Li-Storage",
+                "name": "Storage Used (%)",
+                "group": "(Gruppe LIFI)",
+                "format": "float xx.xx",
+                "min": null,
+                "max": "90",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Li-InPresCam",
+                "name": "Internal Pressure Camera",
+                "group": "(Gruppe LIFI)",
+                "format": "float xxxx.xx (dbar)",
+                "min": null,
+                "max": "15",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Li-HuCam",
+                "name": "Humidity Camera",
+                "group": "(Gruppe LIFI)",
+                "format": "float xx.xx (%)",
+                "min": null,
+                "max": "75",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Li-CamPwr",
+                "name": "Camera ON OFF",
+                "group": "(Gruppe LIFI)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            }
+        ],
+        "commands": [
+            {
+                "shorthand": "Li-CamPwr",
+                "name": "Camera ON OFF",
+                "group": "(Gruppe LIFI)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Li-StartRec",
+                "name": "start Recording ",
+                "group": "(Gruppe LIFI)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Li-StopRec",
+                "name": "stop Recording ",
+                "group": "(Gruppe LIFI)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Li-DeckMode",
+                "name": "switch to Deckmode",
+                "group": "(Gruppe LIFI)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Li-StartDown",
+                "name": "start Download ",
+                "group": "(Gruppe LIFI)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Li-DeployMode",
+                "name": "switch to Deploymode",
+                "group": "(Gruppe LIFI)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Li-Stream",
+                "name": "start / stop Stream",
+                "group": "(Gruppe LIFI)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Li-SetGain",
+                "name": "set Gain",
+                "group": "(Gruppe LIFI)",
+                "format": "float xx.xx ",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Li-AcqTime",
+                "name": "set Aquisition Time",
+                "group": "(Gruppe LIFI)",
+                "format": "int xxxxx (us)",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Li-CamMode",
+                "name": "set Cameraeramode  lalala",
+                "group": "(Gruppe LIFI)",
+                "format": "tba",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            }
+        ]
+    },
+    "PROPEL-AKKU": {
+        "sensors": [
+            {
+                "shorthand": "Pa-ExPres",
+                "name": "External Pressure",
+                "group": "(Gruppe PROPEL-AKKU)",
+                "format": "float xxxx.xx (dbar)",
+                "min": null,
+                "max": "6000",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pa-InPres",
+                "name": "Internal Pressure PROPEL AKKU",
+                "group": "(Gruppe PROPEL-AKKU)",
+                "format": "float xxxx.xx (dbar)",
+                "min": null,
+                "max": "15",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pa-Hu",
+                "name": "Humidity PROPEL AKKU",
+                "group": "(Gruppe PROPEL-AKKU)",
+                "format": "float xx.xx (%)",
+                "min": null,
+                "max": "75",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pa-Te",
+                "name": "Temperature PROPEL AKKU",
+                "group": "(Gruppe PROPEL-AKKU)",
+                "format": "float xx.xx (°C)",
+                "min": null,
+                "max": "65",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pa-PFAmpProp1",
+                "name": "Power-FET Amp. PROPEL1",
+                "group": "(Gruppe PROPEL-AKKU)",
+                "format": "float xx.xx (A)",
+                "min": null,
+                "max": "4",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pa-PFVoltProp1",
+                "name": "Power-FET Volt. PROPEL1",
+                "group": "(Gruppe PROPEL-AKKU)",
+                "format": "float xx.xx (V)",
+                "min": "11,5",
+                "max": "13",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pa-PFTeProp1",
+                "name": "Power-FET Temperature PROPEL1",
+                "group": "(Gruppe PROPEL-AKKU)",
+                "format": "float xx.xx (°C)",
+                "min": null,
+                "max": "65",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pa-PFAmpProp2",
+                "name": "Power-FET Amp. PROPEL2",
+                "group": "(Gruppe PROPEL-AKKU)",
+                "format": "float xx.xx (A)",
+                "min": null,
+                "max": "4",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pa-PFVoltProp2",
+                "name": "Power-FET Volt. PROPEL2",
+                "group": "(Gruppe PROPEL-AKKU)",
+                "format": "float xx.xx (V)",
+                "min": "11,5",
+                "max": "13",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pa-PFTeProp2",
+                "name": "Power-FET Temperature PROPEL2",
+                "group": "(Gruppe PROPEL-AKKU)",
+                "format": "float xx.xx (°C)",
+                "min": null,
+                "max": "65",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pa-PFAmpPi",
+                "name": "Power-FET Amp. PIScO",
+                "group": "(Gruppe PROPEL-AKKU)",
+                "format": "float xx.xx (A)",
+                "min": null,
+                "max": "4",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pa-PFVoltPi",
+                "name": "Power-FET Volt. PIScO",
+                "group": "(Gruppe PROPEL-AKKU)",
+                "format": "float xx.xx (V)",
+                "min": "11,5",
+                "max": "13",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pa-PFTePi",
+                "name": "Power-FET Temperature PIScO",
+                "group": "(Gruppe PROPEL-AKKU)",
+                "format": "float xx.xx (°C)",
+                "min": null,
+                "max": "65",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pa-PFAmpBl",
+                "name": "Power-FET Amp. BIOLUM",
+                "group": "(Gruppe PROPEL-AKKU)",
+                "format": "float xx.xx (A)",
+                "min": null,
+                "max": "4",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pa-PFVoltBl",
+                "name": "Power-FET Volt. BIOLUM",
+                "group": "(Gruppe PROPEL-AKKU)",
+                "format": "float xx.xx (V)",
+                "min": "11,5",
+                "max": "13",
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pa-PFTeBl",
+                "name": "Power-FET Temperature BIOLUM",
+                "group": "(Gruppe PROPEL-AKKU)",
+                "format": "float xx.xx (°C)",
+                "min": null,
+                "max": "65",
+                "alarm condition": null
+            }
+        ],
+        "commands": [
+            {
+                "shorthand": "Pa-DeckMode",
+                "name": "switch to Deckmode",
+                "group": "(Gruppe PROPEL-AKKU)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pa-DeployMode",
+                "name": "switch to Deploymode",
+                "group": "(Gruppe PROPEL-AKKU)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pa-PiPwr",
+                "name": "Power on/off PIScO",
+                "group": "(Gruppe PROPEL-AKKU)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pa-BlPwr",
+                "name": "Power on/off BIOLUM",
+                "group": "(Gruppe PROPEL-AKKU)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pa-Prop1Pwr",
+                "name": "Power on/off PROPEL1",
+                "group": "(Gruppe PROPEL-AKKU)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            },
+            {
+                "shorthand": "Pa-Prop2Pwr",
+                "name": "Power on/off PROPEL2",
+                "group": "(Gruppe PROPEL-AKKU)",
+                "format": "Bool button red green",
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            }
+        ]
+    }
+}

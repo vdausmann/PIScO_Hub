@@ -1,0 +1,22 @@
+{
+    "PIScO": {
+        "sensors": [
+            {
+                "shorthand": "Pi-JetPwr",
+                "name": "JETSON Power ON",
+                "group": "(Gruppe PIScO)",
+				"type": "bool",
+				"format": {
+				  "formatter": "button",
+				  "colors": ["red", "green", "gray"],
+				  "unit": ""
+				},
+                "min": null,
+                "max": null,
+                "alarm condition": null
+            }
+		],
+		"commands": [
+		]
+	}
+}
