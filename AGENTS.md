@@ -308,9 +308,10 @@ rather than failing the tasks queued for it. Pin a task to a machine with
 `"machine": "<name>"` in its task spec, or leave it out and let the
 scheduler pick the least-loaded machine that fits.
 
-Known limitation: cancelling a remote task would leave the remote program
-running, because the Hub only controls its local SSH process. The Hub has
-no cancel operation today; kill such a process manually over SSH.
+`POST /workflows/{id}/cancel` stops a workflow: pending tasks are
+cancelled outright, a running one is signalled on its machine (SIGTERM,
+then SIGKILL after a grace period) — the program on a remote worker
+included, not just the local SSH.
 
 ## Endpoint summary
 

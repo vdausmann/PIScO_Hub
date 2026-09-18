@@ -223,8 +223,10 @@ class TaskManager:
         # sort tasks by priority and workflow creation date
         next_tasks.sort(key=lambda t: (t.priority, t.workflow.created_at))
 
-        # Dispatch the most important task that some machine can take. A
-        # task nobody can host yet simply waits for the next cycle.
+        # Dispatch, in order of importance, every task some machine can
+        # take right now; each dispatch is committed before the next is
+        # placed, so the loads it sees are current. A task nobody can host
+        # yet simply waits for the next cycle.
         for task in next_tasks:
             candidates = self._candidate_machines(task)
             if not candidates:
@@ -232,7 +234,6 @@ class TaskManager:
             machine = min(candidates, key=lambda m: machines.machine_load(m.id))
             task.machine_id = machine.id
             self._dispatch_task(task, machine)
-            return
 
 
     def _resolve_settings(self, tool, task):

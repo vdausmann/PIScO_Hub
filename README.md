@@ -213,7 +213,8 @@ app/backend/
   tools.py                provider registry: toolbox.json / legacy config.json → Tool rows
   settings_engine.py      settings validation (JSON Schema), $from/$param/$format, rendering
   task_manager.py         workflow creation + the scheduler thread
-  task_watcher.py         process reaper, timeouts, task/workflow status
+  task_watcher.py         process reaper, timeouts, cancel, task/workflow status, log retention
+  hooks.py                lifecycle hooks: run a command / POST a webhook when a task or workflow ends
   artifacts.py            output allocation, artifact records, workspace layout
   machines.py             machine registry, ssh, readiness probe thread
   hardware_poller.py      live sensor values from the instrument controllers, sensor log, commands
@@ -242,15 +243,21 @@ Verified end to end on the test cluster: the full profile chain
 split across GPU workers, cross-machine handoff through shared storage,
 timeouts, retry, artifact recording, templates and the protocol.
 
+Also there: cancel (a workflow or a task, the process tree on the worker
+included), timeouts, `failed_ok` tools that let a chain run on, `$from`
+references anywhere in the settings (lists included), several dispatches
+per scheduler cycle, log retention, and lifecycle hooks — a command to run
+or a URL to POST when a task or workflow ends (`hooks.json`, see
+`app/backend/hooks.py`).
+
 Not there yet — see [docs/architecture.md](docs/architecture.md#known-limitations)
 for the full list:
 
-- no cancel operation; a remote task that is stopped by a timeout keeps
-  running on the worker until killed there;
-- `$from` references are resolved inside objects, not inside lists;
 - the web builder has no picker for `$from`/`$param` references (typed as
   JSON); no Tools/Providers/Machines/Tokens pages yet;
 - the Visualization Hub only frames external pages (`modules.json`); the
   Hardware Control page shows live values but its command widgets are not
   wired to the poller's command push yet;
-- lifecycle hooks (run a command on `task.failed` etc.) are not implemented.
+- a task that outlives a Hub restart is tracked by pid only; if its
+  process is gone by the time the watcher looks, the exit code is
+  recorded as `-1`.

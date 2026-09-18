@@ -1,0 +1,6 @@
+[
+  {"on": "task.failed",
+   "run": "logger -t pisco-hub '{tool} failed (exit {exit_code}) in workflow {workflow_name}'"},
+  {"on": "workflow.*",
+   "post": "http://localhost:9000/pisco-hub/events"}
+]
