@@ -2,9 +2,9 @@
     "PIScO": {
         "sensors": [
             {
-                "shorthand": "Pi-JetPwr",
-                "name": "JETSON Power ON",
-                "group": "(Gruppe PIScO)",
+                "shorthand": "test1",
+                "name": "Test 1",
+                "group": "(Gruppe Test)",
 				"type": "bool",
 				"format": {
 				  "formatter": "button",
@@ -14,6 +14,19 @@
                 "min": null,
                 "max": null,
                 "alarm condition": null
+            },
+            {
+                "shorthand": "test2",
+                "name": "Test 2",
+                "group": "(Gruppe Test)",
+				"type": "float",
+				"format": {
+				  "formatter": "xxxx.xx",
+				  "unit": "dbar"
+				},
+                "min": null,
+                "max": "10",
+                "alarm condition": "test1==1"
             }
 		],
 		"commands": [

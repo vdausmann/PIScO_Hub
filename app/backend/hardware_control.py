@@ -18,6 +18,7 @@ class DisplayValue:
     value: Any
     text: str
     valid: bool
+    alarm: bool
     device_name: str
     color: str | None = None
 
@@ -27,6 +28,7 @@ class DisplayValue:
             "value": self.value,
             "text": self.text,
             "valid": self.valid,
+            "alarm": self.alarm,
             "device_name": self.device_name,
             "color": self.color
         }
@@ -44,7 +46,8 @@ class Formatter:
             self.colors = ["red", "green", "gray"]
             print("Warning: No colors specified for button formatter. Defaulting to red, green, and gray.")
 
-    def _format_bool(self, value: bool | None, min_value: bool | None, max_value: bool | None):
+    def _format_bool(self, value: bool | None, min_value: bool | None, max_value: bool |
+                     None, triggered: bool):
 
         if value is None:
             text = "N/A"
@@ -53,6 +56,7 @@ class Formatter:
 
             return DisplayValue(value, text, valid,  self.device, color)
 
+        alarm = False
         valid = True
         if not min_value is None and int(value) < int(min_value):
             valid = False
@@ -60,29 +64,37 @@ class Formatter:
         if not max_value is None and int(value) > int(max_value):
             valid = False
 
+        if not valid and triggered:
+            alarm = True
+
         text = str(value)
         color = self.colors[int(value)]
 
         if self.unit:
             text += " " + self.unit
 
-        return DisplayValue(value, text, valid, self.device, color)
+        return DisplayValue(value, text, valid, alarm, self.device, color)
 
 
 
-    def _format_int(self, value: int | None, min_value: int | None, max_value: int | None):
+    def _format_int(self, value: int | None, min_value: int | None, max_value: int | None,
+                    triggered: bool):
         if value is None:
             text = "N/A"
             valid = True    # No value given, so no alarm should be raised.
             color = None
 
-            return DisplayValue(value, text, valid, self.device, color)
+            return DisplayValue(value, text, valid, False, self.device, color)
 
         valid = True
+        alarm = False
         if not min_value is None and value < min_value:
             valid = False
         if not max_value is None and value > max_value:
             valid = False
+
+        if not valid and triggered:
+            alarm = True
 
         if not self.formatter_str:
             text = str(value)
@@ -93,22 +105,27 @@ class Formatter:
 
         if self.unit:
             text += " " + self.unit
-        return DisplayValue(value, text, valid, self.device)
+        return DisplayValue(value, text, valid, alarm, self.device)
 
 
-    def _format_float(self, value: float | None, min_value: float | None, max_value: float | None):
+    def _format_float(self, value: float | None, min_value: float | None, max_value: float
+                      | None, triggered: bool):
         if value is None:
             text = "N/A"
             valid = True    # No value given, so no alarm should be raised.
             color = None
 
-            return DisplayValue(value, text, valid, self.device, color)
+            return DisplayValue(value, text, valid, False, self.device, color)
 
+        alarm = False
         valid = True
         if not min_value is None and value < min_value:
             valid = False
         if not max_value is None and value > max_value:
             valid = False
+
+        if not valid and triggered:
+            alarm = True
 
         if not self.formatter_str:
             text = str(value)
@@ -136,18 +153,18 @@ class Formatter:
         if self.unit:
             text += " " + self.unit
 
-        return DisplayValue(value, text, valid, self.device, None)
+        return DisplayValue(value, text, valid, alarm, self.device, None)
 
 
-    def format_value(self, value, min_value, max_value, value_type):
+    def format_value(self, value, min_value, max_value, value_type, triggered):
         if value_type == int:
-            return self._format_int(value, min_value, max_value)
+            return self._format_int(value, min_value, max_value, triggered)
         elif value_type == float:
-            return self._format_float(value, min_value, max_value)
+            return self._format_float(value, min_value, max_value, triggered)
         elif value_type == bool:
-            return self._format_bool(value, min_value, max_value)
+            return self._format_bool(value, min_value, max_value, triggered)
         else:
-            return DisplayValue(0, "", True, self.device, None)
+            return DisplayValue(0, "", False, False, self.device, None)
 
 OPERATORS = {
     "==": operator.eq,
@@ -175,6 +192,8 @@ class AlarmCondition:
 
 
     def check(self, sensors):
+        if not self.name in sensors:
+            raise KeyError(f"{self.name} is not in SensorConfig")
         return self.operator(sensors[self.name].currentValue,
                              sensors[self.name].parse_value(self.threshold))
 
@@ -231,12 +250,9 @@ class Sensor:
             self.currentValue = self.value_type(value)
 
 
-    def get_display_value(self):
-        # print(self.currentValue, self.min_value, self.max_value, self.value_type)
-        # print(type(self.currentValue), type(self.min_value), type(self.max_value))
+    def get_display_value(self, triggered: bool):
         return self.formatter.format_value(self.currentValue, self.min_value,
-                                    self.max_value, self.value_type)
-        # return DisplayValue(0, "", True, None)
+                                    self.max_value, self.value_type, triggered)
 
     def parse_value(self, value: str):
         return self.value_type(value)
@@ -272,30 +288,50 @@ def parse_config(path: Path):
 
 
 def parse_sensor_data(filepath: Path):
+    try:
+        # get last row of file:
+        with open(filepath, "r") as f:
+            # Assumes the data is written in the format shorthand1_data1_shorthand2_data2...
+            data = f.readlines()[-1].strip().split("_")
 
-    # get last row of file:
-    with open(filepath, "r") as f:
-        # Assumes the data is written in the format shorthand1_data1_shorthand2_data2...
-        data = f.readlines()[-1].strip().split("_")
+        if len(data) % 2 != 0:
+            raise Exception("Invalid data file")
 
-    if len(data) % 2 != 0:
-        raise Exception("Invalid data file")
+        data_dict = {data[2 * i]: data[2 * i + 1] for i in range(len(data) // 2)}
 
-    data_dict = {data[2 * i]: data[2 * i + 1] for i in range(len(data) // 2)}
-    print(data_dict)
+        sensors = {}
+        for name, sensor in sensor_config.items():
+            try:
+                value = data_dict.get(name, None)
+                # if not value is None:
+                #     value = sensor.parse_value(value)
+                sensor.set_value(value)
 
-    res = {}
-    for name, sensor in sensor_config.items():
-        try:
-            value = data_dict.get(name, None)
-            # if not value is None:
-            #     value = sensor.parse_value(value)
-            sensor.set_value(value)
+                sensors[name] = sensor
+            except Exception as e:
+                print("#" * 60)
+                print(name, value, type(value), e)
 
-            res[name] = sensor.get_display_value().to_dict()
-            # print(name, res[name])
-        except Exception as e:
-            print("#" * 60)
-            print(name, value, type(value), e)
+        res = {}
+        # check all alarm conditions:
+        for name, sensor in sensor_config.items():
+            triggered = False
+            if sensor.alarm_condition is not None:
+                try:
+                    if sensor.alarm_condition.check(sensors):
+                        triggered = True
+                except Exception as exception:
+                    # print(name, exception)
+                    ...
+            else:
+                # Assume that no-alarm condition means that an alarm should be triggered
+                # as soon as the value is invalid
+                triggered = True
 
-    return res
+            res = {name: sensors[name].get_display_value(triggered).to_dict() for name in sensors}
+
+                
+        return res
+    except Exception as e:
+        print("parse_sensor_data:", e)
+        return {}

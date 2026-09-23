@@ -11,6 +11,7 @@ Hardware Control
 
 {% block content %}
 
+
 <div id="hardware-control"
      data-config='{{ config | tojson | e }}'
      data-files-url='{{ url_for("hardware-control.get_files") }}'
@@ -34,7 +35,40 @@ Hardware Control
 		Last update: —
 	</div>
 
+	<div id="alarm-board" class="alarm-board">
+
+		<div class="alarm-board-title">
+			Active alarms
+		</div>
+
+		<div id="alarm-list">
+		</div>
+
+	</div>
+
 	<div id="sensors"></div>
+
+
+	<div id="alarm-overlay" class="alarm-overlay">
+
+		<div class="alarm-popup">
+
+			<div class="alarm-title">
+				⚠ Alarm
+			</div>
+
+			<div id="alarm-message"
+				 class="alarm-message">
+			</div>
+
+			<button id="alarm-acknowledge"
+					class="alarm-acknowledge">
+				Acknowledge
+			</button>
+
+		</div>
+
+	</div>
 
 
 </div>
