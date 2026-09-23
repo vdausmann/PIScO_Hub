@@ -203,7 +203,8 @@ Global settings (defaults seeded on first start; later changes are kept):
 | `MACHINE_PROBE_INTERVAL` | 30 | seconds between machine readiness probes |
 | `TASK_TIMEOUT` | 0 | seconds a task may run when its tool declares no `timeout`; 0 = unlimited |
 | `MAX_WEIGHT` | 10 | capacity given to the `local` machine when it is first created; per-machine capacity lives on the machine afterwards |
-| `LOG_RETENTION_DAYS` | 30 | declared, not enforced: nothing deletes logs yet |
+| `LOG_RETENTION_DAYS` | 30 | task log files older than this are deleted (checked hourly); 0 keeps them all |
+| `HOOKS_FILE` | `hooks.json` | lifecycle hooks — commands to run or URLs to POST when a task or workflow ends; absent means none (see `app/backend/hooks.py`) |
 | `HARDWARE_CONTROL_CONFIG_FILE` | `hardware_control/hardware_control_config.json` | sensor/command definitions for the Hardware Control page |
 
 Fixed locations, relative to the checkout: `logs/<tool>/<task-id>.log|.err`

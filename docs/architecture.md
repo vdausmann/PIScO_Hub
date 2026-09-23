@@ -174,8 +174,10 @@ Every cycle:
    workflow;
 3. sort candidates by `(priority, workflow.created_at)` — lower priority
    number first, then oldest workflow;
-4. for the first candidate that some machine can take, dispatch it and
-   **return**. One dispatch per cycle; the rest wait `POLL_INTERVAL`.
+4. dispatch, in that order, every candidate some machine can take right
+   now. Each dispatch is committed before the next is placed, so the
+   machine loads it consults are current; a candidate nobody can host
+   waits for the next cycle.
 
 A machine can take a task when it is enabled, is the local machine or
 probed `online`, its tags cover the tool's `requires` (or the task is
@@ -235,11 +237,14 @@ Every cycle, for every `Running` task with a pid:
 is checked (`exists`, `size_bytes` for files); a missing declared output
 is logged but does not fail the task — a later `$from` to it will fail
 with a precise message. Then the workflow: if every task is terminal,
-`Finished` when none failed, else `Failed`; otherwise `Failed` if this
-task failed and the tool is not `failed_ok`, else back to `Pending` so the
-scheduler takes the next task. Note that a `failed_ok` failure lets the
-workflow continue but still counts at the end: a workflow with any failed
-task ends `Failed`.
+`Finished` when no task failed except ones whose tool is `failed_ok`,
+else `Failed`; otherwise `Failed` if this task failed and the tool is not
+`failed_ok`, else back to `Pending` so the scheduler takes the next task.
+Every ending fires the lifecycle hooks (`backend/hooks.py`):
+`task.finished|failed|cancelled` for the task, and
+`workflow.finished|failed|cancelled` once the workflow's outcome is
+known — a command run with the event's fields, or a URL POSTed them,
+from `hooks.json` (`HOOKS_FILE`), off the watcher's thread.
 
 ### 5. Afterwards — `backend/workflows.py`
 
@@ -399,30 +404,18 @@ removes rows, not files.
 
 Things the code does not do, so nobody has to rediscover them:
 
-- **No cancel.** There is no operation to stop a running task or
-  workflow. A timeout is the only way the Hub stops a process, and for a
-  remote task it can only kill its local ssh; the program on the worker
-  keeps running until killed there. A worker-side daemon would fix both.
-- **One dispatch per scheduler cycle.** With `POLL_INTERVAL` 5 and ten
-  runnable workflows, the tenth starts about 45 s after the first.
-- **`$from` is not resolved inside lists**, only inside objects.
-- **A workflow with any failed task ends `Failed`**, even when the tool was
-  `failed_ok` and the remaining tasks ran.
 - **Tasks that outlive a Hub restart** are tracked by pid only; if the
   process is gone by the time the watcher looks, the exit code is recorded
-  as `-1`.
-- **`LOG_RETENTION_DAYS` is not enforced**; log files accumulate.
-- **Lifecycle hooks** (`task.failed` → run a command / POST a webhook) are
-  not implemented. The seam is `TaskWatcher.finalize_task`.
+  as `-1`. A worker-side daemon would fix this.
+- **A cancelled or timed-out remote task** is signalled on its worker by
+  the process group the settings file identifies; a program that
+  re-parents itself out of that group survives.
 - **`inputs` declarations** are validated and served but not otherwise
   used; only `outputs` drive allocation and artifacts.
-- **`flask-sock`** is a dependency but unused; status updates are htmx
-  polling.
+- **Hooks are fire-and-forget**: a hook that fails is printed, not
+  retried, and nothing records that it ran.
 - **Web UI gaps**: no pages for tools, providers, machines or tokens (API
   and CLI only); the builder has no picker for `$from`/`$param`; the
   Visualization Hub only frames external pages declared in `modules.json`
-  (`app/backend/modules.py`); Hardware Control renders its config
-  but `parse_sensor_data` returns `{}`.
-- **Stale scripts**: `scripts/add_test_task.py` imports a module that no
-  longer exists; `scripts/create_workflow.py` drives the deprecated
-  creation route with hard-coded credentials. Use the CLI instead.
+  (`app/backend/modules.py`); the Hardware Control page's command widgets
+  are not wired to the poller's command push.

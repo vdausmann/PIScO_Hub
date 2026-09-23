@@ -589,7 +589,8 @@ forwards it. Beyond that:
 | "No such file or directory" naming the settings file | The share is not mounted on the worker, or not at the same path |
 | "No such file or directory" naming the program | The toolbox is missing on the worker, or at a different path |
 | Permission denied writing results | The login account cannot write the share; check the UID discussion above |
-| Task hangs as Running forever | The remote program is waiting on something — the Hub cannot cancel it, so kill it over ssh |
+| Task hangs as Running forever | The remote program is waiting on something — cancel the workflow (`hub workflow cancel <id>`), or give the tool a `timeout` |
 
-A remote task that is killed leaves the remote program running: the Hub
-only controls its local ssh process. There is no cancel operation yet.
+Cancel and timeout signal the program on the worker too (SIGTERM, then
+SIGKILL after a grace period), by the process group its settings file
+identifies; only a program that leaves that group survives.

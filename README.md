@@ -48,6 +48,101 @@ toolbox repos                          PIScO Hub                           inter
 - **Three equal front ends**: everything the web UI does, the REST API and
   the `hub` CLI do too.
 
+## From the instrument to the first task
+
+Two things happen before any processing tool runs: the camera's recording
+and the controller's sensor readings have to be brought together, and the
+Hub has to know what the instrument is doing while it is in the water.
+
+```
+PISCO instrument                                   Hub                                     workers
+────────────────                                   ───                                     ───────
+controller (NUC, Unified Controller)
+  PiscoComputeSensors.txt  ── ssh, once a second ──▶ hardware poller
+    one line: Pi-ExPres_23.45_Pi-TeCom_…              ├─▶ /hardware-control/live   (the page)
+  PiscoComputeCommands.txt ◀── scp, only on change ── │   data/<device>.dat
+                                                      └─▶ DATA_ROOT/sensor_logs/<device>/
+                                                          sensorlog_<device>_<day>.csv ─┐
+camera computer (Jetson, pisco_record.py)                                               │
+  <prefix>_<date>_<time>.h5   ── copied to the share after the cast ────────────────────┼─▶ pisco_prepare_profile
+    /frames /timestamp_ms /frame_counter                                                │     matches frames to rows by time
+  or <prefix>_NNNNNN.raw + .json chunks                                                 │
+                                                                                        ▼
+                                                            profile_dataset.h5 ─▶ segment ─▶ deconvolve ─▶ … ─▶ EcoTaxa
+```
+
+### Live sensor values: the hardware poller
+
+`app/backend/hardware_poller.py`, started with the other background threads.
+For every device in `hardware_control/devices.json` that is enabled and has
+a host, a thread fetches the controller's sensor file once a second over
+one multiplexed SSH connection (`scp -p`, so the file's modification time
+comes along — a moving mtime is the liveness signal, independent of the
+controller's clock). The line is kept as the controller wrote it and goes
+three ways:
+
+- `GET /hardware-control/live` — `{PIScO: {"Pi-ExPres": "23.450", …}, …}`
+  plus `_meta` per device (`received`, `measured`, `stale`, `error`,
+  `clock_offset_s`); what the hardware-control page polls.
+- `data/<device>.dat` — the latest line, which the page's file mode reads.
+- `DATA_ROOT/sensor_logs/<device>/sensorlog_<device>_<YYYYMMDD>.csv` — one
+  row per tick, changed or not, in the controller's own CSV layout
+  (`TS_ISO`, then a column per `Pi-` shorthand) plus `TS_RECEIVED`. This
+  is the sensor log the profile preparer takes. `TS_ISO` is the Hub's
+  receive time until the controller stamps its line; then it is the
+  measurement time and both are kept.
+
+Commands go the other way: `POST /hardware-control/live/commands/<device>`
+with `{"Pi-SetFPS": 10}` merges into the full command line read from the
+device, and copies it over only if something changed — the controller
+notices by the file's mtime. `GET` on the same URL shows the current line.
+Every push is logged next to the sensor log.
+
+`devices.json` has one entry per device of the hardware-control config
+(host, user, `os`, the two file paths, interval, `stale_after_s`). Only
+PIScO is enabled; the other cameras are stubs in the same shape, so
+bringing one up is a config edit. The Hub's `pisco` key must be in the
+controller's `authorized_keys` (on Windows, for an administrator, that is
+`C:\ProgramData\ssh\administrators_authorized_keys`).
+
+Two things the poller cannot fix: the controller, the camera computer and
+the Hub must agree on the time to about a second (NTP), and the controller
+logs once a second while the camera runs at ten frames a second, so the
+pressure of a frame is an interpolation between two readings.
+
+### The profile dataset: `pisco_prepare_profile`
+
+The first task of the `profile` template, from the
+[`pisco_profile_dataset`](https://git.geomar.de/team-optics/plankton/pisco_profile_dataset)
+toolbox. It normalises the camera output **once** into one HDF5 file per
+profile, `profile_dataset.h5`, and every later step reads that — the
+segmenters, the exporter, the viewers. Nothing downstream knows the camera
+format.
+
+Inputs: the recording (`sourcePath` — the camera computer's `.h5`, or the
+directory holding it, or its `.raw` chunk directory; also a PNG directory
+from earlier cruises), the sensor log (`sensorLog` — the Hub's day file
+above, or the controller's own `sensorlog_*.csv`), and the profile's
+identity (`cruise`, `station`, `instrument`, `lat`, `lon`, `date`) from the
+workflow parameters.
+
+What it does: reads each frame's time from the recording, matches it to
+the sensor rows by time (pressure and temperature interpolated between
+the two rows around the frame; every other column — switches, lock
+status, currents — takes the nearest row), names the frame by the
+convention every later step and EcoTaxa's `object_id` rely on
+(`M202_028-02_PISCO2_0009.94dbar-38.58N-027.32W-22.18C_20240725-05400026`),
+decodes the pixels (12-bit packed frames, blosc2-compressed recordings)
+and writes them in time order. The file holds `/frames`, `/names`, a
+`/frame/<column>` per sensor column, the whole sensor log, and the
+profile's metadata as attributes; `docs/format.md` in the toolbox is the
+specification.
+
+Verified on the test cluster: the 46 M202 frames packaged as a Video
+Pipeline `.h5` plus a 1 Hz Hub-style sensor log ran the full template to
+an EcoTaxa project with features (workflow `aba344e7`, 16 933 objects),
+producing the same names as the PNG era.
+
 ## Documentation
 
 | Read this | when you want to |
@@ -118,14 +213,17 @@ app/backend/
   tools.py                provider registry: toolbox.json / legacy config.json → Tool rows
   settings_engine.py      settings validation (JSON Schema), $from/$param/$format, rendering
   task_manager.py         workflow creation + the scheduler thread
-  task_watcher.py         process reaper, timeouts, task/workflow status
+  task_watcher.py         process reaper, timeouts, cancel, task/workflow status, log retention
+  hooks.py                lifecycle hooks: run a command / POST a webhook when a task or workflow ends
   artifacts.py            output allocation, artifact records, workspace layout
   machines.py             machine registry, ssh, readiness probe thread
+  hardware_poller.py      live sensor values from the instrument controllers, sensor log, commands
   templates.py            templates: user-saved and manifest-shipped
   workflows.py            retry / delete / export / protocol
   param_catalog.py        predefined parameters for the template editor
   migrations.py           idempotent SQLite column migrations
 app/routes/               web UI blueprints (processing, workflow_builder, file_explorer, …)
+app/routes/hardware_live.py  /hardware-control/live: the poller's values and command push
 app/routes/api_v1/        REST API + openapi.py
 app/templates, static/    Jinja + htmx front end
 hub_cli/                  the `hub` CLI (pip-installable, see pyproject.toml)
@@ -133,7 +231,7 @@ viewers/                  file-viewer plugins (Flask blueprints): HDF viewer, pr
 tools/                    builtin provider: legacy config.json tools (test fixtures only)
 examples/chain_demo/      a complete toolbox: two chained tools, a timeout demo, a template
 scripts/                  setup_env, create_user, create_api_token, reset_db, hard_reset_db
-hardware_control/         config for the (in-progress) hardware control page
+hardware_control/         hardware control page config; devices.json for the poller
 comparison/               analysis scripts behind docs/pipeline-comparison-spec.md
 docs/                     documentation (see the table above)
 ```
@@ -145,14 +243,21 @@ Verified end to end on the test cluster: the full profile chain
 split across GPU workers, cross-machine handoff through shared storage,
 timeouts, retry, artifact recording, templates and the protocol.
 
+Also there: cancel (a workflow or a task, the process tree on the worker
+included), timeouts, `failed_ok` tools that let a chain run on, `$from`
+references anywhere in the settings (lists included), several dispatches
+per scheduler cycle, log retention, and lifecycle hooks — a command to run
+or a URL to POST when a task or workflow ends (`hooks.json`, see
+`app/backend/hooks.py`).
+
 Not there yet — see [docs/architecture.md](docs/architecture.md#known-limitations)
 for the full list:
 
-- no cancel operation; a remote task that is stopped by a timeout keeps
-  running on the worker until killed there;
-- `$from` references are resolved inside objects, not inside lists;
 - the web builder has no picker for `$from`/`$param` references (typed as
   JSON); no Tools/Providers/Machines/Tokens pages yet;
 - the Visualization Hub only frames external pages (`modules.json`); the
-  Hardware Control page is a placeholder;
-- lifecycle hooks (run a command on `task.failed` etc.) are not implemented.
+  Hardware Control page shows live values but its command widgets are not
+  wired to the poller's command push yet;
+- a task that outlives a Hub restart is tracked by pid only; if its
+  process is gone by the time the watcher looks, the exit code is
+  recorded as `-1`.

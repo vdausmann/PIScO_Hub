@@ -11,6 +11,7 @@ so a reference can be resolved even if the artifact row is missing.
 
 import json
 import os
+import re
 
 from .models import Artifact, GlobalSetting, db
 
@@ -71,24 +72,38 @@ def allocated_output_path(app, task, output):
     return path
 
 
+def _path_parts(key):
+    """'section.items[2].path' -> ['section', 'items', 2, 'path']."""
+    return [int(tok[1:-1]) if tok.startswith("[") else tok
+            for tok in re.findall(r"\[\d+\]|[^.\[\]]+", key)]
+
+
 def get_setting(obj, dotted_key):
-    """Read a value from parsed settings; 'section.key' walks one level."""
+    """Read a value from parsed settings; 'section.key' walks one level,
+    'items[2]' one list position."""
     node = obj
-    for part in dotted_key.split("."):
-        if not isinstance(node, dict) or part not in node:
+    for part in _path_parts(dotted_key):
+        if isinstance(part, int):
+            if not isinstance(node, list) or part >= len(node):
+                return None
+        elif not isinstance(node, dict) or part not in node:
             return None
         node = node[part]
     return node
 
 
 def set_setting(obj, dotted_key, value):
-    """Write a value into parsed settings, creating intermediate dicts."""
-    parts = dotted_key.split(".")
+    """Write a value into parsed settings, creating intermediate dicts;
+    list positions must already exist."""
+    parts = _path_parts(dotted_key)
     node = obj
     for part in parts[:-1]:
-        if not isinstance(node.get(part), dict):
-            node[part] = {}
-        node = node[part]
+        if isinstance(part, int):
+            node = node[part]
+        else:
+            if not isinstance(node.get(part), (dict, list)):
+                node[part] = {}
+            node = node[part]
     node[parts[-1]] = value
 
 

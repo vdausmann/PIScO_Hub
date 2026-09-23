@@ -62,7 +62,6 @@ outputs = { self, nixpkgs, flake-utils, ... }:
 						flask
 						flask-sqlalchemy
 						flask-login
-						flask-sock
 						python-dotenv
 						h5py
 						requests

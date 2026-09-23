@@ -5,8 +5,7 @@ import subprocess
 from threading import Thread
 import time
 from datetime import datetime
-from flask_sock import Sock
-from . import artifacts, machines, process_registry, settings_engine, task_manager
+from . import artifacts, hooks, machines, process_registry, settings_engine, task_manager
 from .models import db, Task, Workflow, GlobalSetting, Tool
 
 # How long a terminated task gets to exit before it is killed outright.
@@ -48,8 +47,38 @@ class TaskWatcher:
                             self.enforce_timeout(task)
                         self.check_task_status(task)
 
+                self.sweep_logs()
                 sleep_time = GlobalSetting.get("POLL_INTERVAL", default=5)
                 time.sleep(sleep_time)
+
+    _last_sweep = 0.0
+
+    def sweep_logs(self):
+        """Delete log files older than LOG_RETENTION_DAYS (0 keeps them
+        all); at most once an hour, since it walks the whole logs tree."""
+        if time.time() - self._last_sweep < 3600:
+            return
+        self._last_sweep = time.time()
+        days = GlobalSetting.get("LOG_RETENTION_DAYS", default=0)
+        try:
+            days = float(days)
+        except (TypeError, ValueError):
+            return
+        if days <= 0:
+            return
+        cutoff = time.time() - days * 86400
+        removed = 0
+        for root, _, files in os.walk(self.app.config["LOGS_DIR"]):
+            for name in files:
+                path = os.path.join(root, name)
+                try:
+                    if os.path.getmtime(path) < cutoff:
+                        os.remove(path)
+                        removed += 1
+                except OSError:
+                    pass
+        if removed:
+            print(f"[*] Removed {removed} log files older than {days:g} days")
 
     def timeout_for(self, task):
         """Seconds this task may run, or 0 for no limit."""
@@ -199,6 +228,8 @@ class TaskWatcher:
             artifacts.finalize_artifacts(task)
 
         print(f"[*] Task {task.id} finished (Exit: {exit_code})")
+        db.session.flush()
+        hooks.fire(self.app, f"task.{task.status.lower()}", hooks.fields_for(task, f"task.{task.status.lower()}"))
         
         # Check if this was the last task in the workflow
         all_tasks = Task.query.filter_by(workflow_id=task.workflow_id).all()
@@ -207,26 +238,34 @@ class TaskWatcher:
         if workflow is None:
             raise KeyError(f"Could not find workflow with id {task.workflow_id} in database.")
 
+        ended = None
         if workflow.status == 'Cancelled':
-            pass  # a cancel decides the outcome; the tasks just wind down
+            # a cancel decides the outcome; the tasks just wind down
+            if all(t.status in ['Finished', 'Failed', 'Cancelled'] for t in all_tasks):
+                ended = 'workflow.cancelled'
         elif all(t.status in ['Finished', 'Failed', 'Cancelled'] for t in all_tasks):
-            # check if a task failed:
-            if any(t.status == 'Failed' for t in all_tasks):
+            # A failure the tool declared harmless (failed_ok) does not
+            # fail the workflow, since the chain ran on past it.
+            if any(t.status == 'Failed' and not (t.tool and t.tool.failed_ok) for t in all_tasks):
                 workflow.status = 'Failed'
                 print(f"[!] Workflow '{workflow.name}' failed.")
             else:
                 workflow.status = 'Finished'
                 print(f"[!] Workflow '{workflow.name}' fully processed.")
+            ended = f"workflow.{workflow.status.lower()}"
         else:
             tool = Tool.query.filter_by(id=task.tool_id).first()
             if not isinstance(tool, Tool):
                 raise KeyError(f"Could not find tool with id {task.tool_id} in database.")
             if task.status == 'Failed' and not tool.failed_ok:
                 workflow.status = 'Failed'
+                ended = 'workflow.failed'
             else:
                 workflow.status = 'Pending'
 
         db.session.commit()
+        if ended:
+            hooks.fire(self.app, ended, hooks.fields_for(task, ended))
 
 
     def serialize_workflows(self):

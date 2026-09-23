@@ -68,11 +68,20 @@ def _is_ref(value):
 
 
 def extract_refs(obj, prefix=""):
-    """Find every reference in a settings object as [(dotted_path, kind, ref)]."""
+    """Find every reference in a settings object as [(path, kind, ref)].
+    Paths are dotted, with list positions as `[i]`: `inputs[2].path`."""
     found = []
     if isinstance(obj, dict):
         for key, value in obj.items():
             path = f"{prefix}.{key}" if prefix else key
+            kind = ref_kind(value)
+            if kind is not None:
+                found.append((path, kind, value[kind]))
+            else:
+                found.extend(extract_refs(value, path))
+    elif isinstance(obj, list):
+        for i, value in enumerate(obj):
+            path = f"{prefix}[{i}]"
             kind = ref_kind(value)
             if kind is not None:
                 found.append((path, kind, value[kind]))
