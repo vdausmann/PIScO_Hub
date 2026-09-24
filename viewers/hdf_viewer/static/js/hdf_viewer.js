@@ -1,4 +1,3 @@
-
 async function loadTree()
 {
     const response =
@@ -73,7 +72,6 @@ function renderNode(parent, node)
 
 async function loadDatasetInfo(datasetPath)
 {
-
     const response =
         await fetch(
             `/viewer/hdf-viewer/dataset_info?` +
@@ -81,17 +79,14 @@ async function loadDatasetInfo(datasetPath)
             `&dataset=${encodeURIComponent(datasetPath)}`
         );
 
-
     const info =
         await response.json();
-
 
     document
     .getElementById(
         "dataset-info"
     )
     .innerHTML = `
-
         <p>
             <b>Group Attributes:</b>
             ${info.group_attrs}
@@ -107,102 +102,151 @@ async function loadDatasetInfo(datasetPath)
             ${info.name}
         </p>
 
-
         <p>
             <b>Shape:</b>
             ${info.shape.join(" × ")}
         </p>
-
 
         <p>
             <b>Type:</b>
             ${info.dtype}
         </p>
 
-
         <p>
             <b>Elements:</b>
             ${info.size}
         </p>
-
     `;
 }
 
-function renderDataset(response)
-{
-    // 1. Manually force the loader to display immediately
+let currentFilePath = "";
+let currentDatasetPath = "";
+let currentFrame = 0;
+let totalFrames = 1;
+
+function renderDataset(response, fileParam, datasetParam) {
+    // Save reference context for pagination requests when passed from tree click
+    if (fileParam) currentFilePath = fileParam;
+    if (datasetParam) currentDatasetPath = datasetParam;
+    
     const loader = document.getElementById('global-loader');
     if (loader) loader.style.display = 'flex';
 
-    // 2. Use setTimeout to yield control to the browser.
-    // This gives the browser a frame to actually render the loader overlay on screen.
     setTimeout(() => {
         const container = document.getElementById("dataset-preview");
         container.innerHTML = "";
 
-        let values = response.data;
-
-        // Convert scalar -> [[scalar]]
-        if (!Array.isArray(values)) {
-            values = [[values]];
-        }
-        // Convert 1D -> [1D]
-        else if (values.length > 0 && !Array.isArray(values[0])) {
-            values = [values];
+        // Check if dataset is 3D based on its shape array
+        const is3D = response.shape && response.shape.length === 3;
+        if (is3D) {
+            totalFrames = response.shape[0];
+            currentFrame = response.current_frame !== undefined ? response.current_frame : 0;
         }
 
-        const flat = values.flat();
+        if (response.image) {
+            // If 3D, build navigation toolbar container
+            if (is3D) {
+                const navBar = document.createElement("div");
+                navBar.className = "frame-nav-bar";
+                
+                const prevBtn = document.createElement("button");
+                prevBtn.className = "nav-btn";
+                prevBtn.textContent = "◀ Prev";
+                prevBtn.disabled = currentFrame <= 0;
+                prevBtn.onclick = () => loadFrame(currentFrame - 1);
 
-        // NOTE: Math.min(...flat) will crash with a Call Stack Max Range Error 
-        // if the dataset has > 100,000 elements. Using a basic loop is safer and faster.
-        let min = Infinity;
-        let max = -Infinity;
-        for (let i = 0; i < flat.length; i++) {
-            if (flat[i] < min) min = flat[i];
-            if (flat[i] > max) max = flat[i];
-        }
+                const indicator = document.createElement("span");
+                indicator.className = "frame-indicator";
+                indicator.textContent = `Frame ${currentFrame + 1} / ${totalFrames}`;
 
-        document.getElementById("min-value").textContent = min;
-        document.getElementById("max-value").textContent = max;
+                const nextBtn = document.createElement("button");
+                nextBtn.className = "nav-btn";
+                nextBtn.textContent = "Next ▶";
+                nextBtn.disabled = currentFrame >= totalFrames - 1;
+                nextBtn.onclick = () => loadFrame(currentFrame + 1);
 
-        // Optimize DOM manipulation by using a Fragment instead of appending one by one
-        const fragment = document.createDocumentFragment();
+                navBar.appendChild(prevBtn);
+                navBar.appendChild(indicator);
+                navBar.appendChild(nextBtn);
+                container.appendChild(navBar);
+            }
 
-        values.forEach(row => {
-            const rowDiv = document.createElement("div");
-            rowDiv.className = "data-row";
+            // Image display element
+            const img = document.createElement("img");
+            img.src = `data:image/png;base64,${response.image}`;
+            img.alt = "Dataset Image Preview";
+            img.className = "dataset-img";
+            container.appendChild(img);
 
-            row.forEach(value => {
-                const cell = document.createElement("div");
-                cell.className = "data-cell";
-                cell.textContent = value;
-                cell.style.backgroundColor = getColor(value, min, max);
-                rowDiv.appendChild(cell);
+            // Clear out min/max fields for images
+            const minElem = document.getElementById("min-value");
+            const maxElem = document.getElementById("max-value");
+            if (minElem) minElem.textContent = "-";
+            if (maxElem) maxElem.textContent = "-";
+        } 
+        else if (response.data) {
+            let values = response.data;
+
+            if (!Array.isArray(values)) {
+                values = [[values]];
+            } else if (values.length > 0 && !Array.isArray(values[0])) {
+                values = [values];
+            }
+
+            const flat = values.flat();
+            let min = Infinity;
+            let max = -Infinity;
+            for (let i = 0; i < flat.length; i++) {
+                if (flat[i] < min) min = flat[i];
+                if (flat[i] > max) max = flat[i];
+            }
+
+            const minElem = document.getElementById("min-value");
+            const maxElem = document.getElementById("max-value");
+            if (minElem) minElem.textContent = min;
+            if (maxElem) maxElem.textContent = max;
+
+            const fragment = document.createDocumentFragment();
+            values.forEach(row => {
+                const rowDiv = document.createElement("div");
+                rowDiv.className = "data-row";
+
+                row.forEach(value => {
+                    const cell = document.createElement("div");
+                    cell.className = "data-cell";
+                    cell.textContent = value;
+                    cell.style.backgroundColor = getColor(value, min, max);
+                    rowDiv.appendChild(cell);
+                });
+                fragment.appendChild(rowDiv);
             });
+            container.appendChild(fragment);
+        }
 
-            fragment.appendChild(rowDiv);
-        });
-
-        // Batch append everything at once to minimize browser reflow layout hits
-        container.appendChild(fragment);
-
-        // 3. Hide the loader now that all heavy elements have been drawn
         if (loader) loader.style.display = 'none';
-    }, 50); // Small 50ms delay gives the UI thread breathing room to draw the loader
+    }, 50);
 }
 
+// Function to fetch a specific frame index via AJAX when clicking buttons
+function loadFrame(frameIndex) {
+    if (frameIndex < 0 || frameIndex >= totalFrames) return;
+    
+    const loader = document.getElementById('global-loader');
+    if (loader) loader.style.display = 'flex';
 
+    fetch(`/viewer/hdf-viewer/dataset_data?file=${encodeURIComponent(currentFilePath)}&dataset=${encodeURIComponent(currentDatasetPath)}&frame=${frameIndex}`)
+        .then(res => res.json())
+        .then(data => {
+            renderDataset(data);
+        })
+        .catch(err => {
+            console.error("Failed to load frame:", err);
+            if (loader) loader.style.display = 'none';
+        });
+}
 
-
-console.log(
-    "HDF viewer loaded"
-);
-
-
-console.log(
-    "File:",
-    filePath
-);
+console.log("HDF viewer loaded");
+console.log("File:", filePath);
 
 function getColor(value, min, max)
 {
@@ -211,11 +255,9 @@ function getColor(value, min, max)
         return "rgb(128,128,128)";
     }
 
-
     let t =
         (value - min) /
         (max - min);
-
 
     t = Math.max(
         0,
@@ -225,7 +267,6 @@ function getColor(value, min, max)
         )
     );
 
-
     const stops = [
         [68, 1, 84],
         [59, 82, 139],
@@ -234,24 +275,19 @@ function getColor(value, min, max)
         [253, 231, 37]
     ];
 
-
     const scaled =
         t * (stops.length - 1);
-
 
     const i =
         Math.floor(
             scaled
         );
 
-
     const f =
         scaled - i;
 
-
     const c1 =
         stops[i];
-
 
     const c2 =
         stops[
@@ -261,13 +297,11 @@ function getColor(value, min, max)
             )
         ];
 
-
     const r =
         Math.floor(
             c1[0] +
             f * (c2[0] - c1[0])
         );
-
 
     const g =
         Math.floor(
@@ -275,13 +309,11 @@ function getColor(value, min, max)
             f * (c2[1] - c1[1])
         );
 
-
     const b =
         Math.floor(
             c1[2] +
             f * (c2[2] - c1[2])
         );
-
 
     return `rgb(${r},${g},${b})`;
 }
@@ -295,15 +327,15 @@ async function loadDatasetData(datasetPath)
             `&dataset=${encodeURIComponent(datasetPath)}`
         );
 
-
     const data =
         await response.json();
 
-
+    // Pass the active file path and dataset path so currentFilePath/currentDatasetPath are populated
     renderDataset(
-        data
+        data,
+        filePath,
+        datasetPath
     );
 }
-
 
 loadTree();

@@ -64,6 +64,7 @@ outputs = { self, nixpkgs, flake-utils, ... }:
 						flask-login
 						python-dotenv
 						h5py
+						hdf5plugin
 						requests
 						gunicorn
 						gevent

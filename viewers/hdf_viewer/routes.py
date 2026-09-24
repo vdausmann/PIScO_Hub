@@ -83,8 +83,9 @@ def dataset_data():
 
     file_path = request.args["file"]
     dataset_path = request.args["dataset"]
+    frame_idx = int(request.args.get('frame', 0))
 
-    info = get_dataset_data(file_path, dataset_path)
+    info = get_dataset_data(file_path, dataset_path, frame_idx)
 
     if info is None:
         return jsonify({"error": "not a dataset"}), 400
