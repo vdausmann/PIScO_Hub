@@ -2,6 +2,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/hardware_control.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/hardware_device_control.css') }}">
 {% endblock %}
 
 {% block title %}Hardware Control{% endblock %}
@@ -10,9 +11,12 @@
 <main id="device-controls"
       data-config='{{ config | tojson | e }}'
       data-devices='{{ devices | tojson | e }}'
+      data-test-mode='{{ test_mode | tojson }}'
+      data-test-commands='{{ test_commands | tojson | e }}'
       data-command-url="{{ url_for('hardware-live.commands', device='DEVICE_NAME') }}">
     <h1>Device controls</h1>
     <p>Current values are read from each controller's command file. Changes are sent back to that file.</p>
+    {% if test_mode %}<p><strong>Test mode:</strong> showing local mock command settings. Sending is disabled.</p>{% endif %}
     <div id="control-message" role="status" aria-live="polite"></div>
     <div id="device-control-list">
         {% for name, device in config.items() %}

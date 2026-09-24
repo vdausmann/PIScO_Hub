@@ -4,6 +4,8 @@
 
     const config = JSON.parse(root.dataset.config || '{}');
     const activeDevices = new Set(JSON.parse(root.dataset.devices || '[]'));
+    const testMode = root.dataset.testMode === 'true';
+    const testCommands = JSON.parse(root.dataset.testCommands || '{}');
     const commandUrl = root.dataset.commandUrl;
     const message = document.getElementById('control-message');
 
@@ -52,16 +54,21 @@
         const sendButton = section.querySelector('[data-send]');
         const commands = (config[device] && config[device].commands) || [];
 
-        if (!activeDevices.has(device)) {
+        if (!testMode && !activeDevices.has(device)) {
             status.textContent = 'Device is not enabled or reachable by the poller.';
             form.hidden = true;
             return;
         }
 
         try {
-            const response = await fetch(endpoint(device), { credentials: 'same-origin' });
-            const state = await response.json();
-            if (!response.ok) throw new Error(state.error || `Request failed (${response.status})`);
+            let state;
+            if (testMode) {
+                state = testCommands[device] || {};
+            } else {
+                const response = await fetch(endpoint(device), { credentials: 'same-origin' });
+                state = await response.json();
+                if (!response.ok) throw new Error(state.error || `Request failed (${response.status})`);
+            }
 
             fields.replaceChildren();
             const known = new Set();
@@ -80,8 +87,8 @@
                 form.hidden = true;
                 return;
             }
-            status.textContent = 'Current settings loaded from the controller.';
-            sendButton.disabled = false;
+            status.textContent = testMode ? 'Mock settings loaded from the local test file.' : 'Current settings loaded from the controller.';
+            sendButton.disabled = testMode;
         } catch (error) {
             status.textContent = `Could not load command settings: ${error.message}`;
             form.hidden = true;
@@ -104,6 +111,7 @@
         loadDevice(section);
         section.querySelector('[data-command-form]').addEventListener('submit', async event => {
             event.preventDefault();
+            if (testMode) return;
             if (!event.currentTarget.reportValidity()) return;
             const status = section.querySelector('[data-status]');
             const button = section.querySelector('[data-send]');
