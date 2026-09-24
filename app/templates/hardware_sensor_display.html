@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+
+{% block head %}
+<link rel="stylesheet"
+      href="/static/css/hardware_control.css">
+{% endblock %}
+
+{% block title %}
+Hardware Control
+{% endblock %}
+
+{% block content %}
+
+
+<div id="hardware-control"
+     data-config='{{ config | tojson | e }}'
+     data-files-url='{{ url_for("hardware-sensor-display.get_files") }}'
+     data-sensor-data-url='{{ url_for("hardware-sensor-display.get_sensor_data") }}'>
+
+	<div class="file-selector">
+
+		<label for="file-select">
+			Sensor file
+		</label>
+
+		<select id="file-select">
+			<option value="">
+				Select a file...
+			</option>
+		</select>
+
+	</div>
+
+	<div id="last-update">
+		Last update: —
+	</div>
+
+	<div id="alarm-board" class="alarm-board">
+
+		<div class="alarm-board-title">
+			Active alarms
+		</div>
+
+		<div id="alarm-list">
+		</div>
+
+	</div>
+
+	<div id="sensors"></div>
+
+
+	<div id="alarm-overlay" class="alarm-overlay">
+
+		<div class="alarm-popup">
+
+			<div class="alarm-title">
+				⚠ Alarm
+			</div>
+
+			<div id="alarm-message"
+				 class="alarm-message">
+			</div>
+
+			<button id="alarm-acknowledge"
+					class="alarm-acknowledge">
+				Acknowledge
+			</button>
+
+		</div>
+
+	</div>
+
+
+</div>
+
+<script src="{{ url_for('static', filename='js/hardware_sensor_display.js') }}"></script>
+
+{% endblock %}

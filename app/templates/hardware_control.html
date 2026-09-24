@@ -1,78 +1,22 @@
 {% extends 'base.html' %}
-
-{% block head %}
-<link rel="stylesheet"
-      href="/static/css/hardware_control.css">
-{% endblock %}
-
-{% block title %}
-Hardware Control
-{% endblock %}
-
 {% block content %}
+<h1>Hardware Control Dashboard</h1>
 
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
 
-<div id="hardware-control"
-     data-config='{{ config | tojson | e }}'
-     data-files-url='{{ url_for("hardware-control.get_files") }}'
-     data-sensor-data-url='{{ url_for("hardware-control.get_sensor_data") }}'>
-
-	<div class="file-selector">
-
-		<label for="file-select">
-			Sensor file
-		</label>
-
-		<select id="file-select">
-			<option value="">
-				Select a file...
-			</option>
-		</select>
-
-	</div>
-
-	<div id="last-update">
-		Last update: —
-	</div>
-
-	<div id="alarm-board" class="alarm-board">
-
-		<div class="alarm-board-title">
-			Active alarms
+	<a href="{{ url_for('hardware-sensor-display.hub') }}" style="text-decoration:none; color:inherit;">
+		<div style="background:var(--card); padding:20px; border-radius:12px; border: 2px solid var(--accent);">
+			<h3>Sensor Display</h3>
+			<p>Display current sensor data.</p>
 		</div>
+	</a>
 
-		<div id="alarm-list">
+	<a href="{{ url_for('hardware-device-control.hub') }}" style="text-decoration:none; color:inherit;">
+		<div style="background:var(--card); padding:20px; border-radius:12px; border: 2px solid var(--accent);">
+			<h3>Control Devices</h3>
+			<p>See current device settings and send new commands.</p>
 		</div>
-
-	</div>
-
-	<div id="sensors"></div>
-
-
-	<div id="alarm-overlay" class="alarm-overlay">
-
-		<div class="alarm-popup">
-
-			<div class="alarm-title">
-				⚠ Alarm
-			</div>
-
-			<div id="alarm-message"
-				 class="alarm-message">
-			</div>
-
-			<button id="alarm-acknowledge"
-					class="alarm-acknowledge">
-				Acknowledge
-			</button>
-
-		</div>
-
-	</div>
-
+	</a>
 
 </div>
-
-<script src="{{ url_for('static', filename='js/hardware_control.js') }}"></script>
-
 {% endblock %}

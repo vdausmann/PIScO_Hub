@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/hardware_control.css') }}">
+{% endblock %}
+
+{% block title %}Hardware Control{% endblock %}
+
+{% block content %}
+<main id="device-controls"
+      data-config='{{ config | tojson | e }}'
+      data-devices='{{ devices | tojson | e }}'
+      data-command-url="{{ url_for('hardware-live.commands', device='DEVICE_NAME') }}">
+    <h1>Device controls</h1>
+    <p>Current values are read from each controller's command file. Changes are sent back to that file.</p>
+    <div id="control-message" role="status" aria-live="polite"></div>
+    <div id="device-control-list">
+        {% for name, device in config.items() %}
+        {% if name != '_comment' and device is mapping %}
+        <section class="device-section" data-device="{{ name }}">
+            <h2 class="device-title">{{ name }}</h2>
+            <p class="device-status" data-status>Loading current settings…</p>
+            <form data-command-form>
+                <div class="sensor-grid" data-command-fields></div>
+                <button type="submit" data-send disabled>Send changes</button>
+            </form>
+        </section>
+        {% endif %}
+        {% else %}
+        <p>No device configuration is available.</p>
+        {% endfor %}
+    </div>
+</main>
+<script src="{{ url_for('static', filename='js/hardware_device_control.js') }}"></script>
+{% endblock %}

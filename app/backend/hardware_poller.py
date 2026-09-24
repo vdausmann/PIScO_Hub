@@ -313,8 +313,10 @@ class HardwarePoller:
 
     def command_state(self, name):
         state = self.devices[name]
-        if state.commands is None:
-            self._read_commands(name)
+        # Treat the controller's command file as the source of truth. The
+        # in-memory copy is only a cache for snapshots and must not hide
+        # changes made directly on the controller.
+        self._read_commands(name)
         with state.lock:
             return dict(state.commands or {})
 
@@ -335,8 +337,9 @@ class HardwarePoller:
         if name not in self.links:
             raise OSError(f"{name} is not an enabled device")
         state, link = self.devices[name], self.links[name]
-        if state.commands is None:
-            self._read_commands(name)
+        # Merge against the latest file contents so external edits to the
+        # controller's command file are preserved.
+        self._read_commands(name)
         with state.lock:
             merged = dict(state.commands)
             for key, value in changes.items():

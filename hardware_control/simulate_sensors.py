@@ -2,6 +2,7 @@ import json
 import random
 from time import sleep
 
+alarm_percentage = 0.01
 
 
 # read config:
@@ -18,10 +19,10 @@ def simulate_int(min_val: int | None, max_val: int | None):
         max_val = 100
     # oout of bounds with small probability:
     r = random.random()
-    if r < 0.05:
+    if r < alarm_percentage:
         interval = max_val - min_val
         return random.randint(min_val - interval // 10, min_val)
-    elif r > 0.95:
+    elif r > 1 - alarm_percentage:
         interval = max_val - min_val
         return random.randint(max_val, max_val + interval // 10)
 
@@ -34,10 +35,10 @@ def simulate_float(min_val: float | None, max_val: float | None):
         max_val = 100
 
     r = random.random()
-    if r < 0.05:
+    if r < alarm_percentage:
         interval = max_val - min_val
         return random.uniform(min_val - interval // 10, min_val)
-    elif r > 0.95:
+    elif r > 1 - alarm_percentage:
         interval = max_val - min_val
         return random.uniform(max_val, max_val + interval // 10)
 

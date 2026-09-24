@@ -8,7 +8,6 @@ import re
 
 
 sensor_config = {}
-command_config = {}
 
 
 
@@ -54,7 +53,7 @@ class Formatter:
             valid = True    # No value given, so no alarm should be raised.
             color = self.colors[-1] if self.colors else "gray"
 
-            return DisplayValue(value, text, valid,  self.device, color)
+            return DisplayValue(value, text, valid, False,  self.device, color)
 
         alarm = False
         valid = True
@@ -329,6 +328,7 @@ def parse_sensor_data(filepath: Path):
                 triggered = True
 
             res = {name: sensors[name].get_display_value(triggered).to_dict() for name in sensors}
+            print(name, sensors[name].get_display_value(triggered).to_dict())
 
                 
         return res
