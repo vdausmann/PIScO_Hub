@@ -14,3 +14,6 @@ data/
 
 # live sensor state written by the hardware poller
 hardware_control/state/
+
+# the LADCP setup of the ship the Hub runs on (edited on the LADCP page)
+hardware_control/ladcp.json

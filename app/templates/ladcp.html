@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ladcp.css') }}">
+{% endblock %}
+
+{% block title %}LADCP{% endblock %}
+
+{% block content %}
+<div id="ladcp" class="ladcp"
+     data-base="{{ url_for('ladcp.page') }}">
+
+	<header class="ladcp-head">
+		<div>
+			<a class="back" href="{{ url_for('hardware-control.hub') }}">← Hardware</a>
+			<h1>LADCP</h1>
+			<div class="sub">
+				<span>Cruise <b id="h-cruise">—</b></span>
+				<span>Next profile <b id="h-next">—</b>
+					<button class="link" id="edit-profile" title="Set the profile counter">edit</button></span>
+				<span id="h-battery" title="Since the last battery swap">—</span>
+			</div>
+		</div>
+		<div class="head-right">
+			<div id="h-state" class="badge">…</div>
+			<div class="clock"><span id="h-clock">--:--:--</span> UTC</div>
+		</div>
+	</header>
+
+	<section class="actions">
+		<button id="btn-detect" title="Break into both ports, read configuration and recorder">Detect</button>
+		<button id="btn-erase" title="Erase the recorders (asks if files are not downloaded)">Erase</button>
+		<span class="start-group">
+			<label>Deck box <input id="deck-voltage" type="text" inputmode="decimal" size="5" placeholder="V"></label>
+			<button id="btn-start" class="primary">Start</button>
+		</span>
+		<button id="btn-stop" title="Break both instruments, no download">Stop only</button>
+		<button id="btn-stop-download" class="primary">Stop &amp; download</button>
+	</section>
+
+	<section id="operation" class="operation hidden">
+		<div class="op-head"><b id="op-title"></b> <span id="op-state" class="badge small"></span></div>
+		<ol id="op-steps" class="steps"></ol>
+		<div id="op-confirm" class="confirm hidden">
+			<p id="op-confirm-text"></p>
+			<button id="op-confirm-yes" class="danger">Yes, go ahead</button>
+			<button id="op-confirm-no">Cancel</button>
+		</div>
+		<ul id="op-messages" class="messages"></ul>
+	</section>
+
+	<section id="instruments" class="instruments"></section>
+
+	<nav class="tabs">
+		<button data-tab="live" class="active">Live</button>
+		<button data-tab="setup">Setup</button>
+		<button data-tab="console">Console</button>
+		<button data-tab="log">Downloads &amp; log</button>
+	</nav>
+
+	<section id="tab-live" class="tab">
+		<div id="readouts" class="readouts"></div>
+		<div class="live-controls">
+			<label>Window
+				<select id="window">
+					<option value="300">5 min</option>
+					<option value="900" selected>15 min</option>
+					<option value="3600">60 min</option>
+				</select></label>
+			<label>Colour range <input id="ei-min" type="number" value="40" size="4"> –
+				<input id="ei-max" type="number" value="160" size="4"> counts</label>
+			<span class="hint">Echo intensity, mean over beams. Up-looker above the line, down-looker below.</span>
+		</div>
+		<div class="plots">
+			<div class="plot-wide">
+				<canvas id="waterfall" height="420"></canvas>
+			</div>
+			<div class="plot-narrow">
+				<canvas id="profile" height="420"></canvas>
+			</div>
+		</div>
+		<div class="plot-full">
+			<canvas id="depthplot" height="200"></canvas>
+		</div>
+		<p class="hint">Depth is integrated from the instrument's vertical speed through the water since the start:
+			a guide for the winch, not a pressure. The bottom distance is the strongest echo standing out in
+			at least three beams.</p>
+	</section>
+
+	<section id="tab-setup" class="tab hidden">
+		<form id="config-form" autocomplete="off"></form>
+		<div class="form-actions">
+			<button id="cfg-save" class="primary">Save</button>
+			<button id="cfg-reload">Discard changes</button>
+			<button id="cfg-preview">Show commands for the next start</button>
+			<span id="cfg-msg"></span>
+		</div>
+		<div id="preview" class="preview hidden"></div>
+		<div class="maint">
+			<h3>Maintenance</h3>
+			<button id="battery-reset">Battery swapped — reset ping counter</button>
+		</div>
+	</section>
+
+	<section id="tab-console" class="tab hidden">
+		<div class="console-bar">
+			<label>Instrument <select id="console-inst"></select></label>
+			<span class="hint">Commands go to the instrument as typed. <code>===</code> sends a break.
+				Not while the ADCPs are deployed.</span>
+		</div>
+		<pre id="transcript" class="transcript"></pre>
+		<form id="console-form" class="console-form">
+			<input id="console-cmd" type="text" placeholder="PS0, RR, TS?, …" autocomplete="off">
+			<button type="submit">Send</button>
+		</form>
+	</section>
+
+	<section id="tab-log" class="tab hidden">
+		<h3>Last download</h3>
+		<div id="last-download">—</div>
+		<h3>Recent operations</h3>
+		<table id="history" class="table"></table>
+		<p class="hint">Files: <code id="data-dir"></code></p>
+	</section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/ladcp.js') }}"></script>
+{% endblock %}

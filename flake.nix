@@ -70,6 +70,8 @@ outputs = { self, nixpkgs, flake-utils, ... }:
 						gevent
 						matplotlib
 						jsonschema
+						pyserial
+						pytest
                     ]))
 					tailwindcss
 					sqlite

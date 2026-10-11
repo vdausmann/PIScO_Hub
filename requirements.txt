@@ -11,9 +11,13 @@ requests
 jsonschema
 gunicorn
 
+# LADCP: talking to the ADCPs over serial / RFC 2217 / TCP
+pyserial
+
 # Used by the bundled file viewers, which load at startup.
 # headless: the GUI build of opencv needs libGL, which servers rarely have.
 h5py
+hdf5plugin
 numpy
 Pillow
 opencv-python-headless
