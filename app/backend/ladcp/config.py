@@ -50,10 +50,13 @@ DEFAULT_CONFIG = {
     "download": {"files": "last", "simultaneous": True, "baud": 115200},
     "instruments": [
         # The ship's serial server (Raspberry Pi, ser2net with RFC 2217):
-        # the LADCP deck box on its ports 3001 and 3002.
-        {"name": "ADCP-A", "port": "rfc2217://10.11.15.10:3001", "baud": 115200,
+        # the LADCP deck box on its ports 3001 and 3002. ser2net answers a
+        # break request differently from what pyserial expects ("remote
+        # rejected value for option 'control'"); ign_set_control makes
+        # pyserial not wait for that answer.
+        {"name": "ADCP-A", "port": "rfc2217://10.11.15.10:3001?ign_set_control", "baud": 115200,
          "break": "hardware", "enabled": True},
-        {"name": "ADCP-B", "port": "rfc2217://10.11.15.10:3002", "baud": 115200,
+        {"name": "ADCP-B", "port": "rfc2217://10.11.15.10:3002?ign_set_control", "baud": 115200,
          "break": "hardware", "enabled": True},
     ],
     "primary": {**ROLE_DEFAULTS, "wait_ensembles_before_sync": 0, "wait_time_before_sync": 6500},

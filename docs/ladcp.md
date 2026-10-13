@@ -68,8 +68,10 @@ describes the ship). The ADCP setup keeps the parameter names of
 
 **Ports** default to the ship's serial server: a Raspberry Pi
 (`10.11.15.10`) running ser2net, which offers the deck box's two lines with
-RFC 2217 on TCP 3001 and 3002 (`rfc2217://10.11.15.10:3001`, break
-`hardware`). A port serves one client at a time, so the Windows VM's
+RFC 2217 on TCP 3001 and 3002 (`rfc2217://10.11.15.10:3001?ign_set_control`,
+break `hardware`). Keep `?ign_set_control`: ser2net answers a break request
+differently from what pyserial expects, and without the option every break
+fails with "remote rejected value for option 'control'". A port serves one client at a time, so the Windows VM's
 hub4com/com0com bridges for those two ports (COM11/COM12) must not be in use
 while the Hub has them. The CTD and the other instruments stay on Windows.
 Other set-ups work too, because ports are pyserial URLs:
