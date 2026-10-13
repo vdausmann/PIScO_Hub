@@ -74,8 +74,9 @@ class WorkHorse:
 
     # ---- the port ----
     def open(self):
-        if self.ser is not None and self.ser.is_open:
+        if self.is_open:
             return
+        self.close()                   # a connection that died under us
         serial = _serial()
         try:
             self.ser = serial.serial_for_url(self.url, baudrate=self.baud, timeout=0.1)
@@ -99,7 +100,21 @@ class WorkHorse:
 
     @property
     def is_open(self):
-        return self.ser is not None and self.ser.is_open
+        """Open *and* still connected. pyserial keeps `is_open` True after
+        an RFC 2217 server (ser2net) drops the connection — on an idle
+        timeout, or when another client takes the port — so for those
+        the reader thread is what tells."""
+        if self.ser is None or not self.ser.is_open:
+            return False
+        thread = getattr(self.ser, "_thread", None)
+        if self.url.startswith("rfc2217://") and (thread is None or not thread.is_alive()):
+            return False
+        return True
+
+    def reopen(self):
+        self.transcript.add("info", "connection lost; reconnecting")
+        self.close()
+        self.open()
 
     def set_baud(self, baud):
         self.ser.baudrate = int(baud)
@@ -149,14 +164,15 @@ class WorkHorse:
                 self.ser.reset_input_buffer()
             except Exception:
                 pass
-            if self.break_mode == "hardware":
-                self.transcript.add("info", f"hardware break (attempt {attempt})")
+            try:
+                self._break()
+            except Exception:
+                # most often a connection the server has dropped: once more on a fresh one
                 try:
-                    self.ser.send_break(0.3)
+                    self.reopen()
+                    self._break()
                 except Exception as e:
                     raise InstrumentError(f"{self.name}: cannot send a break on {self.url}: {e}") from e
-            else:
-                self._write(self.break_mode)
             text, ok = self._read_until(lambda t: PROMPT.search(t) is not None, 6.0, quiet=0.5)
             self._record_rx(text)
             if ok:
@@ -164,6 +180,13 @@ class WorkHorse:
             time.sleep(1.0)
         raise InstrumentError(f"{self.name}: no answer to the break on {self.url} "
                               f"({attempts} attempts, break mode {self.break_mode!r})")
+
+    def _break(self):
+        if self.break_mode == "hardware":
+            self.transcript.add("info", "hardware break")
+            self.ser.send_break(0.3)
+        else:
+            self._write(self.break_mode)
 
     def command(self, cmd, timeout=5.0, check=True):
         """Send one command and return its reply without the echo and the

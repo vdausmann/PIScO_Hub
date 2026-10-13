@@ -435,10 +435,11 @@ class Line:
         self.write(PROMPT)
 
 
-def _handler(instrument, rfc2217):
+def _handler(instrument, rfc2217, clients):
     class Handler(socketserver.BaseRequestHandler):
         def handle(self):
             sock = self.request
+            clients.add(sock)
             sock.settimeout(0.2)
             send_lock = threading.Lock()
 
@@ -474,6 +475,7 @@ def _handler(instrument, rfc2217):
                     if data:
                         line.feed(data)
             finally:
+                clients.discard(sock)
                 line.close()
 
     return Handler
@@ -501,12 +503,13 @@ class Simulator:
         for instrument in self.instruments:
             instrument.baud = baud
         self.protocol = protocol
+        self.clients = set()
         self.servers = []
         self.host, self.ports = host, ports
 
     def start(self):
         for instrument, port in zip(self.instruments, self.ports):
-            server = _Server((self.host, port), _handler(instrument, self.protocol == "rfc2217"))
+            server = _Server((self.host, port), _handler(instrument, self.protocol == "rfc2217", self.clients))
             threading.Thread(target=server.serve_forever, daemon=True,
                              name=f"sim-server-{port}").start()
             self.servers.append(server)
@@ -515,6 +518,15 @@ class Simulator:
     @property
     def urls(self):
         return [f"{self.protocol}://{self.host}:{s.server_address[1]}" for s in self.servers]
+
+    def drop_clients(self):
+        """Cut every client connection, as ser2net does on an idle timeout
+        or when another client takes the port. The instruments carry on."""
+        for sock in list(self.clients):
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
 
     def stop(self):
         for instrument in self.instruments:

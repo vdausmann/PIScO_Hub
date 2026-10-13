@@ -248,21 +248,24 @@ class LadcpService:
             self.operation = op
 
         def run():
+            # The final state is published last, after the ports are
+            # released: "done" on the page means the ports are free again.
+            final, error = "done", None
             try:
                 op.result = fn(op, *args)
-                op.state = "done"
             except NeedsConfirmation as e:
-                op.state = "needs_confirmation"
-                op.error = str(e)
+                final, error = "needs_confirmation", str(e)
             except Exception as e:      # the page shows it; the log keeps the trace
-                op.state = "failed"
-                op.error = str(e)
+                final, error = "failed", str(e)
                 op.say(traceback.format_exc(limit=3), "debug")
                 for s in op.steps:
                     if s["state"] == "running":
                         s["state"] = "failed"
             finally:
+                self._release_ports()
                 op.finished = _now()
+                op.error = error
+                op.state = final
                 with self.lock:
                     self.history.append({"kind": kind, "state": op.state, "error": op.error,
                                          "started": op.started, "finished": op.finished,
@@ -303,11 +306,25 @@ class LadcpService:
                 raise Busy("the ADCPs are deployed; stop them first")
             inst = self.instruments[name]
         with inst.session.lock:
-            if command.strip() in ("===", "BREAK"):
-                return inst.session.wake()
-            if not inst.session.is_open:
+            try:
+                if command.strip() in ("===", "BREAK"):
+                    return inst.session.wake()
                 inst.session.open()
-            return inst.session.command(command, timeout=15.0, check=False)
+                return inst.session.command(command, timeout=15.0, check=False)
+            finally:
+                inst.session.close()       # the instrument stays awake; the port is free again
+
+    def _release_ports(self):
+        """Close the connections an operation used, unless the ADCPs are
+        deployed and their stream is being read. Closing does not touch
+        the instruments, and a serial server (ser2net) serves one client
+        per port: an idle connection would only block others and be
+        dropped by the server sooner or later."""
+        if self.state.get("deployed"):
+            return
+        for inst in self.instruments.values():
+            if inst.reader is None or not inst.reader.is_alive():
+                inst.session.close()
 
     # ---- the steps ----
     def _contact(self, op, inst, label=None):

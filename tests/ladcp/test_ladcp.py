@@ -322,3 +322,47 @@ def test_hardware_break_needed_over_rfc2217(tmp_path):
         wrong.close()
     finally:
         _teardown(service, sim)
+
+
+def test_dropped_connection_is_reopened(tmp_path):
+    """ser2net drops idle connections; pyserial still calls the port open.
+    The next break must reconnect instead of failing with a broken pipe."""
+    service, sim = _make_rig(tmp_path, "rfc2217")
+    try:
+        from app.backend.ladcp.workhorse import WorkHorse
+        wh = WorkHorse("X", sim.urls[0], baud=115200, break_mode="hardware")
+        assert "BREAK Wakeup" in wh.wake()
+        sim.drop_clients()
+        time.sleep(0.5)
+        assert "BREAK Wakeup" in wh.wake()
+        assert "Instrument S/N" in wh.command("PS0")
+        wh.close()
+    finally:
+        _teardown(service, sim)
+
+
+def test_ports_released_between_operations(rig):
+    """Outside a deployment the Hub holds no connection, so other clients
+    can use the ports and an idle timeout cannot leave a dead one behind;
+    while deployed it keeps reading, and survives the server dropping it."""
+    service, sim, _ = rig
+    service.detect()
+    assert _wait(service).state == "done"
+    assert not any(i.session.is_open for i in service.instruments.values())
+    assert not sim.clients
+    service.console("B", "===")
+    assert service.console("B", "RN?").startswith("RN =")
+    assert not service.instruments["B"].session.is_open
+
+    service.start()
+    assert _wait(service).state == "done"
+    assert all(i.session.is_open for i in service.instruments.values())
+    before = service.live()["B"]["count"]
+    sim.drop_clients()                          # mid-cast: the server drops the stream
+    deadline = time.time() + 15
+    while time.time() < deadline and service.live()["B"]["count"] <= before + 2:
+        time.sleep(0.3)
+    assert service.live()["B"]["count"] > before + 2, "the stream did not resume"
+    assert sim.instruments[0].pinging, "reconnecting must not stop the instruments"
+    service.stop(download=True)
+    assert _wait(service).state == "done"
