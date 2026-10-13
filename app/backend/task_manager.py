@@ -96,6 +96,9 @@ def create_new_workflow(workflow_name: str, task_specs: list[dict],
         tools_so_far.append(tool)
 
         settings = spec.get("settings")
+        if template is not None and isinstance(settings, dict):
+            settings = settings_engine.drop_unset_params(
+                settings, template.params_schema, params)
         if settings is None:
             settings_text = settings_engine.default_settings(tool)
         elif isinstance(settings, str):

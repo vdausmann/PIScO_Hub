@@ -162,6 +162,31 @@ def resolve_params(obj, params):
     return walk(obj, "")
 
 
+def drop_unset_params(obj, params_schema, params):
+    """Copy of the settings without the keys whose value is a bare
+    {"$param": name} for a parameter the template declares but the run
+    left out. An optional parameter then means what it says: the tool's
+    own default applies instead of the run being rejected. A parameter
+    the template does not declare is still an error in resolve_params.
+    """
+    if isinstance(params_schema, str):
+        params_schema = json.loads(params_schema) if params_schema else {}
+    declared = set((params_schema or {}).get("properties", {}))
+    unset = declared - set(params or {})
+    if not unset:
+        return obj
+
+    def walk(value):
+        if isinstance(value, dict) and ref_kind(value) is None:
+            return {key: walk(inner) for key, inner in value.items()
+                    if not (ref_kind(inner) == PARAM_KEY and inner[PARAM_KEY] in unset)}
+        if isinstance(value, list):
+            return [walk(inner) for inner in value]
+        return value
+
+    return walk(obj)
+
+
 def format_name(name_format, params):
     """A workflow name from a template's name_format, or None if the
     format needs a parameter that is missing."""

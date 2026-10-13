@@ -134,7 +134,10 @@ stays a number); `{"$format": "…{name}…"}` composes a string from
 several. Like `$from`, they stay in the stored settings and are resolved
 at dispatch — but because the values are known at creation, they are
 validated then, with the real value substituted: an unknown parameter or
-a type mismatch is a `400` naming the setting. `GET /workflows/<id>`
+a type mismatch is a `400` naming the setting. In a run made from a
+template, a setting that is exactly `{"$param": name}` for a parameter the
+template declares but the run leaves out is dropped, so the tool's
+default applies — that is what makes an optional parameter optional. `GET /workflows/<id>`
 returns `params`; the workflow page and the export carry them too.
 
 ### Templates

@@ -100,6 +100,17 @@ Reorder with the arrows. A template may be saved with parameters only;
 2. **Parameters**: a form from the template's schema. Prefilled from the
    draft you are editing, from the run you clicked *Run again…* on, or
    from the *remembered* values of the last run of this template.
+   A directory field has **Depth preview**: it lists the directory (no
+   image is opened) and plots pressure over the profile from the frame
+   names. If the template has `skip_first` and `skip_last` parameters,
+   dragging across the plot keeps that stretch and fills both; *Downcast
+   only* keeps everything up to the deepest frame. The frames are counted
+   in the order `pisco_prepare_profile` reads them, so the counts mean the
+   same thing there (`app/backend/frame_preview.py`). **Fill metadata
+   from names** copies cruise, station, instrument, position and date
+   from the first frame's name into whichever of those fields are empty.
+   An optional parameter left empty drops the settings bound to it, so
+   the tool's own default applies.
 3. **Review**: the workflow name (from the name format), the parameters,
    and every step with its settings as they will be given to the tool —
    parameters substituted, `$from` shown as a pointer to the step it

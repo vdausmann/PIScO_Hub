@@ -10,11 +10,11 @@ here is validated exactly like one submitted through the API.
 import json
 import re
 
-from flask import (Blueprint, abort, flash, redirect, render_template, request,
-                   url_for)
+from flask import (Blueprint, abort, flash, jsonify, redirect, render_template,
+                   request, url_for)
 from flask_login import current_user, login_required
 
-from ..backend import artifacts, settings_engine, templates
+from ..backend import artifacts, frame_preview, settings_engine, templates
 from ..backend.models import (TemplateTask, TemplateWorkflow, TemporaryTask,
                               TemporaryWorkflow, Tool, Workflow, db)
 from ..backend.task_manager import create_new_workflow
@@ -120,6 +120,10 @@ def _preview(draft, task):
     obj = _task_settings_obj(task)
     if not isinstance(obj, dict):
         return obj or ""
+    template = templates.find(draft.template_id) if draft.template_id else None
+    if template is not None:
+        obj = settings_engine.drop_unset_params(obj, template.params_schema,
+                                                _draft_params(draft))
     try:
         obj = settings_engine.resolve_params(obj, _draft_params(draft))
     except ValueError as e:
@@ -241,6 +245,17 @@ def new_from_template(template_id):
                            schema=schema, values=_prefill(template, draft),
                            draft=draft, name=draft.name if draft else "",
                            errors=None)
+
+
+@workflow_bp.route('/frame-preview')
+@login_required
+def preview_frames():
+    """Depth over time of a frame directory, read from the file names,
+    for the parameter form's plot."""
+    try:
+        return jsonify(frame_preview.scan(request.args.get("path", "")))
+    except (frame_preview.PreviewError, OSError) as e:
+        return jsonify({"error": str(e)}), 400
 
 
 @workflow_bp.route('/review/<workflow_id>')

@@ -53,6 +53,20 @@
         "title": "Frame directory",
         "description": "Raw frames of this profile on /mnt/pisco"
       },
+      "skip_first": {
+        "type": "integer",
+        "title": "Skip first frames",
+        "minimum": 0,
+        "default": 0,
+        "description": "Frames dropped at the start of the profile; the frame directory's depth preview sets this by dragging over the part to keep"
+      },
+      "skip_last": {
+        "type": "integer",
+        "title": "Skip last frames",
+        "minimum": 0,
+        "default": 0,
+        "description": "Frames dropped at the end, e.g. the upcast"
+      },
       "sensor_log": {
         "type": "string",
         "format": "file",
@@ -127,6 +141,12 @@
         },
         "date": {
           "$param": "date"
+        },
+        "skipFirstNFrames": {
+          "$param": "skip_first"
+        },
+        "skipLastNFrames": {
+          "$param": "skip_last"
         }
       }
     },

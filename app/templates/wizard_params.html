@@ -57,7 +57,25 @@
             <input type="text" id="p_{{ key }}" name="p_{{ key }}" class="wide mono"
                    value="{{ value if value is not none else '' }}" placeholder="/mnt/pisco/…">
             <button type="button" class="btn btn-sm" data-browse="p_{{ key }}" data-kind="{{ prop['format'] }}">Browse…</button>
+            {% if prop['format'] == 'directory' %}
+            <button type="button" class="btn btn-sm" data-preview="p_{{ key }}"
+                    title="Plot depth over the profile from the frame names">Depth preview</button>
+            {% endif %}
         </div>
+        {% if prop['format'] == 'directory' %}
+        <div class="frame-preview" id="preview-p_{{ key }}" hidden>
+            <canvas></canvas>
+            <div class="fp-bar">
+                <span class="fp-info muted small"></span>
+                {% if 'skip_first' in schema.get('properties', {}) and 'skip_last' in schema.get('properties', {}) %}
+                <button type="button" class="btn btn-sm" data-act="down">Downcast only</button>
+                <button type="button" class="btn btn-sm" data-act="all">Keep all</button>
+                {% endif %}
+                <button type="button" class="btn btn-sm" data-act="meta"
+                        title="Fill empty fields (cruise, station, instrument, position, date) from the first frame's name">Fill metadata from names</button>
+            </div>
+        </div>
+        {% endif %}
         {% else %}
         <input type="text" id="p_{{ key }}" name="p_{{ key }}" class="wide"
                {% if prop.get('pattern') %}pattern="{{ prop['pattern'] }}"{% endif %}
@@ -140,6 +158,161 @@
     document.getElementById("picker-close").onclick = () => picker.hidden = true;
     document.getElementById("picker-up").onclick = () => open(current.replace(/\/?[^/]+\/?$/, ""));
     document.getElementById("picker-use").onclick = () => choose(current);
+})();
+</script>
+<script>
+// Depth preview: the frame names carry pressure, so a directory listing
+// is the profile. Dragging across the plot keeps that stretch of frames
+// by writing skip_first / skip_last, which the template hands to the
+// preparer's skipFirstNFrames / skipLastNFrames.
+(() => {
+    const skipFirst = document.getElementById("p_skip_first");
+    const skipLast = document.getElementById("p_skip_last");
+    const css = getComputedStyle(document.body);
+    const color = (name, fallback) => (css.getPropertyValue(name) || "").trim() || fallback;
+    const fmtTime = t => t == null ? "?" : new Date(t * 1000).toISOString().slice(11, 19);
+
+    function attach(panel, input) {
+        const canvas = panel.querySelector("canvas");
+        const info = panel.querySelector(".fp-info");
+        let data = null, drag = null;
+
+        const range = () => {
+            const n = data.frames;
+            const a = Math.min(Math.max(parseInt(skipFirst?.value) || 0, 0), n - 1);
+            const b = Math.max(Math.min(n - 1 - (parseInt(skipLast?.value) || 0), n - 1), a);
+            return [a, b];
+        };
+        const geometry = () => {
+            const w = canvas.clientWidth, h = canvas.clientHeight;
+            const pad = {l: 52, r: 10, t: 10, b: 24};
+            const ps = data.points.map(p => p[2]).filter(p => p != null);
+            const pmax = ps.length ? Math.max(...ps) : 1, pmin = ps.length ? Math.min(0, ...ps) : 0;
+            const x = i => pad.l + (w - pad.l - pad.r) * (data.frames > 1 ? i / (data.frames - 1) : 0);
+            const y = p => pad.t + (h - pad.t - pad.b) * ((p - pmin) / ((pmax - pmin) || 1));
+            const index = px => Math.round(Math.min(Math.max((px - pad.l) / (w - pad.l - pad.r), 0), 1) * (data.frames - 1));
+            return {w, h, pad, pmin, pmax, x, y, index};
+        };
+        function draw() {
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = canvas.clientWidth * dpr;
+            canvas.height = canvas.clientHeight * dpr;
+            const ctx = canvas.getContext("2d");
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            const g = geometry(), text = color("--text", "#888"), muted = color("--muted", "#888");
+            const [a, b] = drag ? [Math.min(...drag), Math.max(...drag)] : range();
+
+            ctx.fillStyle = "rgba(127,127,127,0.18)";               // what is dropped
+            ctx.fillRect(g.pad.l, g.pad.t, g.x(a) - g.pad.l, g.h - g.pad.t - g.pad.b);
+            ctx.fillRect(g.x(b), g.pad.t, g.w - g.pad.r - g.x(b), g.h - g.pad.t - g.pad.b);
+
+            ctx.strokeStyle = color("--border", "#ccc");
+            ctx.strokeRect(g.pad.l, g.pad.t, g.w - g.pad.l - g.pad.r, g.h - g.pad.t - g.pad.b);
+            ctx.fillStyle = muted;
+            ctx.font = "11px sans-serif";
+            ctx.textAlign = "right";
+            for (let k = 0; k <= 4; k++) {
+                const p = g.pmin + (g.pmax - g.pmin) * k / 4;
+                ctx.fillText(p.toFixed(0), g.pad.l - 6, g.y(p) + 4);
+            }
+            ctx.save(); ctx.translate(12, g.h / 2); ctx.rotate(-Math.PI / 2);
+            ctx.textAlign = "center"; ctx.fillText("dbar", 0, 0); ctx.restore();
+            ctx.textAlign = "left";
+            ctx.fillText(fmtTime(data.points[0][1]), g.pad.l, g.h - 6);
+            ctx.textAlign = "right";
+            ctx.fillText(fmtTime(data.points[data.points.length - 1][1]) + " UTC", g.w - g.pad.r, g.h - 6);
+
+            ctx.strokeStyle = "#3b82f6"; ctx.lineWidth = 1.5; ctx.beginPath();
+            let open = false;
+            for (const [i, , p] of data.points) {
+                if (p == null) { open = false; continue; }
+                open ? ctx.lineTo(g.x(i), g.y(p)) : ctx.moveTo(g.x(i), g.y(p));
+                open = true;
+            }
+            ctx.stroke();
+
+            ctx.strokeStyle = text; ctx.lineWidth = 1;
+            for (const i of [a, b]) { ctx.beginPath(); ctx.moveTo(g.x(i), g.pad.t); ctx.lineTo(g.x(i), g.h - g.pad.b); ctx.stroke(); }
+            describe(a, b);
+        }
+        function near(i) {        // the plotted point closest to frame i
+            let best = data.points[0];
+            for (const p of data.points) if (Math.abs(p[0] - i) < Math.abs(best[0] - i)) best = p;
+            return best;
+        }
+        function describe(a, b) {
+            const pa = near(a), pb = near(b);
+            const kept = b - a + 1;
+            let s = `${data.frames.toLocaleString()} frames`;
+            if (!data.with_pressure) s += " · no pressure in the file names, so only the time axis is meaningful";
+            else s += ` · max ${data.max_pressure.toFixed(1)} dbar`;
+            s += ` · keeping ${kept.toLocaleString()} (frames ${a}–${b}, ${fmtTime(pa[1])}–${fmtTime(pb[1])}`;
+            if (pa[2] != null && pb[2] != null) s += `, ${pa[2].toFixed(1)} → ${pb[2].toFixed(1)} dbar`;
+            info.textContent = s + ")";
+        }
+        function setRange(a, b) {
+            if (!skipFirst || !skipLast) return;
+            skipFirst.value = a;
+            skipLast.value = data.frames - 1 - b;
+            draw();
+        }
+
+        const at = e => geometry().index(e.clientX - canvas.getBoundingClientRect().left);
+        canvas.addEventListener("pointerdown", e => {
+            if (!data || !skipFirst || !skipLast) return;
+            drag = [at(e), at(e)]; canvas.setPointerCapture(e.pointerId); draw();
+        });
+        canvas.addEventListener("pointermove", e => { if (drag) { drag[1] = at(e); draw(); } });
+        canvas.addEventListener("pointerup", () => {
+            if (!drag) return;
+            const [a, b] = [Math.min(...drag), Math.max(...drag)];
+            drag = null;
+            a === b ? draw() : setRange(a, b);
+        });
+        [skipFirst, skipLast].forEach(el => el?.addEventListener("input", () => data && draw()));
+        window.addEventListener("resize", () => data && !panel.hidden && draw());
+
+        panel.querySelectorAll("[data-act]").forEach(btn => btn.addEventListener("click", () => {
+            if (!data) return;
+            if (btn.dataset.act === "all") setRange(0, data.frames - 1);
+            if (btn.dataset.act === "down") setRange(0, data.deepest_frame ?? data.frames - 1);
+            if (btn.dataset.act === "meta") fillMeta(data.metadata);
+        }));
+
+        return async () => {
+            const path = input.value.trim();
+            if (!path) { input.focus(); return; }
+            panel.hidden = false;
+            info.textContent = "Reading the directory…";
+            canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+            data = null;
+            const r = await fetch(`{{ url_for('workflow.preview_frames') }}?path=${encodeURIComponent(path)}`, {showLoader: false});
+            const body = await r.json();
+            if (!r.ok) { info.textContent = body.error || "cannot read the directory"; return; }
+            data = body;
+            draw();
+        };
+    }
+
+    function fillMeta(meta) {
+        if (!meta) { alert("The file names do not follow the PIScO naming convention, so there is nothing to fill in."); return; }
+        const filled = [];
+        for (const [key, value] of Object.entries(meta)) {
+            const el = document.getElementById("p_" + key);
+            if (!el || el.value !== "" || value == null) continue;
+            if (el.tagName === "SELECT" && ![...el.options].some(o => o.value === String(value))) continue;
+            el.value = value;
+            filled.push(key);
+        }
+        alert(filled.length ? "Filled from the first frame's name: " + filled.join(", ")
+                            : "Every field the names could fill already has a value.");
+    }
+
+    document.querySelectorAll("[data-preview]").forEach(btn => {
+        const input = document.getElementById(btn.dataset.preview);
+        const load = attach(document.getElementById("preview-" + btn.dataset.preview), input);
+        btn.addEventListener("click", load);
+    });
 })();
 </script>
 {% endblock %}
