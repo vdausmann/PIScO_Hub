@@ -441,6 +441,13 @@ def build_spec(server_url):
                            {"type": "integer"})])},
             "/system/load": {"get": _op(
                 "Scheduler load vs capacity, broken down per machine")},
+            "/nav/latest": {"get": _op(
+                "The ship's latest NMEA fix and the state of each feed")},
+            "/nav/at": {"get": _op(
+                "Ship position at a time, interpolated from the track log",
+                params=[{"name": "time", "in": "query", "required": True,
+                         "description": "ISO 8601 (UTC unless it says otherwise) or epoch seconds",
+                         "schema": {"type": "string"}}])},
             "/tokens": {
                 "get": _op("List your API tokens (session auth only)"),
                 "post": _op("Mint an API token; plaintext returned once "

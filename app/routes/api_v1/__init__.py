@@ -26,5 +26,5 @@ def _server_error(e):
 
 
 from . import (auth, tools, providers, workflows, tasks, machines, system,  # noqa: E402,F401
-               templates,
+               templates, nav,
                docs)

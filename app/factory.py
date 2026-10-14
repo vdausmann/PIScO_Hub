@@ -94,6 +94,8 @@ def create_app(create_worker=True):
         TaskWatcher(app)
         MachineMonitor(app)
         HardwarePoller(app)
+        from .backend.nav import NavService
+        NavService(app)
         from .backend.ladcp import create_service
         create_service(app)
 

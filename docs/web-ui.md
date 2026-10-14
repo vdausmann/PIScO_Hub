@@ -109,6 +109,9 @@ Reorder with the arrows. A template may be saved with parameters only;
    same thing there (`app/backend/frame_preview.py`). **Fill metadata
    from names** copies cruise, station, instrument, position and date
    from the first frame's name into whichever of those fields are empty.
+   **Fill from ship nav** sets latitude, longitude and date from the
+   ship's track (see Hardware Control) at the time of the first kept
+   frame.
    An optional parameter left empty drops the settings bound to it, so
    the tool's own default applies.
 3. **Review**: the workflow name (from the name format), the parameters,
@@ -227,7 +230,13 @@ rather than a silently empty list.
 
 ## Hardware Control — `/hardware-control/`
 
-In progress. Renders the sensors and commands declared in the file named
+The **Ship navigation** card shows the ship's latest position, heading,
+course and speed from its NMEA feed, refreshed every 2 s, and turns red
+when the last fix is more than 10 s old. Configured by `NAV_SOURCES`
+(Global Settings, then restart the Hub); the track is logged per day under
+`<DATA_ROOT>/nav/`.
+
+The rest is in progress. Renders the sensors and commands declared in the file named
 by `HARDWARE_CONTROL_CONFIG_FILE` (`hardware_control/hardware_control_config.json`:
 the PIScO compute unit's sensors with their ranges, and its command
 shorthands). The sensor-data endpoints exist but the parser returns

@@ -21,6 +21,10 @@ def seed_settings(app):
                               'desc': 'LADCP instruments, cruise and ADCP setup (edited on the LADCP page). Relative paths are taken from the Hub root.'},
         'HOOKS_FILE': {'value': 'hooks.json', 'type': 'str',
                        'desc': 'Lifecycle hooks: commands to run or URLs to POST when a task or workflow ends (see app/backend/hooks.py). Relative to the Hub root; absent means none.'},
+        'NAV_SOURCES': {'value': '', 'type': 'str',
+                        'desc': "The ship's NMEA feed, comma separated: udp:<port> listens (broadcast or unicast), tcp:<host>:<port> reads a TCP server. Empty means off. Read at start; restart the Hub after a change."},
+        'NAV_LOG_DIR': {'value': '', 'type': 'str',
+                        'desc': 'Where the ship track (nav_YYYYMMDD.csv, one row per fix) is written. Empty means <DATA_ROOT>/nav.'},
         'MODULES_FILE': {'value': 'modules.json', 'type': 'str',
                          'desc': 'JSON list of external pages shown in the Visualization Hub. Relative paths are taken from the Hub root.'},
     }

@@ -25,5 +25,44 @@
 		</div>
 	</a>
 
+	<div style="background:var(--card); padding:20px; border-radius:12px; border: 2px solid var(--accent);">
+		<h3>Ship navigation</h3>
+		<div id="nav-live" style="font-variant-numeric: tabular-nums;">Waiting for the NMEA feed…</div>
+		<p style="opacity:.7; font-size:.85em; margin-bottom:0;">From the ship's NMEA broadcast (<code>NAV_SOURCES</code>), logged per day under <code id="nav-dir">…</code>.</p>
+	</div>
+
 </div>
+
+<script>
+// Latest fix from the Hub's NMEA reader, every 2 s.
+(() => {
+    const box = document.getElementById("nav-live");
+    const fmt = (v, d, unit = "") => v == null ? "–" : Number(v).toFixed(d) + unit;
+    const dm = (v, pos, neg) => {
+        if (v == null) return "–";
+        const a = Math.abs(v), deg = Math.floor(a);
+        return `${deg}° ${((a - deg) * 60).toFixed(3)}′ ${v < 0 ? neg : pos}`;
+    };
+    async function tick() {
+        try {
+            const r = await fetch("/api/v1/nav/latest", {showLoader: false});
+            const d = await r.json();
+            if (!r.ok) { box.textContent = d.error || "not available"; return; }
+            document.getElementById("nav-dir").textContent = d.log_dir;
+            const f = d.latest;
+            if (!f) {
+                box.textContent = "No fix yet · " + Object.entries(d.sources)
+                    .map(([s, st]) => `${s}: ${st.state}${st.error ? " (" + st.error + ")" : ""}`).join(", ");
+                return;
+            }
+            const stale = f.age_s > 10 ? ` <strong style="color:var(--bad, #ef4444)">· ${Math.round(f.age_s)} s old</strong>` : "";
+            box.innerHTML = `
+                <div style="font-size:1.25em; font-weight:bold;">${dm(f.lat, "N", "S")} &nbsp; ${dm(f.lon, "E", "W")}</div>
+                <div>heading ${fmt(f.heading, 1, "°")} · course ${fmt(f.course, 1, "°")} · ${fmt(f.speed_kn, 1, " kn")}</div>
+                <div style="opacity:.8;">${f.time_utc.replace("T", " ").slice(0, 19)} UTC · fix quality ${f.quality}, ${f.satellites} satellites${stale}</div>`;
+        } catch (e) { box.textContent = "Hub not reachable"; }
+    }
+    tick(); setInterval(tick, 2000);
+})();
+</script>
 {% endblock %}

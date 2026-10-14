@@ -316,6 +316,16 @@ cancelled outright, a running one is signalled on its machine (SIGTERM,
 then SIGKILL after a grace period) — the program on a remote worker
 included, not just the local SSH.
 
+## Ship navigation
+
+The Hub can listen to the ship's NMEA 0183 feed (`NAV_SOURCES`, e.g.
+`udp:30000` for a broadcast port, `tcp:host:port` for a server; read at
+start) and keeps a track log, one CSV per UTC day under `<DATA_ROOT>/nav/`
+(`NAV_LOG_DIR` to move it), a row per position fix with heading, course
+and speed. `GET /nav/at?time=…` interpolates it between fixes at most
+30 s apart, which is how a profile gets its position: the new-workflow
+form's *Fill from ship nav* asks for the time of the first kept frame.
+
 ## Endpoint summary
 
 | Method | Path | Scope | Purpose |
@@ -347,6 +357,8 @@ included, not just the local SSH.
 | PATCH | `/api/v1/machines/<id>` | full | update, enable or disable |
 | DELETE | `/api/v1/machines/<id>` | full | remove (409 with running tasks) |
 | GET | `/api/v1/system/load` | read | load vs capacity, per machine |
+| GET | `/api/v1/nav/latest` | read | the ship's latest NMEA fix and the state of each feed |
+| GET | `/api/v1/nav/at?time=` | read | ship position at a time (ISO 8601 or epoch), interpolated from the track log |
 | GET/POST | `/api/v1/tokens` | session | list / mint API tokens (`name`, `scope`) |
 | DELETE | `/api/v1/tokens/<id>` | session | revoke one of your tokens |
 | GET | `/api/v1/openapi.json` | — | OpenAPI 3.1 spec |

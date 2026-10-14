@@ -73,6 +73,10 @@
                 {% endif %}
                 <button type="button" class="btn btn-sm" data-act="meta"
                         title="Fill empty fields (cruise, station, instrument, position, date) from the first frame's name">Fill metadata from names</button>
+                {% if 'lat' in schema.get('properties', {}) or 'lon' in schema.get('properties', {}) %}
+                <button type="button" class="btn btn-sm" data-act="nav"
+                        title="Latitude, longitude and date from the ship's track at the first kept frame">Fill from ship nav</button>
+                {% endif %}
             </div>
         </div>
         {% endif %}
@@ -277,6 +281,7 @@
             if (btn.dataset.act === "all") setRange(0, data.frames - 1);
             if (btn.dataset.act === "down") setRange(0, data.deepest_frame ?? data.frames - 1);
             if (btn.dataset.act === "meta") fillMeta(data.metadata);
+            if (btn.dataset.act === "nav") fillNav(near(range()[0])[1]);
         }));
 
         return async () => {
@@ -292,6 +297,18 @@
             data = body;
             draw();
         };
+    }
+
+    // The ship's position when the kept part of the profile starts, from
+    // the Hub's NMEA track log. Overwrites: the button is the request.
+    async function fillNav(time) {
+        if (time == null) { alert("The frame names carry no time, so there is nothing to look up."); return; }
+        const r = await fetch(`/api/v1/nav/at?time=${time}`, {showLoader: false});
+        const body = await r.json();
+        if (!r.ok) { alert(body.error || "No ship position for that time."); return; }
+        const set = (key, value) => { const el = document.getElementById("p_" + key); if (el) el.value = value; };
+        set("lat", body.lat); set("lon", body.lon); set("date", body.date);
+        alert(`Ship position at ${body.time_utc}: ${body.lat}, ${body.lon} (nearest fix ${body.nearest_fix_s} s away).`);
     }
 
     function fillMeta(meta) {
