@@ -33,7 +33,13 @@ _META_RE = re.compile(
     r"^(?P<pressure>[\d.]+)(?P<punit>d?bar)"
     r"(?:-(?P<lat>[\d.]+)(?P<latdir>[NS])-(?P<lon>[\d.]+)(?P<londir>[EW]))?"
     r"(?:-(?P<temp>[\d.]+)C)?$")
-# Names outside the convention: any "<number>dbar" and a date-time stamp.
+# The PISCO3 camera's own names (MSM147): 20261012-04121098_000.953bar_22.18C,
+# time to the centisecond and pressure in bar. Mirrors
+# pisco_profile_dataset.naming.parse_camera_name.
+_CAMERA_RE = re.compile(
+    r"^(?P<date>\d{8})-(?P<clock>\d{6})(?P<centi>\d{2})"
+    r"_(?P<pressure>-?[\d.]+)(?P<punit>d?bar)(?:_(?P<temp>-?[\d.]+)C)?$")
+# Names outside both: any "<number>dbar" and a date-time stamp.
 _LOOSE_PRESSURE = re.compile(r"(\d+(?:\.\d+)?)(d?bar)")
 _LOOSE_TIME = re.compile(r"(\d{8})[-_T](\d{6})(?:\.(\d{1,6}))?(?:[-_](\d{1,10}))?")
 
@@ -71,6 +77,16 @@ def parse_name(stem):
                 meta["lon"] = -lon if mm.group("londir") == "W" else lon
         meta["date"] = datetime.fromtimestamp(time, tz=timezone.utc).strftime("%Y-%m-%d")
         return time, -1, pressure, meta
+
+    c = _CAMERA_RE.match(stem)
+    if c:
+        try:
+            time = datetime.strptime(c.group("date") + c.group("clock"), "%Y%m%d%H%M%S") \
+                .replace(tzinfo=timezone.utc).timestamp() + int(c.group("centi")) * 0.01
+            pressure = float(c.group("pressure")) * (10.0 if c.group("punit") == "bar" else 1.0)
+            return time, -1, pressure, None
+        except ValueError:
+            pass
 
     pressure = None
     p = _LOOSE_PRESSURE.search(stem)
