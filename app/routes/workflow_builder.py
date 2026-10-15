@@ -14,7 +14,7 @@ from flask import (Blueprint, abort, flash, jsonify, make_response, redirect,
                    render_template, request, url_for)
 from flask_login import current_user, login_required
 
-from ..backend import artifacts, frame_preview, settings_engine, templates
+from ..backend import artifacts, coords, frame_preview, settings_engine, templates
 from ..backend.models import (TemplateTask, TemplateWorkflow, TemporaryTask,
                               TemporaryWorkflow, Tool, Workflow, db)
 from ..backend.task_manager import create_new_workflow
@@ -227,7 +227,7 @@ def new_from_template(template_id):
             name, params, _ = templates.instantiate(template, params, name)
         except templates.TemplateError as e:
             errors = str(e).removeprefix("Invalid parameters: ").split("; ")
-            return render_template('wizard_params.html', template=template,
+            return render_template('wizard_params.html', template=template, axes=_axes(schema),
                                    schema=schema, values=params, draft=draft,
                                    name=request.form.get("workflow_name", ""),
                                    errors=errors)
@@ -241,7 +241,7 @@ def new_from_template(template_id):
         db.session.commit()
         return redirect(url_for('workflow.review', workflow_id=draft.id))
 
-    return render_template('wizard_params.html', template=template,
+    return render_template('wizard_params.html', template=template, axes=_axes(schema),
                            schema=schema, values=_prefill(template, draft),
                            draft=draft, name=draft.name if draft else "",
                            errors=None)
@@ -255,6 +255,27 @@ def preview_frames():
     try:
         return jsonify(frame_preview.scan(request.args.get("path", "")))
     except (frame_preview.PreviewError, OSError) as e:
+        return jsonify({"error": str(e)}), 400
+
+
+def _axes(schema):
+    """Which parameters are coordinates ('lat' / 'lon'), for the form."""
+    return {key: coords.axis_of(key, prop)
+            for key, prop in (schema or {}).get("properties", {}).items()
+            if coords.axis_of(key, prop)}
+
+
+@workflow_bp.route('/coordinate')
+@login_required
+def parse_coordinate():
+    """A written coordinate in decimal degrees, as the form converts it
+    while typing; the same parser checks the submitted value."""
+    axis = request.args.get("axis", "lat")
+    if axis not in coords.AXES:
+        return jsonify({"error": "axis must be lat or lon"}), 400
+    try:
+        return jsonify({"value": coords.parse(request.args.get("text", ""), axis)})
+    except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
 

@@ -154,7 +154,9 @@ Instantiate one instead of writing the task list:
 
 The params are checked against the template's `params_schema` (text
 values are coerced to the declared types first, so `"lat": "38.58"` from a
-form or a CLI flag is fine; defaults are filled in), the name comes from
+form or a CLI flag is fine, and a `lat`/`lon` parameter — or one with
+`"format": "latitude"|"longitude"` — also takes written forms such as
+`"37° 20.198' N"`; defaults are filled in), the name comes from
 the template's `name_format` unless `name` is given, and the response is
 the usual workflow detail. `GET /templates/<name>` shows the schema, so an
 agent can work out what to ask for. CLI: `hub templates describe <name>`,

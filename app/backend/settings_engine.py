@@ -17,6 +17,8 @@ import configparser
 import io
 import json
 
+from . import coords
+
 try:
     import jsonschema
 except ImportError:  # pragma: no cover - optional until flake update is applied
@@ -209,14 +211,23 @@ def validate_params(schema_text, params):
         return params, []
     schema = json.loads(schema_text) if isinstance(schema_text, str) else schema_text
     properties = schema.get("properties", {})
+    errors = []
     for key, prop in properties.items():
         if key not in params and "default" in prop:
             params[key] = prop["default"]
         elif key in params and isinstance(params[key], str):
+            axis = coords.axis_of(key, prop)
+            if axis is not None:
+                # 37° 20.198' N and the like, not only decimal degrees
+                try:
+                    params[key] = coords.parse(params[key], axis)
+                except ValueError as e:
+                    errors.append(f"{key}: {e}")
+                    params.pop(key)
+                continue
             params[key] = _coerce(prop.get("type"), params[key])
-    if jsonschema is None:
-        return params, []
-    errors = []
+    if errors or jsonschema is None:
+        return params, errors
     for error in jsonschema.Draft202012Validator(schema).iter_errors(params):
         location = "/".join(str(p) for p in error.absolute_path) or "(root)"
         errors.append(f"{location}: {error.message}")

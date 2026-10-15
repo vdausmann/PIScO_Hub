@@ -112,6 +112,11 @@ Reorder with the arrows. A template may be saved with parameters only;
    same thing there (`app/backend/frame_preview.py`). **Fill metadata
    from names** copies cruise, station, instrument, position and date
    from the first frame's name into whichever of those fields are empty.
+   Latitude and longitude take decimal degrees or the usual written
+   forms — `37° 20.198' N`, `N 37 20.198`, `37°20'11.9"S`, `37:20:11.9`,
+   `021 00.5 W` (or `O`), NMEA `3720.198 N`, with a point or a comma —
+   and turn into decimal degrees when you leave the field
+   (`app/backend/coords.py`; the API accepts the same text).
    Next to latitude and longitude, **Current ship position** fills both
    from the latest NMEA fix, in decimal degrees (south and west
    negative). **Fill from ship nav** sets latitude, longitude and date from the

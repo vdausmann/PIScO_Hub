@@ -45,17 +45,24 @@
         </select>
         {% elif prop.get('type') == 'boolean' %}
         <input type="checkbox" id="p_{{ key }}" name="p_{{ key }}" {% if value %}checked{% endif %}>
-        {% elif prop.get('type') in ('integer', 'number') %}
-        <input type="number" id="p_{{ key }}" name="p_{{ key }}"
-               {% if prop.get('type') == 'number' %}step="any"{% endif %}
-               {% if prop.get('minimum') is defined %}min="{{ prop['minimum'] }}"{% endif %}
-               {% if prop.get('maximum') is defined %}max="{{ prop['maximum'] }}"{% endif %}
+        {% elif axes.get(key) %}
+        {# a coordinate: decimal degrees or 37° 20.198' N and the like, converted on leaving the field #}
+        <input type="text" id="p_{{ key }}" name="p_{{ key }}" data-axis="{{ axes[key] }}"
+               autocomplete="off" spellcheck="false"
+               placeholder="{{ '37.336633 or 37° 20.198′ N' if axes[key] == 'lat' else '-20.999657 or 020° 59.979′ W' }}"
                value="{{ value if value is not none else '' }}">
         {% if key in ('lat', 'lon') %}
         <button type="button" class="btn btn-sm" data-nav-now
                 title="Latitude and longitude from the ship's NMEA feed, now, in decimal degrees">Current ship position</button>
         <span class="muted small" data-nav-note></span>
         {% endif %}
+        <div class="muted small" data-coord-note="p_{{ key }}"></div>
+        {% elif prop.get('type') in ('integer', 'number') %}
+        <input type="number" id="p_{{ key }}" name="p_{{ key }}"
+               {% if prop.get('type') == 'number' %}step="any"{% endif %}
+               {% if prop.get('minimum') is defined %}min="{{ prop['minimum'] }}"{% endif %}
+               {% if prop.get('maximum') is defined %}max="{{ prop['maximum'] }}"{% endif %}
+               value="{{ value if value is not none else '' }}">
         {% elif prop.get('format') == 'date' %}
         <input type="date" id="p_{{ key }}" name="p_{{ key }}" value="{{ value if value is not none else '' }}">
         {% elif prop.get('format') in ('directory', 'file') %}
@@ -141,6 +148,37 @@ document.querySelectorAll("[data-nav-now]").forEach(btn => btn.addEventListener(
              (f.age_s > 10 ? ` — ${Math.round(f.age_s)} s old, the feed may have stopped` : ""));
     } catch (e) { note("Hub not reachable"); }
 }));
+</script>
+
+<script>
+// Coordinates as people write them: while typing, show what the Hub reads;
+// on leaving the field, replace the text with decimal degrees. The server
+// parses the submitted value the same way, so nothing depends on this.
+document.querySelectorAll("input[data-axis]").forEach(input => {
+    const note = document.querySelector(`[data-coord-note="${input.id}"]`);
+    let timer = null, token = 0;
+    async function read() {
+        const text = input.value.trim();
+        if (!text) { note.textContent = ""; note.style.color = ""; return null; }
+        const mine = ++token;
+        const r = await fetch(`{{ url_for('workflow.parse_coordinate') }}?axis=${input.dataset.axis}&text=${encodeURIComponent(text)}`, {showLoader: false});
+        const body = await r.json();
+        if (mine !== token) return null;
+        if (!r.ok) { note.textContent = body.error; note.style.color = "var(--bad, #ef4444)"; return null; }
+        note.style.color = "";
+        note.textContent = String(body.value) === text ? "" : `= ${body.value}° (decimal degrees)`;
+        return body.value;
+    }
+    input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(read, 300); });
+    input.addEventListener("change", async () => {
+        const original = input.value.trim();
+        const value = await read();
+        if (value != null && String(value) !== original) {
+            input.value = value;
+            note.textContent = `read from “${original}”`;
+        }
+    });
+});
 </script>
 
 {# A small directory picker over the File Explorer's listing endpoint. #}
