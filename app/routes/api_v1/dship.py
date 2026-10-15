@@ -45,3 +45,14 @@ def dship_at():
     if found is None:
         return jsonify({"error": f"No {device} operation in DSHIP's action log at that time"}), 404
     return jsonify(found)
+
+
+@api_v1_bp.route("/dship/next-cast", methods=["GET"])
+@api_auth()
+def dship_next_cast():
+    """The CTD cast being set up or under way — what the LADCP profile is
+    numbered by — or the number the next one will get."""
+    service = _service()
+    if service is None:
+        return jsonify({"error": "DSHIP is not configured (DSHIP_URL)"}), 404
+    return jsonify(service.next_cast(refresh=request.args.get("refresh") in ("1", "true")))

@@ -43,10 +43,23 @@ def page():
     return render_template("ladcp.html")
 
 
+def _next_cast(refresh=False):
+    """The CTD cast DSHIP says comes next, or None without DSHIP."""
+    from ..backend import dship
+    service = dship.service(current_app)
+    if service is None or not (service.url or service.ops):
+        return None
+    return service.next_cast(refresh=refresh)
+
+
 @ladcp_bp.route("/status")
 @login_required
 def status():
-    return jsonify(_service().status())
+    out = _service().status()
+    nxt = _next_cast()
+    out["next_cast"] = None if nxt is None else {
+        k: nxt.get(k) for k in ("cast", "operation", "station", "source", "note")}
+    return jsonify(out)
 
 
 @ladcp_bp.route("/live")
@@ -85,8 +98,16 @@ def start():
         voltage = float(str(voltage).replace(",", "."))
     profile = body.get("profile")
     profile = int(profile) if profile not in (None, "") else None
+    cast = None
+    if profile is None:
+        # The LADCP profile is the CTD cast: take DSHIP's number, read
+        # fresh, unless the page asked for a number of its own.
+        nxt = _next_cast(refresh=True)
+        if nxt is not None:
+            profile = nxt["cast"]
+            cast = {k: nxt.get(k) for k in ("cast", "operation", "station", "source")}
     return jsonify(_service().start(force=bool(body.get("force")), deck_voltage=voltage,
-                                    profile=profile).as_dict()), 202
+                                    profile=profile, cast=cast).as_dict()), 202
 
 
 @ladcp_bp.route("/stop", methods=["POST"])

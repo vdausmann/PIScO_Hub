@@ -118,3 +118,16 @@ deployment:
 - the bottom-echo threshold on real echo intensities;
 - the transmit-voltage scale (0.592157 V/count was commented out in the old
   tool, which logged raw counts; the summaries keep both values).
+
+
+## Profile numbers are CTD casts
+
+With DSHIP connected (`DSHIP_URL`), the profile number is the CTD cast
+number: the page's *Next profile* shows the CTD operation DSHIP has open
+(`= CTD cast · MSM147_5-1`), or the number the next one will get when
+DSHIP has none yet (*predicted*). **Start** reads DSHIP once more and
+programs that number, unless a number is given explicitly; the DSHIP
+operation is kept with the deployment and as `<profile>/dship.json`.
+Every CTD operation counts, aborted ones and ones that never went in too,
+so numbers can be skipped. Without DSHIP the profile counter applies as
+before.

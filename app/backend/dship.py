@@ -16,8 +16,10 @@ From the log it derives what a profile needs: the operation a time
 falls into (PIScO rides on the CTD, and starts recording a few minutes
 before the CTD goes in), its station written as 002-09, and the CTD cast
 number — the operation's place among the expedition's CTD operations in
-time order, every one that went into the water counted, aborted ones
-included.
+the order DSHIP created them, every one counted, aborted ones and ones
+that never went in included. A CTD operation created for the coming cast
+has its number before it goes in, which is what the LADCP setup on deck
+uses (`next_cast`).
 
 Settings: DSHIP_URL (e.g. http://192.168.100.10:8080; empty = off),
 DSHIP_USER / DSHIP_PASSWORD (anonymous / anonymous), DSHIP_CAST_DEVICE
@@ -105,6 +107,16 @@ class Client:
     def expedition(self):
         return self.post("/dship-actionlog/rest/getCurrentExpedition", sessionId=self.session)
 
+    def device_operations(self, expedition_id):
+        """Every device operation, with or without events yet."""
+        ops = self.post("/dship-actionlog/rest/getDeviceOperationsForExpedition",
+                        sessionId=self.session, expeditionId=str(expedition_id), activeOnly="false")
+        if not isinstance(ops, list):
+            raise DshipError("unexpected answer to getDeviceOperationsForExpedition")
+        return [{"id": o.get("id"), "name": o.get("name"), "device": o.get("deviceShortName"),
+                 "device_name": o.get("deviceName"), "closed": bool(o.get("deactivated")),
+                 "comment": o.get("comment") or ""} for o in ops]
+
     def action_log(self, expedition_id):
         """Every event of the expedition, oldest first."""
         keys = list(COLUMNS)
@@ -138,17 +150,21 @@ class Client:
         return events
 
 
-def operations(events, cast_device="CTD"):
-    """Device operations from the events, oldest first, with station,
-    in-water / max-depth / on-deck events and, for the cast device, the
-    cast number."""
+def operations(events, cast_device="CTD", device_ops=None):
+    """Device operations, oldest first, with station, in-water / max-depth
+    / on-deck events and, for the cast device, the cast number. From
+    DSHIP's list of operations when given (it also holds operations
+    without events), else from the events alone."""
     ops = {}
+    for d in device_ops or []:
+        ops[d["name"]] = {"name": d["name"], "device": d["device"], "device_name": d["device_name"],
+                          "id": d["id"], "closed": d["closed"], "events": []}
     for e in events:
         if not e["operation"]:
             continue
         op = ops.setdefault(e["operation"], {
             "name": e["operation"], "device": e["device"], "device_name": e["device_name"],
-            "events": []})
+            "id": e.get("operation_id"), "closed": None, "events": []})
         op["events"].append(e)
     result = []
     for op in ops.values():
@@ -161,19 +177,23 @@ def operations(events, cast_device="CTD"):
         op["in_water"] = first.get("in the water")
         op["max_depth"] = first.get("max depth/on ground")
         op["on_deck"] = first.get("on deck")
-        op["start"] = (op["in_water"] or op["events"][0])["time"]
-        op["end"] = (op["on_deck"] or op["events"][-1])["time"] if op["on_deck"] else None
+        started = op["in_water"] or (op["events"][0] if op["events"] else None)
+        op["start"] = started["time"] if started else None
+        op["end"] = op["on_deck"]["time"] if op["on_deck"] else None
         op["aborted"] = any("problem" in (e["comment"] or "").lower()
                             or "problem" in (e["action"] or "").lower() for e in op["events"]) \
             or (op["on_deck"] is not None and op["max_depth"] is None)
         op["cast"] = None
         result.append(op)
-    result.sort(key=lambda o: o["start"] or 0)
+    # DSHIP's operation ids grow as operations are created: that is the
+    # cast order, also for operations that never got an event.
+    result.sort(key=lambda o: (o["id"] is None, o["id"] or 0, o["start"] or 0))
     n = 0
     for op in result:
-        if op["device"] == cast_device and op["in_water"] is not None:
+        if op["device"] == cast_device and (device_ops is not None or op["in_water"] is not None):
             n += 1
             op["cast"] = n
+    result.sort(key=lambda o: (o["start"] is None, o["start"] or 0, o["id"] or 0))
     return result
 
 
@@ -228,6 +248,7 @@ class DshipService:
         self.lock = threading.Lock()
         self.expedition = None
         self.events = []
+        self.device_ops = None
         self.ops = []
         self.fetched_at = None
         self.error = None
@@ -251,9 +272,11 @@ class DshipService:
             if not isinstance(expedition, dict) or "id" not in expedition:
                 raise DshipError("DSHIP has no current expedition")
             events = client.action_log(expedition["id"])
-        ops = operations(events, self.device)
+            device_ops = client.device_operations(expedition["id"])
+        ops = operations(events, self.device, device_ops)
         with self.lock:
             self.expedition, self.events, self.ops = expedition, events, ops
+            self.device_ops = device_ops
             self.fetched_at, self.error = time.time(), None
         self._save_snapshot()
 
@@ -267,7 +290,7 @@ class DshipService:
             path = self._snapshot_path()
             with open(path + ".tmp", "w") as f:
                 json.dump({"expedition": self.expedition, "fetched_at": self.fetched_at,
-                           "events": self.events}, f)
+                           "events": self.events, "device_operations": self.device_ops}, f)
             os.replace(path + ".tmp", path)
         except OSError as e:
             self.error = f"cannot write the snapshot: {e}"
@@ -288,7 +311,8 @@ class DshipService:
             return
         self.expedition, self.events = data.get("expedition"), data.get("events") or []
         self.fetched_at = data.get("fetched_at")
-        self.ops = operations(self.events, self.device)
+        self.device_ops = data.get("device_operations")
+        self.ops = operations(self.events, self.device, self.device_ops)
 
     # ---- looking up ----
     def status(self):
@@ -313,6 +337,27 @@ class DshipService:
             ops = list(self.ops)
         op = operation_at(ops, when_s * 1000, device or self.device)
         return summary(op) if op else None
+
+
+    def next_cast(self, refresh=False):
+        """The cast-device operation being set up or under way — the first
+        not yet back on deck and not closed — or, when DSHIP has none yet,
+        the number the next one will get. For numbering a deployment on
+        deck before the cast starts."""
+        if refresh and self.url:
+            try:
+                self.refresh()
+            except DshipError as e:
+                self.error = str(e)
+        with self.lock:
+            ops = [o for o in self.ops if o["device"] == self.device and o["cast"] is not None]
+        open_ops = [o for o in ops if o["on_deck"] is None and not o.get("closed")]
+        if open_ops:
+            op = min(open_ops, key=lambda o: o["cast"])
+            return dict(summary(op), source="dship")
+        last = max((o["cast"] for o in ops), default=0)
+        return {"cast": last + 1, "operation": None, "station": None, "source": "predicted",
+                "note": f"no open {self.device} operation in DSHIP yet; the next one will be cast {last + 1}"}
 
 
 def service(app):

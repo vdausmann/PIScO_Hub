@@ -446,6 +446,9 @@ def build_spec(server_url):
                 "Device operations from DSHIP's action log, with station, cast number and events",
                 params=[{"name": "device", "in": "query", "required": False,
                          "schema": {"type": "string"}}])},
+            "/dship/next-cast": {"get": _op(
+                "The CTD cast being set up or under way, or the number the next one will get",
+                params=[{"name": "refresh", "in": "query", "required": False, "schema": {"type": "string"}}])},
             "/dship/at": {"get": _op(
                 "The cast-device operation a time belongs to (recording may start up to 45 min before it goes in)",
                 params=[{"name": "time", "in": "query", "required": True, "schema": {"type": "string"}},

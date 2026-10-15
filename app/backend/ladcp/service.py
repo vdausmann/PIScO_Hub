@@ -285,11 +285,13 @@ class LadcpService:
                 [f"Erase {i.name}" for i in self._enabled()]
         return self._launch("erase", steps, self._erase, force)
 
-    def start(self, force=False, deck_voltage=None, profile=None):
+    def start(self, force=False, deck_voltage=None, profile=None, cast=None):
+        """`cast`: the DSHIP CTD operation the profile number came from
+        (dship.next_cast), recorded with the deployment."""
         steps = ["Check clock"] + [f"Contact {i.name}" for i in self._enabled()] + \
                 ["Assign roles", "Program secondary", "Program primary", "Start secondary",
                  "Start primary", "Live data"]
-        return self._launch("start", steps, self._start, force, deck_voltage, profile)
+        return self._launch("start", steps, self._start, force, deck_voltage, profile, cast)
 
     def stop(self, download=True):
         steps = ["Stop primary", "Stop secondary", "Assign roles"]
@@ -469,7 +471,7 @@ class LadcpService:
         op.step(label, "done", f"{inst.name} as {inst.role}, {cfgmod.deployment_name(profile, orientation)}")
         return readback
 
-    def _start(self, op, force, deck_voltage, profile):
+    def _start(self, op, force, deck_voltage, profile, cast=None):
         if self.state.get("last_action") == "start" and not force:
             raise NeedsConfirmation("the last action was a START — the ADCPs may be running "
                                     "already. Start them again?")
@@ -494,12 +496,22 @@ class LadcpService:
         # From here the instruments are being started: record it, so a
         # failure halfway is not mistaken for "nothing happened".
         self.state.update(profile=number, last_action="start", deck_voltage=deck_voltage,
-                          deployed={"profile": number, "started": _now(),
+                          deployed={"profile": number, "started": _now(), "cast": cast,
                                     "instruments": {i.name: {"role": i.role,
                                                              "orientation": i.info.get("orientation"),
                                                              "serial": i.info.get("serial")}
                                                     for i in (secondary, primary) if i}})
         self._save_state()
+        if cast:
+            # Which CTD cast this profile is, beside its data, so the cast
+            # and the LADCP files can be found from each other.
+            base = os.path.join(self.data_dir(), f"{number:03d}")
+            os.makedirs(base, exist_ok=True)
+            with open(os.path.join(base, "dship.json"), "w") as f:
+                json.dump(cast, f, indent=2)
+            op.say(f"Profile {number:03d} is CTD cast {cast.get('cast')}"
+                   + (f" ({cast['operation']}, station {cast['station']})" if cast.get("operation")
+                      else " (predicted: DSHIP has no open CTD operation yet)"), "info")
         start = self.config["start_command"]
         if secondary:
             op.step("Start secondary")

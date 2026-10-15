@@ -61,7 +61,20 @@ function busy() {
 function renderHeader() {
 	const st = status.state, cfg = status.config;
 	$("h-cruise").textContent = cfg.cruise_id;
-	$("h-next").textContent = pad3((st.profile || 0) + 1);
+	// The next profile is the next CTD cast when DSHIP is connected;
+	// the counter is the fallback without it.
+	const nc = status.next_cast;
+	if (nc) {
+		$("h-next").textContent = pad3(nc.cast);
+		$("h-next").title = nc.operation
+			? `CTD cast ${nc.cast} = ${nc.operation} (station ${nc.station}) in DSHIP`
+			: `CTD cast ${nc.cast}, predicted: ${nc.note || "no open CTD operation in DSHIP yet"}`;
+		$("h-next-src").textContent = nc.operation ? `= CTD cast · ${nc.operation}` : "= CTD cast · predicted";
+	} else {
+		$("h-next").textContent = pad3((st.profile || 0) + 1);
+		$("h-next").title = "From the profile counter (DSHIP is not connected)";
+		$("h-next-src").textContent = "";
+	}
 	$("h-battery").textContent = `${st.total_pings || 0} pings · ${fmt(st.total_ping_hours, 1)} h since battery swap`;
 	const badge = $("h-state");
 	if (busy()) {
