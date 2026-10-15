@@ -303,8 +303,7 @@
         "projectTitle": {
           "$format": "{cruise}_{station}"
         },
-        "instrument": "Other camera",
-        "access": "open"
+        "instrument": "Other camera"
       }
     },
     {
