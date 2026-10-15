@@ -177,6 +177,22 @@ pre.log-box.stderr { border-color: rgba(239, 68, 68, 0.4); }
 .pick-scratch { border-style: dashed; }
 
 .wizard-form { max-width: 720px; }
+/* The parameter form with the profile's first frame beside it. */
+.wizard-layout { display: grid; grid-template-columns: minmax(0, 720px) minmax(0, 1fr);
+                 gap: 16px; align-items: start; }
+.wizard-layout .wizard-form { max-width: none; }
+.frame-shot { position: sticky; top: 12px; padding: 10px; }
+.frame-shot[hidden] { display: none; }
+.frame-shot .fs-head { display: flex; justify-content: space-between; align-items: center;
+                       margin-bottom: 8px; }
+.frame-shot .fs-nav { display: flex; gap: 4px; }
+.frame-shot img { display: block; width: 100%; height: auto; background: #000;
+                  border-radius: 4px; }
+.frame-shot .fs-info { margin-top: 6px; overflow-wrap: anywhere; }
+@media (max-width: 1100px) {
+    .wizard-layout { grid-template-columns: minmax(0, 1fr); }
+    .frame-shot { position: static; }
+}
 .wizard-form .input-group { margin-bottom: 1.2rem; }
 .wizard-form label { display: block; font-weight: bold; margin-bottom: 4px; }
 .wizard-form .hint { margin-bottom: 6px; }

@@ -17,6 +17,7 @@
 {% if template.description %}<p class="muted" style="margin-top: -0.5rem;">{{ template.description }}</p>{% endif %}
 
 {% set required = schema.get('required', []) %}
+<div class="wizard-layout">
 <form method="POST" class="card wizard-form"
       action="{{ url_for('workflow.new_from_template', template_id=template.id, draft=draft.id if draft else None) }}">
     {% if errors %}
@@ -107,6 +108,19 @@
         <button type="submit" class="btn btn-primary">Review &rarr;</button>
     </div>
 </form>
+
+<aside class="card frame-shot" id="frame-shot" hidden>
+    <div class="fs-head">
+        <strong>First frame of the profile</strong>
+        <span class="fs-nav">
+            <button type="button" class="btn btn-sm" data-step="-1" title="Previous frame">◀</button>
+            <button type="button" class="btn btn-sm" data-step="1" title="Next frame">▶</button>
+        </span>
+    </div>
+    <a class="fs-link" target="_blank" title="Open full size in a new tab"><img alt=""></a>
+    <div class="fs-info muted small"></div>
+</aside>
+</div>
 
 <script>
 // "Current ship position": the latest NMEA fix into both lat and lon,
@@ -202,6 +216,47 @@ document.querySelectorAll("[data-nav-now]").forEach(btn => btn.addEventListener(
     const color = (name, fallback) => (css.getPropertyValue(name) || "").trim() || fallback;
     const fmtTime = t => t == null ? "?" : new Date(t * 1000).toISOString().slice(11, 19);
 
+    // The side panel: the first kept frame, as the Hub renders it (the
+    // camera's TIFFs are not something a browser shows). ◀ ▶ step through
+    // the frames around it without changing the range.
+    const shot = (() => {
+        const box = document.getElementById("frame-shot");
+        const img = box.querySelector("img"), link = box.querySelector("a");
+        const caption = box.querySelector(".fs-info");
+        let path = null, index = 0, total = 0, token = 0, timer = null, url = null;
+        async function load() {
+            const mine = ++token;
+            box.hidden = false;
+            caption.textContent = `Loading frame ${index}…`;
+            const r = await fetch(`{{ url_for('workflow.frame_image') }}?path=${encodeURIComponent(path)}&index=${index}`, {showLoader: false});
+            if (mine !== token) return;               // a newer request won
+            if (!r.ok) {
+                const body = await r.json().catch(() => ({}));
+                caption.textContent = body.error || "cannot show this frame";
+                img.removeAttribute("src");
+                return;
+            }
+            const info = JSON.parse(r.headers.get("X-Frame-Info") || "{}");
+            if (url) URL.revokeObjectURL(url);
+            url = URL.createObjectURL(await r.blob());
+            img.src = url; link.href = url;
+            let text = `frame ${info.index} of ${total.toLocaleString()} · ${info.name}`;
+            text += ` · ${info.width}×${info.height}, ${info.bit_depth}-bit`;
+            if (info.pressure != null) text += ` · ${info.pressure.toFixed(2)} dbar`;
+            if (info.time != null) text += ` · ${new Date(info.time * 1000).toISOString().slice(11, 19)} UTC`;
+            caption.textContent = text;
+        }
+        box.querySelectorAll("[data-step]").forEach(b => b.addEventListener("click", () => {
+            if (path == null) return;
+            index = Math.min(Math.max(index + Number(b.dataset.step), 0), total - 1);
+            load();
+        }));
+        return {
+            show(p, i, n) { clearTimeout(timer); path = p; index = i; total = n; load(); },
+            later(p, i, n) { clearTimeout(timer); timer = setTimeout(() => this.show(p, i, n), 400); },
+        };
+    })();
+
     function attach(panel, input) {
         const canvas = panel.querySelector("canvas");
         const info = panel.querySelector(".fp-info");
@@ -285,6 +340,7 @@ document.querySelectorAll("[data-nav-now]").forEach(btn => btn.addEventListener(
             skipFirst.value = a;
             skipLast.value = data.frames - 1 - b;
             draw();
+            shot.show(input.value.trim(), a, data.frames);
         }
 
         const at = e => geometry().index(e.clientX - canvas.getBoundingClientRect().left);
@@ -300,6 +356,9 @@ document.querySelectorAll("[data-nav-now]").forEach(btn => btn.addEventListener(
             a === b ? draw() : setRange(a, b);
         });
         [skipFirst, skipLast].forEach(el => el?.addEventListener("input", () => data && draw()));
+        skipFirst?.addEventListener("input", () => {
+            if (data) shot.later(input.value.trim(), range()[0], data.frames);
+        });
         window.addEventListener("resize", () => data && !panel.hidden && draw());
 
         panel.querySelectorAll("[data-act]").forEach(btn => btn.addEventListener("click", () => {
@@ -322,6 +381,7 @@ document.querySelectorAll("[data-nav-now]").forEach(btn => btn.addEventListener(
             if (!r.ok) { info.textContent = body.error || "cannot read the directory"; return; }
             data = body;
             draw();
+            shot.show(path, range()[0], data.frames);
         };
     }
 

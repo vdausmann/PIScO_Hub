@@ -101,10 +101,17 @@ def _resolve(path):
     return target
 
 
-def scan(path):
-    """The frames of a directory in the preparer's order, with what their
-    names say."""
-    directory = _resolve(path)
+# The ordered listing of the last few directories: the plot, the image
+# preview and every change of the kept range ask for the same one, and a
+# cast can be 70 000 files on NFS. A changed directory has a new mtime.
+_CACHE = {}
+_CACHE_SIZE = 4
+
+
+def _ordered(directory):
+    key = (str(directory), directory.stat().st_mtime_ns)
+    if key in _CACHE:
+        return _CACHE[key]
     rows = []
     with os.scandir(directory) as entries:
         names = sorted(e.name for e in entries)
@@ -121,8 +128,18 @@ def scan(path):
         rows.append((time, counter if counter >= 0 else len(rows), name, pressure, meta))
     if not rows:
         raise PreviewError(f"no image files in {directory}")
-
     rows.sort(key=lambda r: (r[0] if not math.isnan(r[0]) else math.inf, r[1], r[2]))
+    while len(_CACHE) >= _CACHE_SIZE:
+        _CACHE.pop(next(iter(_CACHE)))
+    _CACHE[key] = rows
+    return rows
+
+
+def scan(path):
+    """The frames of a directory in the preparer's order, with what their
+    names say."""
+    directory = _resolve(path)
+    rows = _ordered(directory)
 
     n = len(rows)
     stride = max(1, math.ceil(n / MAX_POINTS))
@@ -148,4 +165,47 @@ def scan(path):
         "deepest_frame": deepest,
         "metadata": first_meta,
         "points": points,
+    }
+
+
+# Longest side of the preview image; the page shows it in a side column.
+PREVIEW_SIZE = 900
+
+
+def frame_image(path, index):
+    """(JPEG bytes, info dict) of frame `index` in the preparer's order,
+    scaled down and stretched to 8 bit for the browser — the camera writes
+    TIFF, often 12 or 16 bit, which browsers do not show."""
+    import cv2
+    import numpy as np
+
+    directory = _resolve(path)
+    rows = _ordered(directory)
+    index = min(max(int(index), 0), len(rows) - 1)
+    time, _, name, pressure, _ = rows[index]
+    image = cv2.imread(str(directory / name), cv2.IMREAD_UNCHANGED)
+    if image is None:
+        raise PreviewError(f"cannot decode {name}")
+    if image.ndim == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY if image.shape[2] == 3
+                             else cv2.COLOR_BGRA2GRAY)
+    height, width = image.shape[:2]
+    bit_depth = image.dtype.itemsize * 8
+    if image.dtype != np.uint8:
+        # Scale by what the frame actually uses, so a 12-bit image in a
+        # 16-bit container is not nearly black; the 99.9th percentile
+        # keeps a few hot pixels from setting the scale.
+        top = float(np.percentile(image, 99.9)) or 1.0
+        image = np.clip(image.astype(np.float32) * (255.0 / top), 0, 255).astype(np.uint8)
+    scale = PREVIEW_SIZE / max(height, width)
+    if scale < 1:
+        image = cv2.resize(image, (round(width * scale), round(height * scale)),
+                           interpolation=cv2.INTER_AREA)
+    ok, jpeg = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    if not ok:
+        raise PreviewError(f"cannot encode {name}")
+    return jpeg.tobytes(), {
+        "index": index, "name": name, "width": width, "height": height,
+        "bit_depth": bit_depth,
+        "pressure": pressure, "time": None if math.isnan(time) else round(time, 2),
     }

@@ -10,8 +10,8 @@ here is validated exactly like one submitted through the API.
 import json
 import re
 
-from flask import (Blueprint, abort, flash, jsonify, redirect, render_template,
-                   request, url_for)
+from flask import (Blueprint, abort, flash, jsonify, make_response, redirect,
+                   render_template, request, url_for)
 from flask_login import current_user, login_required
 
 from ..backend import artifacts, frame_preview, settings_engine, templates
@@ -256,6 +256,23 @@ def preview_frames():
         return jsonify(frame_preview.scan(request.args.get("path", "")))
     except (frame_preview.PreviewError, OSError) as e:
         return jsonify({"error": str(e)}), 400
+
+
+@workflow_bp.route('/frame-image')
+@login_required
+def frame_image():
+    """One frame of a directory as a small JPEG, for the parameter form's
+    preview; what the frame is travels in X-Frame-* headers."""
+    try:
+        jpeg, info = frame_preview.frame_image(request.args.get("path", ""),
+                                               request.args.get("index", 0))
+    except (frame_preview.PreviewError, OSError, ValueError) as e:
+        return jsonify({"error": str(e)}), 400
+    response = make_response(jpeg)
+    response.headers["Content-Type"] = "image/jpeg"
+    response.headers["Cache-Control"] = "private, max-age=300"
+    response.headers["X-Frame-Info"] = json.dumps(info)
+    return response
 
 
 @workflow_bp.route('/review/<workflow_id>')

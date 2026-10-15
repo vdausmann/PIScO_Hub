@@ -104,7 +104,10 @@ Reorder with the arrows. A template may be saved with parameters only;
    image is opened) and plots pressure over the profile from the frame
    names. If the template has `skip_first` and `skip_last` parameters,
    dragging across the plot keeps that stretch and fills both; *Downcast
-   only* keeps everything up to the deepest frame. The frames are counted
+   only* keeps everything up to the deepest frame. Beside the form, the
+   first kept frame is shown as the Hub renders it (the camera's TIFFs,
+   scaled and stretched to 8 bit); it follows the range, and ◀ ▶ step
+   through the frames around it. The frames are counted
    in the order `pisco_prepare_profile` reads them, so the counts mean the
    same thing there (`app/backend/frame_preview.py`). **Fill metadata
    from names** copies cruise, station, instrument, position and date
