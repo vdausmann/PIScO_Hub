@@ -109,7 +109,9 @@ Reorder with the arrows. A template may be saved with parameters only;
    same thing there (`app/backend/frame_preview.py`). **Fill metadata
    from names** copies cruise, station, instrument, position and date
    from the first frame's name into whichever of those fields are empty.
-   **Fill from ship nav** sets latitude, longitude and date from the
+   Next to latitude and longitude, **Current ship position** fills both
+   from the latest NMEA fix, in decimal degrees (south and west
+   negative). **Fill from ship nav** sets latitude, longitude and date from the
    ship's track (see Hardware Control) at the time of the first kept
    frame.
    An optional parameter left empty drops the settings bound to it, so

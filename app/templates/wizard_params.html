@@ -50,6 +50,11 @@
                {% if prop.get('minimum') is defined %}min="{{ prop['minimum'] }}"{% endif %}
                {% if prop.get('maximum') is defined %}max="{{ prop['maximum'] }}"{% endif %}
                value="{{ value if value is not none else '' }}">
+        {% if key in ('lat', 'lon') %}
+        <button type="button" class="btn btn-sm" data-nav-now
+                title="Latitude and longitude from the ship's NMEA feed, now, in decimal degrees">Current ship position</button>
+        <span class="muted small" data-nav-note></span>
+        {% endif %}
         {% elif prop.get('format') == 'date' %}
         <input type="date" id="p_{{ key }}" name="p_{{ key }}" value="{{ value if value is not none else '' }}">
         {% elif prop.get('format') in ('directory', 'file') %}
@@ -102,6 +107,27 @@
         <button type="submit" class="btn btn-primary">Review &rarr;</button>
     </div>
 </form>
+
+<script>
+// "Current ship position": the latest NMEA fix into both lat and lon,
+// decimal degrees, south and west negative like the fields expect.
+document.querySelectorAll("[data-nav-now]").forEach(btn => btn.addEventListener("click", async () => {
+    const notes = document.querySelectorAll("[data-nav-note]");
+    const note = text => notes.forEach(n => n.textContent = text);
+    try {
+        const r = await fetch("/api/v1/nav/latest", {showLoader: false});
+        const d = await r.json();
+        const f = d.latest;
+        if (!r.ok || !f) { note(d.error || "no fix from the ship's feed yet"); return; }
+        for (const key of ["lat", "lon"]) {
+            const el = document.getElementById("p_" + key);
+            if (el) el.value = f[key].toFixed(6);
+        }
+        note(`fix of ${f.time_utc.replace("T", " ").slice(0, 19)} UTC` +
+             (f.age_s > 10 ? ` — ${Math.round(f.age_s)} s old, the feed may have stopped` : ""));
+    } catch (e) { note("Hub not reachable"); }
+}));
+</script>
 
 {# A small directory picker over the File Explorer's listing endpoint. #}
 <div id="picker" class="picker" hidden>
