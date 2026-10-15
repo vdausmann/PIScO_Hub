@@ -343,6 +343,21 @@ length). The new-workflow form's *Fill from DSHIP* uses it for station,
 `ctd_cast`, position and date; the EcoTaxa export writes `ctd_cast` as
 `sample_ctd_cast`.
 
+## DSHIP
+
+With `DSHIP_URL` set (MSM147: `http://192.168.100.10:8080`), the Hub reads
+the ship's DSHIP action log read-only, as the anonymous user its web
+interface uses, every `DSHIP_POLL_INTERVAL` seconds, and keeps a snapshot
+under `<DATA_ROOT>/dship/`. Device operations (`MSM147_2-9`) become a
+station written `002-09`; operations of `DSHIP_CAST_DEVICE` (CTD) are
+numbered in time order as CTD casts, aborted ones included.
+`GET /dship/at?time=…` returns the operation a recording belongs to — it
+may start up to 45 min before the device goes in — with its events
+(in the water, max depth, on deck: time, position, water depth, rope
+length). The new-workflow form's *Fill from DSHIP* uses it for station,
+`ctd_cast`, position and date; the EcoTaxa export writes `ctd_cast` as
+`sample_ctd_cast`.
+
 ## Endpoint summary
 
 | Method | Path | Scope | Purpose |
@@ -374,6 +389,9 @@ length). The new-workflow form's *Fill from DSHIP* uses it for station,
 | PATCH | `/api/v1/machines/<id>` | full | update, enable or disable |
 | DELETE | `/api/v1/machines/<id>` | full | remove (409 with running tasks) |
 | GET | `/api/v1/system/load` | read | load vs capacity, per machine |
+| GET | `/api/v1/dship/status` | read | DSHIP connection: expedition, last read, error |
+| GET | `/api/v1/dship/operations` | read | device operations with station, cast number and events (`?device=`) |
+| GET | `/api/v1/dship/at?time=` | read | the cast-device operation a time belongs to |
 | GET | `/api/v1/dship/status` | read | DSHIP connection: expedition, last read, error |
 | GET | `/api/v1/dship/operations` | read | device operations with station, cast number and events (`?device=`) |
 | GET | `/api/v1/dship/at?time=` | read | the cast-device operation a time belongs to |

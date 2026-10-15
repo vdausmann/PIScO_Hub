@@ -119,7 +119,10 @@ Reorder with the arrows. A template may be saved with parameters only;
    (`app/backend/coords.py`; the API accepts the same text).
    Next to latitude and longitude, **Current ship position** fills both
    from the latest NMEA fix, in decimal degrees (south and west
-   negative). **Fill from ship nav** sets latitude, longitude and date from the
+   negative). **Fill from DSHIP** finds the CTD operation the first kept frame
+   belongs to in DSHIP's action log and sets station (`002-09`), CTD
+   cast, position and date from it, reporting the in-water, max-depth
+   and on-deck times. **Fill from ship nav** sets latitude, longitude and date from the
    ship's track (see Hardware Control) at the time of the first kept
    frame.
    An optional parameter left empty drops the settings bound to it, so
