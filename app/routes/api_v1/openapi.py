@@ -441,6 +441,15 @@ def build_spec(server_url):
                            {"type": "integer"})])},
             "/system/load": {"get": _op(
                 "Scheduler load vs capacity, broken down per machine")},
+            "/dship/status": {"get": _op("DSHIP connection: expedition, last read, error")},
+            "/dship/operations": {"get": _op(
+                "Device operations from DSHIP's action log, with station, cast number and events",
+                params=[{"name": "device", "in": "query", "required": False,
+                         "schema": {"type": "string"}}])},
+            "/dship/at": {"get": _op(
+                "The cast-device operation a time belongs to (recording may start up to 45 min before it goes in)",
+                params=[{"name": "time", "in": "query", "required": True, "schema": {"type": "string"}},
+                        {"name": "device", "in": "query", "required": False, "schema": {"type": "string"}}])},
             "/nav/latest": {"get": _op(
                 "The ship's latest NMEA fix and the state of each feed")},
             "/nav/at": {"get": _op(

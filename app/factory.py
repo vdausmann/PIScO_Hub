@@ -96,6 +96,8 @@ def create_app(create_worker=True):
         HardwarePoller(app)
         from .backend.nav import NavService
         NavService(app)
+        from .backend.dship import DshipService
+        DshipService(app)
         from .backend.ladcp import create_service
         create_service(app)
 

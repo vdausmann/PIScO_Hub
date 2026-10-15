@@ -17,6 +17,12 @@
         "description": "DSHIP station id, e.g. 012-01",
         "pattern": "^\\d{3}-\\d{2}$"
       },
+      "ctd_cast": {
+        "type": "integer",
+        "title": "CTD cast",
+        "minimum": 1,
+        "description": "Running number of the CTD cast on this cruise, as counted from DSHIP's CTD operations; Fill from DSHIP sets it"
+      },
       "instrument": {
         "type": "string",
         "title": "Instrument",
@@ -278,7 +284,10 @@
           }
         },
         "taxonomyMapPath": "/opt/pisco/tools/process_pisco_profiles/ecotaxa_taxonomy_map.json",
-        "linkBase": "http://10.11.11.110:5000"
+        "linkBase": "http://10.11.11.110:5000",
+        "ctdCast": {
+          "$param": "ctd_cast"
+        }
       }
     },
     {

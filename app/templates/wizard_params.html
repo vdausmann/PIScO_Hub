@@ -86,6 +86,10 @@
                 {% endif %}
                 <button type="button" class="btn btn-sm" data-act="meta"
                         title="Fill empty fields (cruise, station, instrument, position, date) from the first frame's name">Fill metadata from names</button>
+                {% if 'station' in schema.get('properties', {}) %}
+                <button type="button" class="btn btn-sm" data-act="dship"
+                        title="Station, CTD cast, position and date from DSHIP's action log: the CTD operation the first kept frame belongs to">Fill from DSHIP</button>
+                {% endif %}
                 {% if 'lat' in schema.get('properties', {}) or 'lon' in schema.get('properties', {}) %}
                 <button type="button" class="btn btn-sm" data-act="nav"
                         title="Latitude, longitude and date from the ship's track at the first kept frame">Fill from ship nav</button>
@@ -405,6 +409,7 @@ document.querySelectorAll("input[data-axis]").forEach(input => {
             if (btn.dataset.act === "down") setRange(0, data.deepest_frame ?? data.frames - 1);
             if (btn.dataset.act === "meta") fillMeta(data.metadata);
             if (btn.dataset.act === "nav") fillNav(near(range()[0])[1]);
+            if (btn.dataset.act === "dship") fillDship(near(range()[0])[1]);
         }));
 
         return async () => {
@@ -421,6 +426,30 @@ document.querySelectorAll("input[data-axis]").forEach(input => {
             draw();
             shot.show(path, range()[0], data.frames);
         };
+    }
+
+    // The CTD operation this recording belongs to, from DSHIP's action log
+    // as the Hub keeps it: station (002-09), cast number, position and date
+    // at "in the water". Overwrites: DSHIP is the record of the cruise.
+    async function fillDship(time) {
+        if (time == null) { alert("The frame names carry no time, so there is nothing to look up."); return; }
+        const r = await fetch(`/api/v1/dship/at?time=${time}`, {showLoader: false});
+        const op = await r.json();
+        if (!r.ok) { alert(op.error || "No DSHIP operation at that time."); return; }
+        const set = (key, value) => {
+            const el = document.getElementById("p_" + key);
+            if (el && value != null) { el.value = value; el.dispatchEvent(new Event("input")); }
+        };
+        set("station", op.station); set("ctd_cast", op.cast);
+        set("lat", op.lat); set("lon", op.lon); set("date", op.date);
+        const t = e => e ? e.time.slice(11, 16) : "–";
+        alert(`${op.operation} (${op.device_name || op.device}), CTD cast ${op.cast ?? "–"}` +
+              (op.aborted ? " — marked as aborted in DSHIP" : "") +
+              `\nin the water ${t(op.in_water)}, max depth ${t(op.max_depth)}` +
+              (op.max_depth && op.max_depth.rope_m != null ? ` (${op.max_depth.rope_m} m rope)` : "") +
+              `, on deck ${t(op.on_deck)} UTC` +
+              (op.in_water && op.in_water.water_depth_m != null ? `\nwater depth ${op.in_water.water_depth_m} m` : "") +
+              `\nFilled: station ${op.station}, cast ${op.cast ?? "–"}, position ${op.lat}, ${op.lon}, date ${op.date}.`);
     }
 
     // The ship's position when the kept part of the profile starts, from

@@ -25,6 +25,13 @@ def seed_settings(app):
                         'desc': "The ship's NMEA feed, comma separated: udp:<port> listens (broadcast or unicast), tcp:<host>:<port> reads a TCP server. Empty means off. Read at start; restart the Hub after a change."},
         'NAV_LOG_DIR': {'value': '', 'type': 'str',
                         'desc': 'Where the ship track (nav_YYYYMMDD.csv, one row per fix) is written. Empty means <DATA_ROOT>/nav.'},
+        'DSHIP_URL': {'value': '', 'type': 'str',
+                      'desc': "The ship's DSHIP server, e.g. http://192.168.100.10:8080. The Hub reads its action log (stations, device operations) read-only. Empty means off. Restart the Hub after a change."},
+        'DSHIP_USER': {'value': 'anonymous', 'type': 'str', 'desc': 'DSHIP login; anonymous may read the action log.'},
+        'DSHIP_PASSWORD': {'value': 'anonymous', 'type': 'str', 'desc': 'Password for DSHIP_USER.'},
+        'DSHIP_CAST_DEVICE': {'value': 'CTD', 'type': 'str',
+                              'desc': 'DSHIP device short name PIScO is mounted on; its operations are numbered as casts.'},
+        'DSHIP_POLL_INTERVAL': {'value': '120', 'type': 'int', 'desc': "Seconds between reads of DSHIP's action log."},
         'MODULES_FILE': {'value': 'modules.json', 'type': 'str',
                          'desc': 'JSON list of external pages shown in the Visualization Hub. Relative paths are taken from the Hub root.'},
     }
