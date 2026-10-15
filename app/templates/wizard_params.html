@@ -97,6 +97,15 @@
             </div>
         </div>
         {% endif %}
+        {% elif key == 'station' %}
+        <div class="path-field">
+            <input type="text" id="p_{{ key }}" name="p_{{ key }}" class="wide"
+                   {% if prop.get('pattern') %}pattern="{{ prop['pattern'] }}"{% endif %}
+                   value="{{ value if value is not none else '' }}">
+            <button type="button" class="btn btn-sm" data-dship-now
+                    title="Station, CTD cast, position and date from DSHIP: the CTD cast the profile's first frame belongs to, or the one running now">Fill from DSHIP</button>
+        </div>
+        <div class="muted small" data-dship-note></div>
         {% else %}
         <input type="text" id="p_{{ key }}" name="p_{{ key }}" class="wide"
                {% if prop.get('pattern') %}pattern="{{ prop['pattern'] }}"{% endif %}
@@ -368,6 +377,7 @@ document.querySelectorAll("input[data-axis]").forEach(input => {
             return best;
         }
         function describe(a, b) {
+            window.__firstKeptTime = near(a)[1];
             const pa = near(a), pb = near(b);
             const kept = b - a + 1;
             let s = `${data.frames.toLocaleString()} frames`;
@@ -431,11 +441,12 @@ document.querySelectorAll("input[data-axis]").forEach(input => {
     // The CTD operation this recording belongs to, from DSHIP's action log
     // as the Hub keeps it: station (002-09), cast number, position and date
     // at "in the water". Overwrites: DSHIP is the record of the cruise.
-    async function fillDship(time) {
+    window.fillDship = fillDship;
+    async function fillDship(time, note) {
         if (time == null) { alert("The frame names carry no time, so there is nothing to look up."); return; }
         const r = await fetch(`/api/v1/dship/at?time=${time}`, {showLoader: false});
         const op = await r.json();
-        if (!r.ok) { alert(op.error || "No DSHIP operation at that time."); return; }
+        if (!r.ok) { const m = op.error || "No DSHIP operation at that time."; note ? (note.textContent = m) : alert(m); return; }
         const set = (key, value) => {
             const el = document.getElementById("p_" + key);
             if (el && value != null) { el.value = value; el.dispatchEvent(new Event("input")); }
@@ -443,7 +454,7 @@ document.querySelectorAll("input[data-axis]").forEach(input => {
         set("station", op.station); set("ctd_cast", op.cast);
         set("lat", op.lat); set("lon", op.lon); set("date", op.date);
         const t = e => e ? e.time.slice(11, 16) : "–";
-        alert(`${op.operation} (${op.device_name || op.device}), CTD cast ${op.cast ?? "–"}` +
+        (note ? (m => { note.textContent = m.replace(/\n/g, " · "); }) : alert)(`${op.operation} (${op.device_name || op.device}), CTD cast ${op.cast ?? "–"}` +
               (op.aborted ? " — marked as aborted in DSHIP" : "") +
               `\nin the water ${t(op.in_water)}, max depth ${t(op.max_depth)}` +
               (op.max_depth && op.max_depth.rope_m != null ? ` (${op.max_depth.rope_m} m rope)` : "") +
@@ -477,6 +488,26 @@ document.querySelectorAll("input[data-axis]").forEach(input => {
         alert(filled.length ? "Filled from the first frame's name: " + filled.join(", ")
                             : "Every field the names could fill already has a value.");
     }
+
+    // Fill from DSHIP beside the station: the time of the first kept frame
+    // when the depth preview has it, else the first frame of the chosen
+    // directory, else now (the cast that is running).
+    document.querySelectorAll("[data-dship-now]").forEach(btn => btn.addEventListener("click", async () => {
+        const note = document.querySelector("[data-dship-note]");
+        let time = window.__firstKeptTime ?? null;
+        const frames = document.getElementById("p_frames");
+        if (time == null && frames && frames.value.trim()) {
+            note.textContent = "Reading the frame directory…";
+            const r = await fetch(`{{ url_for('workflow.preview_frames') }}?path=${encodeURIComponent(frames.value.trim())}`, {showLoader: false});
+            const body = await r.json().catch(() => ({}));
+            const first = (body.points || []).find(p => p[1] != null);
+            if (r.ok && first) time = first[1];
+        }
+        const source = time == null ? "now" : "the profile's first frame";
+        if (time == null) time = Date.now() / 1000;
+        note.textContent = `Looking up the CTD cast at ${source}…`;
+        await fillDship(time, note);
+    }));
 
     document.querySelectorAll("[data-preview]").forEach(btn => {
         const input = document.getElementById(btn.dataset.preview);
