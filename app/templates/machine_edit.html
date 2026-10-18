@@ -61,7 +61,7 @@
         </div>
         <div class="input-group">
             <label for="max_weight">Capacity</label>
-            <div class="muted small hint">The running tasks' weights stay below this. With 10, one segmenter (weight 8) at a time.</div>
+            <div class="muted small hint">The running tasks' weights stay below this. With 10, one segmenter (weight 8) at a time; 0 takes no tasks at all, e.g. to keep the Hub's own host free.</div>
             <input type="number" id="max_weight" name="max_weight" min="0" style="width: 8em;"
                    value="{{ val('max_weight', machine.max_weight if machine else 10) }}">
         </div>

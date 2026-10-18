@@ -366,3 +366,23 @@ def test_ports_released_between_operations(rig):
     assert sim.instruments[0].pinging, "reconnecting must not stop the instruments"
     service.stop(download=True)
     assert _wait(service).state == "done"
+
+
+def test_live_history_is_thinned_and_sent_once(monkeypatch):
+    """A page starting from nothing gets the thinned history for the long
+    windows; a page that keeps polling does not get it again."""
+    from app.backend.ladcp import live
+
+    clock = [1000.0]
+    monkeypatch.setattr(live.time, "time", lambda: clock[0])
+    buf = live.LiveBuffer()
+    for i in range(60):                      # one ensemble a second for a minute
+        buf.add({"number": i, "time": 1000 + i, "ei": np.full((3, 4), 80),
+                 "corr": np.ones((3, 4)), "vel": np.ones((3, 4))})
+        clock[0] += 1
+    first = buf.snapshot(0)
+    assert len(first["records"]) == 60
+    assert [h["seq"] for h in first["history"]] == [1, 11, 21, 31, 41, 51]
+    assert first["history"][0]["eim"] == [80, 80, 80]
+    assert "ei" not in first["history"][0]
+    assert buf.snapshot(first["seq"])["history"] == []

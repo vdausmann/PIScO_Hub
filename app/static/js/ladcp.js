@@ -185,12 +185,20 @@ async function refreshLive() {
 	const since = Object.entries(live).map(([n, l]) => `${n}:${l.seq}`).join(",");
 	let data;
 	try { data = await api("/live" + (since ? `?since=${since}` : "")); } catch (_) { return; }
-	const cutoff = Date.now() / 1000 - 3700;
+	const now = Date.now() / 1000;
 	for (const [name, d] of Object.entries(data)) {
 		let l = live[name];
-		if (!l || d.seq < l.seq) l = live[name] = {records: [], seq: 0};   // a new deployment
+		if (!l || d.seq < l.seq) l = live[name] = {records: [], history: [], seq: 0};   // a new deployment
+		// The server sends its thinned history only to a page starting from
+		// nothing; after that the page thins the new records itself.
+		if (d.history && d.history.length) l.history = d.history;
+		for (const r of d.records) {
+			const last = l.history[l.history.length - 1];
+			if (!last || r.received - last.received >= HISTORY_STEP) l.history.push(slim(r));
+		}
 		l.records.push(...d.records);
-		while (l.records.length && l.records[0].received < cutoff) l.records.shift();
+		while (l.records.length && l.records[0].received < now - 3700) l.records.shift();
+		while (l.history.length && l.history[0].received < now - 21600 - 300) l.history.shift();
 		Object.assign(l, {seq: d.seq, geometry: d.geometry, age: d.age, count: d.count,
 			streaming: d.streaming, role: d.role, orientation: d.orientation, errors: d.errors,
 			skipped: d.skipped_bytes});
@@ -198,6 +206,22 @@ async function refreshLive() {
 	for (const name of Object.keys(live)) if (!(name in data)) delete live[name];
 	renderReadouts();
 	drawAll();
+}
+
+// Mirrors app/backend/ladcp/live.py: one entry every HISTORY_STEP seconds,
+// with the echo intensity already averaged over the beams.
+const HISTORY_STEP = 10;
+function slim(r) {
+	return {seq: r.seq, time: r.time, received: r.received, depth: r.depth, target: r.target,
+		eim: r.ei ? r.ei.map((e) => Math.round((e[0] + e[1] + e[2] + e[3]) / 4)) : null};
+}
+
+// What to draw from `from` on: the thinned history for the stretch before
+// the full-rate records begin, then the records themselves.
+function series(l, from) {
+	const first = l.records.length ? l.records[0].received : Infinity;
+	return l.history.filter((r) => r.received >= from && r.received < first)
+		.concat(l.records.filter((r) => r.received >= from));
 }
 
 function isUp(l) {
@@ -325,19 +349,18 @@ function drawWaterfall() {
 		const g = l.geometry;
 		if (!g) continue;
 		const sign = isUp(l) ? -1 : 1;
-		const recs = l.records.filter((r) => r.received >= now - win - 10);
+		const recs = series(l, now - win - HISTORY_STEP);
 		for (let i = 0; i < recs.length; i++) {
 			const r = recs[i];
-			if (!r.ei) continue;
+			const eim = r.eim || (r.ei && r.ei.map((e) => (e[0] + e[1] + e[2] + e[3]) / 4));
+			if (!eim) continue;
 			const x1 = x(r.received);
 			const x2 = i + 1 < recs.length ? x(recs[i + 1].received) : x1 + Math.max(2, x1 - (i ? x(recs[i - 1].received) : x1 - 2));
 			if (x2 < M.l) continue;
 			const wpx = Math.max(1, Math.min(x2 - x1 + 0.5, 30));
-			for (let k = 0; k < r.ei.length; k++) {
-				const e = r.ei[k];
-				const mean = (e[0] + e[1] + e[2] + e[3]) / 4;
+			for (let k = 0; k < eim.length; k++) {
 				const rr = g.bin1_m + k * g.cell_m;
-				ctx.fillStyle = color(mean, lo, hi);
+				ctx.fillStyle = color(eim[k], lo, hi);
 				const yTop = y0 + sign * (rr - g.cell_m / 2) * ypx;
 				const yBot = y0 + sign * (rr + g.cell_m / 2) * ypx;
 				ctx.fillRect(Math.max(M.l, x1), Math.min(yTop, yBot), wpx, Math.abs(yBot - yTop) + 0.5);
@@ -355,7 +378,7 @@ function drawWaterfall() {
 	ctx.textAlign = "center";
 	ctx.textBaseline = "top";
 	ctx.fillStyle = css("--text");
-	const tick = win <= 300 ? 60 : win <= 900 ? 180 : 600;
+	const tick = win <= 300 ? 60 : win <= 900 ? 180 : win <= 3600 ? 600 : win <= 7200 ? 1800 : 3600;
 	for (let t = Math.ceil((now - win) / tick) * tick; t <= now; t += tick)
 		ctx.fillText(hhmmss(t).substring(0, 5), x(t), h - M.b + 6);
 	ctx.textAlign = "left";
@@ -414,7 +437,7 @@ function drawDepth() {
 	const x = (t) => M.l + (t - (now - win)) / win * (w - M.l - M.r);
 	const dn = Object.values(live).find((l) => !isUp(l)) || Object.values(live)[0];
 	if (!dn) return;
-	const recs = dn.records.filter((r) => r.received >= now - win);
+	const recs = series(dn, now - win);
 	let maxD = 50;
 	for (const r of recs) {
 		maxD = Math.max(maxD, r.depth || 0);

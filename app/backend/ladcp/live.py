@@ -7,6 +7,13 @@ integrated from the vertical speed since the start.
 
 The page asks for what is new since the last sequence number it saw, so
 a poll every second or two carries a handful of ensembles, not the hour.
+
+For the long windows (up to six hours) a thinned history is kept beside
+that: one ensemble every HISTORY_STEP seconds, reduced to what the time
+plots draw (echo intensity averaged over the beams, depth, bottom
+distance). A page that starts from nothing gets it once with its first
+answer; drawing six hours at full rate would be some 20,000 ensembles per
+instrument for a plot a thousand pixels wide.
 """
 
 import collections
@@ -17,10 +24,14 @@ import numpy as np
 
 from . import pd0
 
+HISTORY_STEP = 10           # seconds between history entries
+HISTORY_SPAN = 6 * 3600     # the longest window the page offers
+
 
 class LiveBuffer:
     def __init__(self, keep=3000, threshold=25):
         self.records = collections.deque(maxlen=keep)
+        self.history = collections.deque(maxlen=HISTORY_SPAN // HISTORY_STEP + 60)
         self.lock = threading.Lock()
         self.seq = 0
         self.count = 0
@@ -69,6 +80,8 @@ class LiveBuffer:
             self.count += 1
             record["seq"] = self.seq
             self.records.append(record)
+            if not self.history or now - self.history[-1]["received"] >= HISTORY_STEP:
+                self.history.append(slim(record))
             self.geometry = {"n_cells": ens.get("n_cells"), "cell_m": ens.get("cell_m"),
                              "bin1_m": ens.get("bin1_m"), "up": ens.get("up"),
                              "serial": ens.get("serial"), "beam_angle": ens.get("beam_angle"),
@@ -80,6 +93,9 @@ class LiveBuffer:
     def snapshot(self, since=0, limit=1500):
         with self.lock:
             new = [r for r in self.records if r["seq"] > since]
+            # Only a page starting from nothing needs the history; one that
+            # keeps polling adds to its own copy as records arrive.
+            history = list(self.history) if since == 0 else []
             return {
                 "seq": self.seq,
                 "count": self.count,
@@ -90,4 +106,18 @@ class LiveBuffer:
                 "last_received": self.last_received,
                 "age": None if self.last_received is None else round(time.time() - self.last_received, 1),
                 "records": new[-limit:],
+                "history": history,
             }
+
+
+def slim(record):
+    """A record cut down to what the time plots need."""
+    ei = record.get("ei")
+    return {
+        "seq": record["seq"],
+        "time": record["time"],
+        "received": record["received"],
+        "depth": record["depth"],
+        "target": record["target"],
+        "eim": None if ei is None else [int(round(sum(beams) / len(beams))) for beams in ei],
+    }

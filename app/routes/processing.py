@@ -346,7 +346,9 @@ def _placement():
     The scheduler's own rule (machines.can_run), so the page shows where a
     task can actually land, not a reimplementation that could drift.
     """
-    enabled = Machine.query.filter_by(enabled=True).order_by(Machine.name).all()
+    # Capacity 0 takes nothing, which is how the Hub's own host is kept free.
+    enabled = [m for m in Machine.query.filter_by(enabled=True).order_by(Machine.name).all()
+               if (m.max_weight or 0) > 0]
     rows = []
     for tool in Tool.query.filter_by(available=True).order_by(Tool.name).all():
         required = machines.tool_requirements(tool)
