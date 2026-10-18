@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}{{ machine.name if machine else 'Add machine' }} · PIScO Hub{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/processing.css') }}">
+{% endblock %}
+
+{% block content %}
+{% with section = 'machines' %}{% include "partials/processing_nav.html" %}{% endwith %}
+{# Values: what was just submitted if it had errors, else the machine's own. #}
+{% set v = form or {} %}
+{% macro val(key, default='') %}{{ v[key] if form else default }}{% endmacro %}
+{% set tags = (form.tags if form else (machine.tags | from_json | join(' ') if machine else '')) %}
+{% set local = machine and machine.is_local %}
+
+<div class="ph-header">
+    <h1>{{ machine.name if machine else 'Add machine' }}</h1>
+    {% if local %}<span class="muted">the machine the Hub runs on</span>{% endif %}
+    <div class="actions">
+        <a class="btn" href="{{ url_for('processing.machine_list') }}">&larr; Machines</a>
+    </div>
+</div>
+
+<form method="POST" class="wizard-form">
+    {% if errors %}
+    <div class="flash flash-error"><strong>Please check:</strong>
+        <ul style="margin: 0.4rem 0 0 1.2rem;">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>
+    {% endif %}
+    <fieldset class="card" style="border: 1px solid var(--border);">
+        <div class="input-group">
+            <label for="name">Name <span class="req">*</span></label>
+            <input type="text" id="name" name="name" class="wide" required placeholder="gpuworker6"
+                   value="{{ val('name', machine.name if machine else '') }}">
+        </div>
+        {% if not local %}
+        <div class="input-group">
+            <label for="host">Host <span class="req">*</span></label>
+            <div class="muted small hint">Reached over key-based SSH from the Hub's account, with the shared storage mounted at the same paths.</div>
+            <input type="text" id="host" name="host" class="wide mono" required placeholder="10.11.11.x"
+                   value="{{ val('host', machine.host if machine else '') }}">
+        </div>
+        <div class="input-group">
+            <label for="ssh_user">SSH user</label>
+            <input type="text" id="ssh_user" name="ssh_user" class="mono" placeholder="pisco"
+                   value="{{ val('ssh_user', (machine.ssh_user or '') if machine else 'pisco') }}">
+        </div>
+        {% endif %}
+        <div class="input-group">
+            <label for="tags">Tags</label>
+            <div class="muted small hint">What this machine offers, separated by spaces. A tool runs only where its <span class="mono">requires</span> are all present.</div>
+            <input type="text" id="tags" name="tags" class="wide mono" value="{{ tags }}" placeholder="pisco-tools gpu">
+            {% if known_tags %}
+            <div class="small" style="margin-top: 6px;">
+                {% for t in known_tags %}<a href="#" class="chip mono add-tag" data-tag="{{ t }}" title="Add">+ {{ t }}</a> {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        <div class="input-group">
+            <label><input type="checkbox" name="dedicated" {% if (form and 'dedicated' in form) or (not form and machine and machine.dedicated) %}checked{% endif %}>
+                Dedicated</label>
+            <div class="muted small hint">Take only tools that require one of this machine's tags. Use it for a machine set up for one job, like the EcoTaxa server, so tools that require nothing do not land there.</div>
+        </div>
+        <div class="input-group">
+            <label for="max_weight">Capacity</label>
+            <div class="muted small hint">The running tasks' weights stay below this. With 10, one segmenter (weight 8) at a time.</div>
+            <input type="number" id="max_weight" name="max_weight" min="0" style="width: 8em;"
+                   value="{{ val('max_weight', machine.max_weight if machine else 10) }}">
+        </div>
+        {% if not local %}
+        <div class="input-group">
+            <label><input type="checkbox" name="enabled" {% if (form and 'enabled' in form) or (not form and (not machine or machine.enabled)) %}checked{% endif %}>
+                Enabled</label>
+            <div class="muted small hint">A disabled machine gets no new tasks; running ones finish.</div>
+        </div>
+        {% endif %}
+        <div class="input-group" style="margin-bottom: 0;">
+            <label for="note">Note</label>
+            <input type="text" id="note" name="note" class="wide" placeholder="CT 120 on pve0, RTX 3060"
+                   value="{{ val('note', (machine.note or '') if machine else '') }}">
+        </div>
+    </fieldset>
+    <div class="actions">
+        <button type="submit" class="btn btn-primary">{{ 'Save' if machine else 'Add and check' }}</button>
+        <a class="btn" href="{{ url_for('processing.machine_list') }}">Cancel</a>
+    </div>
+</form>
+
+{% if machine and not local %}
+<form action="{{ url_for('processing.machine_delete', machine_id=machine.id) }}" method="POST" style="margin-top: 2rem;"
+      onsubmit="return confirm('Remove machine \'{{ machine.name }}\'? Finished tasks keep their history.')">
+    <button type="submit" class="btn btn-danger">Remove machine</button>
+</form>
+{% endif %}
+
+<script>
+document.querySelectorAll('.add-tag').forEach(function (chip) {
+    chip.addEventListener('click', function (e) {
+        e.preventDefault();
+        var field = document.getElementById('tags');
+        var tags = field.value.split(/[\s,]+/).filter(Boolean);
+        if (tags.indexOf(chip.dataset.tag) === -1) tags.push(chip.dataset.tag);
+        field.value = tags.join(' ');
+    });
+});
+</script>
+{% endblock %}

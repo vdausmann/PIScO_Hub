@@ -148,7 +148,7 @@ task running on another machine. Task ids are in `workflow status`.
 
 ```
 hub machines list                       with status, load, capacity, tags, and the last probe error
-hub machines add <name> --host <h> [--user <u>] [--tag <t> …] [--max-weight <n>]
+hub machines add <name> --host <h> [--user <u>] [--tag <t> …] [--max-weight <n>] [--dedicated]
 hub machines enable <id> | disable <id>
 hub machines remove <id>                refused while it has running tasks
 ```

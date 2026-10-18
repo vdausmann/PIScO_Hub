@@ -1,5 +1,5 @@
 {# Sub-navigation shared by every Processing Hub page. `section` names the
-   active link. Further sections (Tools, Machines, Tokens) join as they land. #}
+   active link. Further sections (Tools, Tokens) join as they land. #}
 <nav class="ph-nav">
     <a class="ph-brand" href="{{ url_for('processing.dashboard') }}">Processing Hub</a>
     <a class="ph-link {% if section == 'workflows' %}active{% endif %}"
@@ -8,6 +8,8 @@
        href="{{ url_for('processing.protocol') }}">Protocol</a>
     <a class="ph-link {% if section == 'templates' %}active{% endif %}"
        href="{{ url_for('workflow.list_templates') }}">Templates</a>
+    <a class="ph-link {% if section == 'machines' %}active{% endif %}"
+       href="{{ url_for('processing.machine_list') }}">Machines</a>
     <span class="ph-spacer"></span>
     {% include "partials/load_pill.html" %}
     <a class="ph-home" href="{{ url_for('index') }}">&larr; Dashboard</a>

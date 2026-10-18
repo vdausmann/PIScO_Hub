@@ -428,7 +428,7 @@ def cmd_machines_list(client, args):
     print_table(data["machines"], [
         ("ID", "id"), ("NAME", "name"), ("HOST", "host"), ("STATUS", "status"),
         ("ENABLED", "enabled"), ("LOAD", "load"), ("CAPACITY", "max_weight"),
-        ("TAGS", "tags"),
+        ("TAGS", "tags"), ("DEDICATED", "dedicated"),
     ])
     for machine in data["machines"]:
         if machine.get("last_probe_error"):
@@ -443,6 +443,8 @@ def cmd_machines_add(client, args):
         payload["max_weight"] = args.max_weight
     if args.tag:
         payload["tags"] = args.tag
+    if args.dedicated:
+        payload["dedicated"] = True
     data = client.post("/machines", payload)
     if args.json:
         print_json(data)
@@ -586,6 +588,8 @@ def build_parser():
     p.add_argument("--max-weight", type=int, dest="max_weight")
     p.add_argument("--tag", action="append",
                    help="Capability tag, e.g. gpu; repeat for several")
+    p.add_argument("--dedicated", action="store_true",
+                   help="Take only tools that require one of its tags")
     p.set_defaults(func=cmd_machines_add)
     p = machines.add_parser("remove")
     p.add_argument("id", type=int)

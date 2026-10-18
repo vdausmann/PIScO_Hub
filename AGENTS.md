@@ -32,7 +32,9 @@ Machine-readable API description: `GET /api/v1/openapi.json`.
 - **Machine** — where a task runs. The `local` machine is the Hub's own
   host; others are reached over SSH and require shared storage mounted at
   identical paths. A tool may declare `requires` tags (e.g. `["gpu"]`)
-  that a machine's `tags` must cover.
+  that a machine's `tags` must cover. A machine marked `dedicated` takes
+  only tools that require one of its tags, so a server set up for one job
+  (EcoTaxa) does not also catch every tool that requires nothing.
 - **Scheduling** — each task has a `weight`; the running weights on a
   machine stay below that machine's `max_weight`. Lower `priority` numbers
   are scheduled first. A task waits until some enabled, reachable machine
@@ -306,8 +308,11 @@ worker: the Hub writes the settings file locally and passes that path to
 the remote tool, and nothing is copied. Key-based, non-interactive SSH
 from the Hub's account to each worker is required.
 
-Register one with `POST /api/v1/machines` or
+Register one on the Processing Hub's **Machines** page, with
+`POST /api/v1/machines`, or
 `hub machines add gpu-box --host 10.0.0.5 --user pisco --tag gpu`. The
+page also edits tags, capacity and the `dedicated` flag, and lists for
+every tool the machines it can run on. The
 Hub probes reachability periodically; an unreachable machine is skipped
 rather than failing the tasks queued for it. Pin a task to a machine with
 `"machine": "<name>"` in its task spec, or leave it out and let the

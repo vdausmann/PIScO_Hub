@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Machines · PIScO Hub{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/processing.css') }}">
+{% endblock %}
+
+{% block content %}
+{% with section = 'machines' %}{% include "partials/processing_nav.html" %}{% endwith %}
+
+<div class="ph-header">
+    <h1>Machines</h1>
+    <span class="muted">where tasks run, and what each one may take</span>
+    <div class="actions">
+        <a class="btn btn-primary" href="{{ url_for('processing.machine_edit') }}">+ Add machine</a>
+    </div>
+</div>
+
+<div class="table-scroll">
+<table class="ph-table">
+    <thead><tr><th></th><th>Name</th><th>Host</th><th>Tags</th><th>Load</th><th>Last seen</th><th></th></tr></thead>
+    <tbody>
+    {% for m in machines %}
+    {% set online = m.is_local or m.status == 'online' %}
+    <tr class="task-row{% if not m.enabled %} muted{% endif %}">
+        <td><span class="status-dot {{ 'status-done' if online and m.enabled else ('status-failed' if m.enabled else 'status-pending') }}"
+                  title="{{ 'disabled' if not m.enabled else ('online' if online else 'offline') }}"></span></td>
+        <td><a href="{{ url_for('processing.machine_edit', machine_id=m.id) }}"><strong>{{ m.name }}</strong></a>
+            {% if not m.enabled %}<span class="muted small">disabled</span>{% endif %}
+            {% if m.note %}<div class="muted small">{{ m.note }}</div>{% endif %}
+            {% if m.enabled and not online and m.last_probe_error %}<div class="small" style="color: var(--bad);">{{ m.last_probe_error }}</div>{% endif %}</td>
+        <td class="mono small">{% if m.is_local %}<span class="muted">the Hub itself</span>{% else %}{{ m.ssh_user ~ '@' if m.ssh_user }}{{ m.host }}{% endif %}</td>
+        <td>{% for t in m.tags | from_json %}<span class="chip mono">{{ t }}</span> {% endfor %}
+            {% if m.dedicated %}<span class="chip" title="Takes only tools that require one of its tags">dedicated</span>{% endif %}</td>
+        <td class="mono small">{{ loads[m.id] }} / {{ m.max_weight }}</td>
+        <td class="small muted">{% if m.is_local %}—{% elif m.last_seen_at %}{{ m.last_seen_at.strftime('%d.%m. %H:%M') }}{% else %}never{% endif %}</td>
+        <td style="white-space: nowrap;">
+            <a class="btn btn-sm" href="{{ url_for('processing.machine_edit', machine_id=m.id) }}">Edit</a>
+            {% if not m.is_local %}
+            <form action="{{ url_for('processing.machine_check', machine_id=m.id) }}" method="POST" style="display: inline;">
+                <button type="submit" class="btn btn-sm" title="Try ssh and the shared storage now">Check</button>
+            </form>
+            <form action="{{ url_for('processing.machine_toggle', machine_id=m.id) }}" method="POST" style="display: inline;">
+                <button type="submit" class="btn btn-sm">{{ 'Disable' if m.enabled else 'Enable' }}</button>
+            </form>
+            {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<h3 class="pick-group">Where each tool can run</h3>
+<p class="muted small">The scheduler's own rule: a machine's tags must cover what the tool requires, and a
+    <em>dedicated</em> machine only takes tools that ask for one of its tags. Among these, a task goes to the
+    least-loaded machine with room for it. Disabled machines are left out.</p>
+<div class="table-scroll">
+<table class="ph-table">
+    <thead><tr><th>Tool</th><th>Requires</th><th>Can run on</th></tr></thead>
+    <tbody>
+    {% for row in placement %}
+    <tr class="task-row">
+        <td class="mono small">{{ row.tool.name }}</td>
+        <td>{% for t in row.requires %}<span class="chip mono">{{ t }}</span> {% else %}<span class="muted small">nothing</span>{% endfor %}</td>
+        <td class="small">{% for m in row.machines %}{{ m.name }}{{ ', ' if not loop.last }}{% else %}<strong style="color: var(--bad);">no machine — tasks of this tool will wait forever</strong>{% endfor %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

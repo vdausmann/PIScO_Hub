@@ -62,10 +62,93 @@ def tool_requirements(tool):
         return set()
 
 
+def can_run(machine, required):
+    """Whether a machine may take a tool with these requirements.
+
+    Its tags must cover them all. A dedicated machine additionally takes
+    only tools that ask for one of its tags: a tool that requires nothing
+    runs anywhere else, but not there.
+    """
+    tags = machine_tags(machine)
+    if not required <= tags:
+        return False
+    return not machine.dedicated or bool(required & tags)
+
+
 def machine_load(machine_id):
     """Weight of everything currently running on one machine."""
     running = Task.query.filter_by(status="Running", machine_id=machine_id).all()
     return sum(task.weight for task in running)
+
+
+def apply_changes(machine, data):
+    """Validate edits to a machine and apply them; return the errors.
+
+    Shared by the API and the machines page so both accept the same
+    things. Nothing is applied when anything is wrong. Keys absent from
+    `data` are left alone.
+    """
+    errors = []
+    changes = {}
+
+    if "name" in data:
+        name = (data["name"] or "").strip()
+        clash = Machine.query.filter(Machine.name == name, Machine.id != machine.id).first()
+        if not name:
+            errors.append("A name is required.")
+        elif clash:
+            errors.append(f"Machine '{name}' already exists.")
+        changes["name"] = name
+
+    for key in ("host", "ssh_user", "note"):
+        if key in data:
+            changes[key] = (data[key] or "").strip() or None
+    if not machine.is_local and "host" in changes and not changes["host"]:
+        errors.append("A host is required for a machine reached over SSH.")
+
+    if "max_weight" in data:
+        try:
+            changes["max_weight"] = int(data["max_weight"])
+            if changes["max_weight"] < 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            errors.append("Capacity must be a whole number, 0 or more.")
+
+    if "tags" in data:
+        tags = data["tags"]
+        if isinstance(tags, str):
+            tags = tags.replace(",", " ").split()
+        if not isinstance(tags, list) or not all(isinstance(t, str) for t in tags):
+            errors.append("Tags must be a list of strings.")
+        else:
+            # Order kept, duplicates and blanks dropped.
+            changes["tags"] = json.dumps(list(dict.fromkeys(t.strip() for t in tags if t.strip())))
+
+    for key in ("enabled", "dedicated"):
+        if key in data:
+            changes[key] = bool(data[key])
+    if machine.is_local and changes.get("enabled") is False:
+        errors.append("The local machine cannot be disabled.")
+
+    if not errors:
+        for key, value in changes.items():
+            setattr(machine, key, value)
+    return errors
+
+
+def remove(machine):
+    """Delete a machine; return why not, or None when it is gone.
+
+    Finished tasks are kept and just lose the machine reference.
+    """
+    if machine.is_local:
+        return "The local machine cannot be removed."
+    if Task.query.filter_by(machine_id=machine.id, status="Running").count():
+        return f"'{machine.name}' still has running tasks."
+    Task.query.filter_by(machine_id=machine.id).update({"machine_id": None})
+    db.session.delete(machine)
+    db.session.commit()
+    return None
 
 
 def ssh_command(machine, remote_command, connect_timeout=10):
@@ -114,6 +197,19 @@ def probe(machine, data_root=None, timeout=5):
     if result.returncode == 255:
         return False, f"ssh failed: {detail}"
     return False, f"cannot use {data_root}: {detail}"
+
+
+def probe_now(machine, app):
+    """Probe one machine at once and record the result."""
+    from . import artifacts
+
+    ready, reason = probe(machine, artifacts.data_root(app))
+    machine.status = "online" if ready else "offline"
+    machine.last_probe_error = reason
+    if ready:
+        machine.last_seen_at = datetime.now()
+    db.session.commit()
+    return ready, reason
 
 
 def _check_local_storage(data_root):

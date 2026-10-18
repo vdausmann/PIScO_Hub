@@ -65,6 +65,7 @@ def machine_dict(machine):
         "enabled": bool(machine.enabled),
         "status": "online" if machine.is_local else machine.status,
         "tags": _json_or_default(machine.tags, []),
+        "dedicated": bool(machine.dedicated),
         "max_weight": machine.max_weight,
         "load": load,
         "remaining_capacity": (machine.max_weight or 0) - load,

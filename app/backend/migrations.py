@@ -34,6 +34,7 @@ _MIGRATIONS = {
     ],
     "machine": [
         ("last_probe_error", "TEXT"),
+        ("dedicated", "BOOLEAN DEFAULT 0"),
     ],
     "api_token": [
         ("scope", "VARCHAR(20) DEFAULT 'full'"),

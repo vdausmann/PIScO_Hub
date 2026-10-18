@@ -73,6 +73,9 @@ class Machine(db.Model):
     ssh_user = db.Column(db.String(100), nullable=True)
     max_weight = db.Column(db.Integer, default=10)
     tags = db.Column(db.Text, default="[]")  # JSON list, matched against Tool.requires
+    # Takes only tasks whose tool requires one of its tags, so a machine set
+    # up for one job (EcoTaxa) does not catch every tool that requires nothing.
+    dedicated = db.Column(db.Boolean, default=False)
     enabled = db.Column(db.Boolean, default=True)
     status = db.Column(db.String(20), default='unknown')  # online, offline, unknown
     last_seen_at = db.Column(db.DateTime, nullable=True)

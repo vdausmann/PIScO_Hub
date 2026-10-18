@@ -185,8 +185,8 @@ class TaskManager:
         """Machines that could run this task right now.
 
         A task pinned to a machine waits for that one; otherwise any
-        enabled, reachable machine whose tags cover the tool's
-        requirements and that still has capacity will do.
+        enabled, reachable machine that may run the tool (see
+        machines.can_run) and still has capacity will do.
         """
         if task.machine_id is not None:
             candidates = [Machine.query.get(task.machine_id)]
@@ -195,7 +195,7 @@ class TaskManager:
             required = machines.tool_requirements(task.tool)
             candidates = [
                 m for m in Machine.query.filter_by(enabled=True).all()
-                if required <= machines.machine_tags(m)
+                if machines.can_run(m, required)
             ]
 
         return [
