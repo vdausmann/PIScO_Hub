@@ -8,7 +8,12 @@ app = create_app()
 @app.route('/')
 @login_required
 def index():
-    return render_template('index.html')
+    from app.backend.links import load_links
+    try:
+        links, links_error = load_links(), None
+    except (OSError, ValueError) as e:
+        links, links_error = [], str(e)
+    return render_template('index.html', links=links, links_error=links_error)
 
 if __name__ == '__main__':
     # Debug off unless asked for: the reloader restarts the process, which

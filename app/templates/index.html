@@ -42,4 +42,20 @@
     </a>
 
 </div>
+
+{% if links or links_error %}
+<h2 style="margin-top: 2rem;">On the ship's network</h2>
+{% if links_error %}<p style="color: #c00;">Links file: {{ links_error }}</p>{% endif %}
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px;">
+    {% for link in links %}
+    <a href="{{ link.url }}" target="_blank" rel="noopener" style="text-decoration:none; color:inherit;">
+        <div style="background:var(--card); padding:12px 16px; border-radius:10px; border: 1px solid var(--accent); height: 100%; box-sizing: border-box;">
+            <strong>{{ link.title }}</strong> <span style="opacity:.6;">&#8599;</span>
+            {% if link.description %}<div style="opacity:.8; font-size:.9em; margin-top:4px;">{{ link.description }}</div>{% endif %}
+            <div style="opacity:.5; font-size:.8em; margin-top:4px; font-family: monospace;">{{ link.url }}</div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
 {% endblock %}

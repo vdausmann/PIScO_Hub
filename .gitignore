@@ -17,3 +17,6 @@ hardware_control/state/
 
 # the LADCP setup of the ship the Hub runs on (edited on the LADCP page)
 hardware_control/ladcp.json
+
+# landing-page links to the ship's services; links.example.json shows the shape
+links.json

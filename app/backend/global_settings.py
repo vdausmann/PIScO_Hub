@@ -34,6 +34,8 @@ def seed_settings(app):
         'DSHIP_POLL_INTERVAL': {'value': '120', 'type': 'int', 'desc': "Seconds between reads of DSHIP's action log."},
         'MODULES_FILE': {'value': 'modules.json', 'type': 'str',
                          'desc': 'JSON list of external pages shown in the Visualization Hub. Relative paths are taken from the Hub root.'},
+        'LINKS_FILE': {'value': 'links.json', 'type': 'str',
+                       'desc': "JSON list of links on the landing page to services on the ship's network (title, url, description). Relative paths are taken from the Hub root; see links.example.json."},
     }
 
     with app.app_context():
