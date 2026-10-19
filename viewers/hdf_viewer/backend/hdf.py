@@ -114,7 +114,7 @@ def _attr_text(value):
     return str(value)
 
 
-def get_dataset_data(file_path: str, dataset_path: str, frame_idx):
+def get_dataset_data(file_path: str, dataset_path: str, frame_idx, max_dimension=512):
     """One image of a dataset for the browser, or its first values.
 
     Images: a 2-D array; a stack of grey frames (frames, h, w); a stack of
@@ -175,7 +175,6 @@ def get_dataset_data(file_path: str, dataset_path: str, frame_idx):
             img = Image.fromarray(img_data)
 
         if img is not None:
-            max_dimension = 512
             if img.width > max_dimension or img.height > max_dimension:
                 img.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
 

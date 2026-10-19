@@ -1,81 +1,206 @@
-.hdf-viewer {
+/* Three columns: file tree | image (at least half the width) | dataset info.
+   Colours come from base.html (--bg, --text, --card, --accent) so dark mode
+   follows; borders are the text colour, faded. */
+
+.hdf-header {
 	display: flex;
-	gap: 20px;
-	height: 80vh;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: 6px 16px;
+	padding: 8px 16px 0;
 }
 
+.hdf-header h1 {
+	margin: 0;
+	font-size: 1.3em;
+}
 
-.hdf-tree {
+.hdf-path {
 	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	opacity: 0.8;
+}
+
+.hdf-root-attrs {
+	flex-basis: 100%;
+	font-size: 0.85em;
+}
+
+.hdf-root-attrs pre,
+.hdf-info pre {
+	max-height: 30vh;
 	overflow: auto;
-	border-right: 1px solid #555;
+	margin: 6px 0;
+	padding: 8px;
+	background: var(--card);
+	border: 1px solid color-mix(in srgb, var(--text) 15%, transparent);
+	border-radius: 4px;
+	white-space: pre-wrap;
+	word-break: break-all;
 }
 
+.hdf-viewer {
+	display: grid;
+	grid-template-columns: minmax(180px, 16rem) minmax(50%, 1fr) minmax(200px, 20rem);
+	gap: 12px;
+	height: calc(100vh - 110px);
+	padding: 8px 16px 16px;
+	box-sizing: border-box;
+}
 
+.hdf-tree,
 .hdf-info {
-	flex: 1;
-	padding: 20px;
+	overflow: auto;
+	min-height: 0;
+	padding: 8px 10px;
+	background: var(--card);
+	border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+	border-radius: 6px;
+	font-size: 0.9em;
+}
+
+.hdf-tree h3,
+.hdf-info h3 {
+	margin: 0 0 8px;
+	font-size: 0.9em;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	opacity: 0.7;
+}
+
+#tree-root,
+#tree-root ul {
+	list-style: none;
+	margin: 0;
+	padding-left: 14px;
+}
+
+#tree-root {
+	padding-left: 0;
+}
+
+#tree-root li.dataset {
+	cursor: pointer;
+	color: var(--accent);
+}
+
+#tree-root li.dataset.active {
+	font-weight: bold;
+}
+
+.hdf-preview {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	gap: 8px;
 }
 
 #dataset-preview {
+	flex: 1;
+	min-height: 0;
 	overflow: auto;
-
-	max-height: 500px;
-
-	max-width: 100%;
-
-	border: 1px solid #444;
-
-	padding: 5px;
-
-	font-family: monospace;
-
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--card);
+	border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+	border-radius: 6px;
+	padding: 6px;
 	box-sizing: border-box;
+	font-family: monospace;
 }
 
+/* Value grids need to start top-left and scroll, not sit centred. */
+#dataset-preview.values {
+	display: block;
+}
+
+.dataset-img {
+	max-width: 100%;
+	max-height: 100%;
+	object-fit: contain;
+	image-rendering: auto;
+}
+
+.hdf-hint {
+	opacity: 0.6;
+	font-family: sans-serif;
+}
+
+/* ---- frame navigation ---- */
+
+.frame-nav-bar {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.frame-nav-bar input[type=range] {
+	flex: 1;
+}
+
+.frame-indicator {
+	min-width: 9em;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+}
+
+.nav-btn {
+	padding: 4px 10px;
+	cursor: pointer;
+}
+
+/* ---- dataset info ---- */
+
+.hdf-info dl {
+	display: grid;
+	grid-template-columns: max-content 1fr;
+	gap: 4px 10px;
+	margin: 0 0 8px;
+}
+
+.hdf-info dt {
+	opacity: 0.7;
+}
+
+.hdf-info dd {
+	margin: 0;
+	font-family: monospace;
+	word-break: break-all;
+}
+
+.hdf-info details {
+	margin-top: 6px;
+}
+
+/* ---- value grid (1-D and small datasets) ---- */
 
 .data-row {
 	display: flex;
-
 	flex-wrap: wrap;
-
 	width: fit-content;
 }
 
-
 .data-cell {
 	width: 60px;
-
 	min-width: 60px;
-
 	height: 25px;
-
 	display: flex;
-
 	align-items: center;
-
 	justify-content: center;
-
 	border: 1px solid #222;
-
 	font-size: 12px;
-
 	box-sizing: border-box;
-
 	color: white;
 }
 
-
-#colorbar-container {
-	margin-bottom: 10px;
-}
-
-
 #colorbar {
-	height: 20px;
-
-	border: 1px solid #444;
-
+	height: 14px;
+	border: 1px solid color-mix(in srgb, var(--text) 25%, transparent);
 	background:
 		linear-gradient(to right,
 			rgb(68, 1, 84),
@@ -85,11 +210,24 @@
 			rgb(253, 231, 37));
 }
 
-
 #colorbar-labels {
 	display: flex;
-
 	justify-content: space-between;
-
 	font-size: 12px;
+}
+
+@media (max-width: 1100px) {
+	.hdf-viewer {
+		grid-template-columns: 1fr;
+		height: auto;
+	}
+
+	.hdf-tree,
+	.hdf-info {
+		max-height: 40vh;
+	}
+
+	#dataset-preview {
+		min-height: 60vh;
+	}
 }

@@ -12,77 +12,44 @@ HDF Viewer
 
 {% block content %}
 
-<h1>
-    HDF Viewer
-</h1>
-
-
-<p>
-    File:
-</p>
-
-<pre>
-{{ file_path }}
-</pre>
-
-<p>
-    Root level attributes:
-</p>
-
-<pre>
-{{ root_level_attributes }}
-</pre>
+<div class="hdf-header">
+    <h1>HDF Viewer</h1>
+    <code class="hdf-path" title="{{ file_path }}">{{ file_path }}</code>
+    {% if root_level_attributes %}
+    <details class="hdf-root-attrs">
+        <summary>Root attributes</summary>
+        <pre>{{ root_level_attributes }}</pre>
+    </details>
+    {% endif %}
+</div>
 
 <div class="hdf-viewer">
 
-    <div class="hdf-tree">
+    <aside class="hdf-tree">
+        <h3>File structure</h3>
+        <ul id="tree-root"></ul>
+    </aside>
 
-        <h3>
-            File structure
-        </h3>
-
-        <ul id="tree-root">
-        </ul>
-
-    </div>
-
-
-    <div class="hdf-info">
-
-        <h3>
-            Dataset information
-        </h3>
-
-        <div id="dataset-info">
-
-            Select a dataset
-
+    <main class="hdf-preview">
+        <div id="frame-nav"></div>
+        <div id="colorbar-container" hidden>
+            <div id="colorbar"></div>
+            <div id="colorbar-labels">
+                <span id="min-value"></span>
+                <span id="max-value"></span>
+            </div>
         </div>
+        <div id="dataset-preview">
+            <p class="hdf-hint">Select a dataset in the file structure.</p>
+        </div>
+    </main>
 
-		<h3>
-			Data Preview
-		</h3>
-
-		<div id="colorbar-container">
-
-			<div id="colorbar"></div>
-
-			<div id="colorbar-labels">
-
-				<span id="min-value"></span>
-
-				<span id="max-value"></span>
-
-			</div>
-
-		</div>
-
-
-		<div id="dataset-preview">
-
-		</div>
-
-    </div>
+    <aside class="hdf-info">
+        <h3>Dataset</h3>
+        <div id="dataset-info">
+            <p class="hdf-hint">Nothing selected.</p>
+        </div>
+    </aside>
 
 </div>
 

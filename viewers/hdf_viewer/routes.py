@@ -84,8 +84,10 @@ def dataset_data():
     file_path = request.args["file"]
     dataset_path = request.args["dataset"]
     frame_idx = int(request.args.get('frame', 0))
+    # The page asks for the size it shows the image at; keep it sane.
+    size = max(128, min(2048, int(request.args.get('size', 512))))
 
-    info = get_dataset_data(file_path, dataset_path, frame_idx)
+    info = get_dataset_data(file_path, dataset_path, frame_idx, size)
 
     if info is None:
         return jsonify({"error": "not a dataset"}), 400
