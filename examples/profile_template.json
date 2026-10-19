@@ -56,8 +56,8 @@
       "frames": {
         "type": "string",
         "format": "directory",
-        "title": "Frame directory",
-        "description": "Raw frames of this profile on /mnt/pisco"
+        "title": "Frames (folder)",
+        "description": "Raw frames of this profile: a folder of images, or of the PISCO3 recorder's .h5 files (then set the cast's start and end time)"
       },
       "skip_first": {
         "type": "integer",
@@ -72,6 +72,37 @@
         "minimum": 0,
         "default": 0,
         "description": "Frames dropped at the end, e.g. the upcast"
+      },
+      "start_time": {
+        "type": "string",
+        "title": "Cast start (UTC)",
+        "description": "Keep frames from this time on, e.g. 2026-10-19T02:53:28Z. For recordings that hold more than one cast (the PISCO3 recorder's folder); Fill from DSHIP / Pick a cast sets it to 'in the water'. Leave empty for a folder holding one profile."
+      },
+      "end_time": {
+        "type": "string",
+        "title": "Cast end (UTC)",
+        "description": "Keep frames up to this time; DSHIP fills 'on deck'. For the downcast only, use the max-depth time DSHIP reports."
+      },
+      "image_size": {
+        "type": "integer",
+        "title": "Frame size (px)",
+        "minimum": 64,
+        "default": 2560,
+        "description": "Width = height of the camera's frames, for both segmenter passes: 2560 for PISCO2, 4504 for PISCO3. A mismatch stops the segmenter."
+      },
+      "pixel_size_um": {
+        "type": "number",
+        "title": "Pixel size (µm)",
+        "minimum": 0.001,
+        "default": 22.5,
+        "description": "Micrometres per pixel, for the scale bar and object_esd in EcoTaxa: 22.5 for PISCO2, 17.13 for PISCO3."
+      },
+      "deconv_model": {
+        "type": "string",
+        "title": "Deconvolution model",
+        "sticky": true,
+        "default": "best_ssim_v5a_noGrad_ablation.pth",
+        "description": "Model file of the deconvolution step, a name in its models folder or a full path. Trained on PISCO2 frames."
       },
       "sensor_log": {
         "type": "string",
@@ -153,6 +184,12 @@
         },
         "skipLastNFrames": {
           "$param": "skip_last"
+        },
+        "startTime": {
+          "$param": "start_time"
+        },
+        "endTime": {
+          "$param": "end_time"
         }
       }
     },
@@ -169,8 +206,12 @@
         "mode": "Mode::BACKGROUND_CORRECTION_AND_COMPRESSION",
         "numProcesses": 4,
         "allowedImageFileExtensions": ".png",
-        "imageSizeX": 2560,
-        "imageSizeY": 2560,
+        "imageSizeX": {
+          "$param": "image_size"
+        },
+        "imageSizeY": {
+          "$param": "image_size"
+        },
         "imageStackSize": 12,
         "threshold": 10,
         "minContourArea": 10,
@@ -188,7 +229,9 @@
             "output": "results"
           }
         },
-        "modelPath": "best_ssim_v5a_noGrad_ablation.pth",
+        "modelPath": {
+          "$param": "deconv_model"
+        },
         "atlasFill": "texture",
         "atlasPadding": 5
       }
@@ -211,8 +254,12 @@
         "mode": "Mode::OBJECT_EXTRACTION",
         "numProcesses": 4,
         "allowedImageFileExtensions": ".png",
-        "imageSizeX": 2560,
-        "imageSizeY": 2560,
+        "imageSizeX": {
+          "$param": "image_size"
+        },
+        "imageSizeY": {
+          "$param": "image_size"
+        },
         "imageStackSize": 12,
         "threshold": 10,
         "minContourArea": 10,
@@ -276,7 +323,9 @@
         },
         "isolateCrops": true,
         "scaleBar": true,
-        "pixelSizeUm": 22.5,
+        "pixelSizeUm": {
+          "$param": "pixel_size_um"
+        },
         "predictionsPath": {
           "$from": {
             "task": 5,
@@ -324,6 +373,18 @@
         "pcaPath": {
           "$param": "pca_path"
         }
+      }
+    }
+  ],
+  "variants": [
+    {
+      "name": "profile_pisco3",
+      "description": "One PISCO3 profile, from the recorder's .h5 files to EcoTaxa: pick the cast by time (Pick a cast / Fill from DSHIP), then the same chain as 'profile'. Defaults for the PISCO3 camera: 4504 px frames at 17.13 µm/px. Deconvolution and the ViT models were trained on PISCO2 and are tried as they are.",
+      "defaults": {
+        "instrument": "PISCO3",
+        "image_size": 4504,
+        "pixel_size_um": 17.13,
+        "frames": "/mnt/nas_a/MSN147/unprocessed/pisco/hdf5/"
       }
     }
   ]

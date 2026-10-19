@@ -104,7 +104,10 @@
                    value="{{ value if value is not none else '' }}">
             <button type="button" class="btn btn-sm" data-dship-now
                     title="Station, CTD cast, position and date from DSHIP: the CTD cast the profile's first frame belongs to, or the one running now">Fill from DSHIP</button>
+            <button type="button" class="btn btn-sm" data-dship-pick
+                    title="Choose the CTD cast from DSHIP's list; fills station, cast, position, date and the cast's start and end time">Pick a cast…</button>
         </div>
+        <select class="wide" data-dship-list hidden style="margin-top: 6px;"></select>
         <div class="muted small" data-dship-note></div>
         {% else %}
         <input type="text" id="p_{{ key }}" name="p_{{ key }}" class="wide"
@@ -447,12 +450,22 @@ document.querySelectorAll("input[data-axis]").forEach(input => {
         const r = await fetch(`/api/v1/dship/at?time=${time}`, {showLoader: false});
         const op = await r.json();
         if (!r.ok) { const m = op.error || "No DSHIP operation at that time."; note ? (note.textContent = m) : alert(m); return; }
+        applyOperation(op, note);
+    }
+
+    // Fills the form from one DSHIP operation. A template with a cast time
+    // window (start_time / end_time: the PISCO3 recorder keeps every cast
+    // in one folder) gets "in the water" to "on deck".
+    function applyOperation(op, note) {
         const set = (key, value) => {
             const el = document.getElementById("p_" + key);
             if (el && value != null) { el.value = value; el.dispatchEvent(new Event("input")); }
         };
         set("station", op.station); set("ctd_cast", op.cast);
         set("lat", op.lat); set("lon", op.lon); set("date", op.date);
+        const windowed = document.getElementById("p_start_time") || document.getElementById("p_end_time");
+        if (op.in_water) set("start_time", op.in_water.time);
+        if (op.on_deck) set("end_time", op.on_deck.time);
         const t = e => e ? e.time.slice(11, 16) : "–";
         (note ? (m => { note.textContent = m.replace(/\n/g, " · "); }) : alert)(`${op.operation} (${op.device_name || op.device}), CTD cast ${op.cast ?? "–"}` +
               (op.aborted ? " — marked as aborted in DSHIP" : "") +
@@ -460,8 +473,29 @@ document.querySelectorAll("input[data-axis]").forEach(input => {
               (op.max_depth && op.max_depth.rope_m != null ? ` (${op.max_depth.rope_m} m rope)` : "") +
               `, on deck ${t(op.on_deck)} UTC` +
               (op.in_water && op.in_water.water_depth_m != null ? `\nwater depth ${op.in_water.water_depth_m} m` : "") +
-              `\nFilled: station ${op.station}, cast ${op.cast ?? "–"}, position ${op.lat}, ${op.lon}, date ${op.date}.`);
+              `\nFilled: station ${op.station}, cast ${op.cast ?? "–"}, position ${op.lat}, ${op.lon}, date ${op.date}` +
+              (windowed ? `, cast from ${t(op.in_water)} to ${t(op.on_deck)} (for the downcast only, set the end to max depth ${op.max_depth ? op.max_depth.time : "–"})` : "") + ".");
     }
+
+    // Pick a cast: DSHIP's CTD operations, newest first. Only the cast
+    // device's operations carry a cast number.
+    document.querySelectorAll("[data-dship-pick]").forEach(btn => btn.addEventListener("click", async () => {
+        const list = document.querySelector("[data-dship-list]");
+        const note = document.querySelector("[data-dship-note]");
+        note.textContent = "Reading DSHIP's operations…";
+        const r = await fetch("/api/v1/dship/operations", {showLoader: false});
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) { note.textContent = body.error || "DSHIP is not available."; return; }
+        const casts = (body.operations || []).filter(op => op.cast != null && op.in_water).reverse();
+        if (!casts.length) { note.textContent = "DSHIP lists no CTD casts yet."; return; }
+        const hm = e => e ? e.time.slice(5, 16).replace("-", ".").replace("T", " ") : "…";
+        list.innerHTML = `<option value="">— ${casts.length} casts, newest first —</option>` + casts.map((op, i) =>
+            `<option value="${i}">${op.station} · cast ${op.cast} · ${hm(op.in_water)} to ${hm(op.on_deck)}` +
+            `${op.aborted ? " · aborted" : ""}</option>`).join("");
+        list.hidden = false;
+        note.textContent = "";
+        list.onchange = () => { if (list.value !== "") applyOperation(casts[+list.value], note); };
+    }));
 
     // The ship's position when the kept part of the profile starts, from
     // the Hub's NMEA track log. Overwrites: the button is the request.
