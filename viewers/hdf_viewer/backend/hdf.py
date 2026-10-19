@@ -85,7 +85,44 @@ def get_dataset_info(file_path: str, dataset_path: str):
         return info
 
 
+def _frames_in_use(f, ds):
+    """How many rows of a frame series hold data.
+
+    The Pisco Video Pipeline preallocates its arrays (20000 rows) and
+    records the true count as the file's n_frames; the rows after it are
+    zeros, not frames.
+    """
+    n = ds.shape[0]
+    if "n_frames" in f.attrs and ds.parent.name == "/":
+        try:
+            n = min(n, int(f.attrs["n_frames"]))
+        except (TypeError, ValueError):
+            pass
+    return max(n, 1)
+
+
+def _is_encoded_series(ds):
+    """A 1-D dataset of variable-length bytes: one encoded image (JPEG)
+    per row, as the recorder's h5jpeg sink stores them."""
+    return ds.ndim == 1 and (h5py.check_vlen_dtype(ds.dtype) is not None
+                             or ds.dtype.kind in ("O", "S", "V"))
+
+
+def _attr_text(value):
+    if isinstance(value, (bytes, np.bytes_)):
+        return value.decode(errors="replace")
+    return str(value)
+
+
 def get_dataset_data(file_path: str, dataset_path: str, frame_idx):
+    """One image of a dataset for the browser, or its first values.
+
+    Images: a 2-D array; a stack of grey frames (frames, h, w); a stack of
+    colour frames (frames, h, w, 3) - BGR when the recorder says so - and
+    a series of encoded images, one JPEG per row. Frame series report
+    their shape as (frames, h, w) so the page's frame navigation works the
+    same for all of them.
+    """
     with h5py.File(file_path, "r") as f:
 
         ds = f[dataset_path]
@@ -93,59 +130,75 @@ def get_dataset_data(file_path: str, dataset_path: str, frame_idx):
         if not isinstance(ds, h5py.Dataset):
             return None
 
-        ndim = ds.ndim
         shape = list(ds.shape)
-        
-        if ndim >  1:
-            if ndim == 2:
-                # 2D dataset: shape (height, width)
+        img = None
+        frames = None
+
+        if _is_encoded_series(ds) and ds.shape[0] > 0:
+            frames = _frames_in_use(f, ds)
+            idx = max(0, min(frame_idx, frames - 1))
+            raw = ds[idx]
+            data = raw.tobytes() if isinstance(raw, np.ndarray) else bytes(raw)
+            try:
+                img = Image.open(io.BytesIO(data))
+                img.load()
+            except Exception:
+                img = None          # not an image after all: show values below
+                frames = None
+
+        elif ds.ndim > 1:
+            if ds.ndim == 2:
                 img_data = ds[:, :]
-            elif ndim == 3:
-                # 3D dataset: shape (frames, height, width), take the first frame
-                idx = max(0, min(frame_idx, shape[0] - 1))
+            elif ds.ndim == 3:
+                frames = _frames_in_use(f, ds)
+                idx = max(0, min(frame_idx, frames - 1))
                 img_data = ds[idx, :, :]
+            elif ds.ndim == 4 and shape[-1] in (3, 4):
+                frames = _frames_in_use(f, ds)
+                idx = max(0, min(frame_idx, frames - 1))
+                img_data = ds[idx]
+                if _attr_text(f.attrs.get("pixel_format", "")).upper().startswith("BGR"):
+                    img_data = img_data[..., [2, 1, 0] + ([3] if shape[-1] == 4 else [])]
             else:
-                raise ValueError(f"Unsupported dataset dimensions: {ndim}D (shape: {ds.shape})")
-            
+                raise ValueError(f"Unsupported dataset dimensions: {ds.ndim}D (shape: {ds.shape})")
+
             # Handle data types and normalization for browser rendering
             if img_data.dtype != np.uint8:
                 img_min = img_data.min()
                 img_max = img_data.max()
                 if img_max > img_min:
                     # Scale floats or uint16 to 0-255 uint8 range
-                    img_normalized = ((img_data - img_min) / (img_max - img_min) * 255).astype(np.uint8)
+                    img_data = ((img_data - img_min) / (img_max - img_min) * 255).astype(np.uint8)
                 else:
-                    img_normalized = np.zeros_like(img_data, dtype=np.uint8)
-                img_data = img_normalized
+                    img_data = np.zeros_like(img_data, dtype=np.uint8)
 
-            # Convert NumPy array to a Pillow Image
             img = Image.fromarray(img_data)
 
+        if img is not None:
             max_dimension = 512
             if img.width > max_dimension or img.height > max_dimension:
-                    img.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
-            
+                img.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
+
             # Save image to an in-memory byte buffer as PNG
             buf = io.BytesIO()
             img.save(buf, format="PNG")
             buf.seek(0)
-        
-            info = {
-                "shape": list(ds.shape),
+
+            if frames is not None:
+                shape = [frames, img.height, img.width]
+            return {
+                "shape": shape,
                 "data": [],
                 "image": base64.b64encode(buf.read()).decode('utf-8'),
-                "current_frame": frame_idx if ds.ndim == 3 else 0
-            }
-        else:
-            if ds.size > 100:
-                data = ds[:100]
-            else:
-                data = ds[:]
-            info = {
-                "shape": list(ds.shape),
-                "data": data.tolist(),
-                "image": None,
-                "current_frame": None
+                "current_frame": idx if frames is not None else 0
             }
 
-        return info
+        data = ds[:100] if ds.size > 100 else ds[:]
+        return {
+            "shape": shape,
+            "data": [_attr_text(v) if isinstance(v, (bytes, np.bytes_, np.ndarray)) else v
+                     for v in np.asarray(data, dtype=object).ravel().tolist()]
+                    if ds.dtype.kind in ("O", "S", "V") else data.tolist(),
+            "image": None,
+            "current_frame": None
+        }
