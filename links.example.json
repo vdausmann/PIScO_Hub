@@ -1,8 +1,20 @@
 [
-  {"title": "EcoTaxa", "url": "http://192.168.103.14:8088/",
-   "description": "Annotate the profiles the Hub imported"},
-  {"title": "GitLab", "url": "http://192.168.103.x/",
-   "description": "Cruise mirror of git.geomar.de team-optics"},
-  {"title": "Frigate", "url": "http://192.168.103.x:5000/",
-   "description": "Camera recordings and events"}
+  {
+    "title": "EcoTaxa",
+    "url": "http://192.168.103.14:8088/",
+    "description": "Annotate the profiles the Hub imported",
+    "icon": "plankton"
+  },
+  {
+    "title": "GitLab",
+    "url": "http://192.168.103.x/",
+    "description": "Cruise mirror of git.geomar.de team-optics",
+    "icon": "git"
+  },
+  {
+    "title": "Frigate",
+    "url": "http://192.168.103.x:5000/",
+    "description": "Camera recordings and events",
+    "icon": "camera"
+  }
 ]

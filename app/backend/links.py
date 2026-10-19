@@ -10,6 +10,8 @@ repository - links.example.json shows the shape), a list of objects:
     title        what the link says
     url          where it goes (http or https)
     description  optional: one line under the title
+    icon         optional pictogram: plankton, camera, git, gauge; anything
+                 else (or none) draws a plain outward arrow
 
 The file is read on every request so an edit shows up without a restart.
 """
@@ -45,5 +47,6 @@ def load_links():
         if not str(entry["url"]).startswith(("http://", "https://")):
             raise ValueError(f"{path}: {entry['title']}: url must start with http:// or https://")
         links.append({"title": str(entry["title"]), "url": str(entry["url"]),
-                      "description": str(entry.get("description") or "")})
+                      "description": str(entry.get("description") or ""),
+                      "icon": str(entry.get("icon") or "")})
     return links

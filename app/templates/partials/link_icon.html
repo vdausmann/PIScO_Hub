@@ -1,0 +1,33 @@
+{# Line pictograms for the landing page's service links, drawn in the
+   text colour so they follow light and dark mode. Inline, because the
+   ship has no internet for an icon font. #}
+{% macro link_icon(name) -%}
+<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none;">
+{%- if name == 'plankton' %}
+    <path d="M12 4 C15.2 4 16.2 7.6 15.4 11 C14.8 13.6 13.3 14.8 12 14.8 C10.7 14.8 9.2 13.6 8.6 11 C7.8 7.6 8.8 4 12 4 Z"/>
+    <path d="M9.1 8.3 H14.9 M9.2 11 H14.8"/>
+    <path d="M10.6 4.6 C7.2 3.6 3.8 5.6 2.2 9.6 M13.4 4.6 C16.8 3.6 20.2 5.6 21.8 9.6"/>
+    <path d="M12 14.8 V19.4 M12 19.4 L10.4 22 M12 19.4 L13.6 22"/>
+{%- elif name == 'camera' %}
+    <rect x="2.5" y="7" width="13" height="10" rx="2"/>
+    <path d="M15.5 10.5 L21.5 7.5 V16.5 L15.5 13.5"/>
+    <circle cx="9" cy="12" r="2.6"/>
+{%- elif name == 'git' %}
+    <circle cx="6" cy="5" r="2.2"/>
+    <circle cx="6" cy="19" r="2.2"/>
+    <circle cx="18" cy="7.5" r="2.2"/>
+    <path d="M6 7.2 V16.8"/>
+    <path d="M18 9.7 C18 14 6 12.5 6 16.8"/>
+{%- elif name == 'gauge' %}
+    <path d="M3.8 17.5 A9 9 0 1 1 20.2 17.5"/>
+    <path d="M12 14 L16.2 8.2"/>
+    <circle cx="12" cy="14" r="1.6"/>
+    <path d="M6.5 13 H5 M7.8 8.2 L6.7 7.1 M12 6 V4.5"/>
+{%- else %}
+    <path d="M10 14 L20.5 3.5"/>
+    <path d="M14.5 3.5 H20.5 V9.5"/>
+    <path d="M18.5 13.5 V20.5 H3.5 V5.5 H10.5"/>
+{%- endif %}
+</svg>
+{%- endmacro %}
