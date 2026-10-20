@@ -161,9 +161,12 @@ function command() {
     src = src.replace(/\/+$/, "") + ($("opt-contents").checked ? "/" : "");
     // ~ only expands unquoted, so keep a leading ~/ outside the quotes.
     const srcArg = src.startsWith("~/") ? "~/" + sq(src.slice(2)) : sq(src);
-    // -rlt rather than -a: owners and permissions are the NAS's business. --progress
+    // -rlt rather than -a: the NAS keeps its own owners. -p with --chmod makes
+    // what arrives group-writable, so the Hub (pisco) and rsync (upload),
+    // both in group pisco, can add to each other's folders; without -p the
+    // receiver's umask would take the group write off again. --progress
     // because macOS ships an rsync too old for --info=progress2.
-    const flags = ["-rlth", "--partial", "--progress"];
+    const flags = ["-rlth", "-p", "--chmod=D2775,F664", "--partial", "--progress"];
     if ($("opt-delete").checked) flags.push("--remove-source-files");
     if ($("opt-dry").checked) flags.push("--dry-run", "-v");
     return `rsync ${flags.join(" ")} ${srcArg} ${SSH_USER}@${SSH_HOST}:${sq(rsyncPath + "/")}`;

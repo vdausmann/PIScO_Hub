@@ -18,6 +18,10 @@ import os
 from .models import GlobalSetting
 
 PART = ".part"
+# Folders the Hub creates are group-writable with the group inherited: the
+# Hub writes as `pisco`, rsync arrives as `upload`, both in group pisco,
+# and each must be able to add to what the other made.
+DIR_MODE = 0o2775
 
 
 class UploadError(Exception):
@@ -87,8 +91,19 @@ def make_dir(parent, name):
         raise UploadError("a folder name without slashes, not starting with a dot")
     target = os.path.join(resolve(parent), name)
     resolve(target)
-    os.makedirs(target, exist_ok=True)
+    _makedirs(target)
     return target
+
+
+def _makedirs(path):
+    """makedirs, each new level group-writable (DIR_MODE)."""
+    missing = []
+    while path and not os.path.isdir(path):
+        missing.append(path)
+        path = os.path.dirname(path)
+    for p in reversed(missing):
+        os.makedirs(p, exist_ok=True)
+        os.chmod(p, DIR_MODE)
 
 
 def _file_target(dest, relpath):
@@ -130,7 +145,7 @@ def write_chunk(dest, relpath, offset, total, stream, overwrite=False):
         if os.path.getsize(target) == total:
             return total
         raise UploadError(f"{relpath} already exists with another size; not overwritten")
-    os.makedirs(os.path.dirname(target), exist_ok=True)
+    _makedirs(os.path.dirname(target))
     part = target + PART
     have = os.path.getsize(part) if os.path.exists(part) else 0
     if offset != have:
