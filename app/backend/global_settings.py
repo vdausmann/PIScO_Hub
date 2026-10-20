@@ -34,6 +34,12 @@ def seed_settings(app):
         'DSHIP_POLL_INTERVAL': {'value': '120', 'type': 'int', 'desc': "Seconds between reads of DSHIP's action log."},
         'MODULES_FILE': {'value': 'modules.json', 'type': 'str',
                          'desc': 'JSON list of external pages shown in the Visualization Hub. Relative paths are taken from the Hub root.'},
+        'UPLOAD_ROOTS': {'value': '/mnt/nas_a,/mnt/nas_b', 'type': 'str',
+                         'desc': 'Comma-separated folders the Data upload page may write into (the NAS mounts, read-write on the Hub).'},
+        'UPLOAD_SSH_USER': {'value': 'upload', 'type': 'str',
+                            'desc': 'Account the upload page\'s rsync command logs in as; sshd restricts it to rsync inside /mnt (rrsync).'},
+        'UPLOAD_SSH_HOST': {'value': '', 'type': 'str',
+                            'desc': 'Host name or address in the rsync command. Empty uses the address the page was opened with.'},
         'LINKS_FILE': {'value': 'links.json', 'type': 'str',
                        'desc': "JSON list of links on the landing page to services on the ship's network (title, url, description). Relative paths are taken from the Hub root; see links.example.json."},
     }

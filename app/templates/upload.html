@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+{% block title %}Data upload · PIScO Hub{% endblock %}
+{% block head %}
+<style>
+    .up-wrap { max-width: 1200px; margin: 0 auto; padding: 0 16px 32px; }
+    .up-card { background: var(--card); border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+               border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; }
+    .up-card h2 { margin: 0 0 10px; font-size: 1.05em; }
+    .up-muted { opacity: .7; font-size: .9em; }
+    .up-mono { font-family: monospace; }
+    .up-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 900px) { .up-grid { grid-template-columns: 1fr; } }
+    .up-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+    .up-row input[type=text] { flex: 1; min-width: 12em; padding: 6px 8px; border-radius: 4px;
+               border: 1px solid color-mix(in srgb, var(--text) 25%, transparent); background: var(--bg); color: var(--text); }
+    .up-btn { padding: 6px 12px; border-radius: 4px; cursor: pointer; border: 1px solid var(--accent);
+               background: transparent; color: var(--accent); }
+    .up-btn.primary { background: var(--accent); color: #fff; }
+    .up-btn:disabled { opacity: .45; cursor: default; }
+    .up-dirs { max-height: 240px; overflow: auto; border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+               border-radius: 4px; margin: 6px 0; }
+    .up-dirs div { padding: 4px 10px; cursor: pointer; }
+    .up-dirs div:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+    .up-badge { padding: 2px 8px; border-radius: 999px; font-size: .85em; }
+    .up-badge.ok { background: color-mix(in srgb, #16a34a 20%, transparent); }
+    .up-badge.no { background: color-mix(in srgb, #dc2626 22%, transparent); }
+    textarea.up-cmd { width: 100%; box-sizing: border-box; min-height: 5.5em; font-family: monospace; font-size: .85em;
+               padding: 8px; border-radius: 4px; background: var(--bg); color: var(--text);
+               border: 1px solid color-mix(in srgb, var(--text) 25%, transparent); }
+    .up-drop { border: 2px dashed color-mix(in srgb, var(--text) 30%, transparent); border-radius: 8px;
+               padding: 22px; text-align: center; margin: 8px 0; }
+    .up-drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+    .up-bar { height: 10px; border-radius: 5px; background: color-mix(in srgb, var(--text) 12%, transparent); overflow: hidden; }
+    .up-bar > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+    .up-log { max-height: 140px; overflow: auto; font-family: monospace; font-size: .8em; margin-top: 6px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="up-wrap">
+<h1>Data upload</h1>
+<p class="up-muted">From the computer you are using the Hub on, to the ship's NAS. Choose where the data goes, then
+    either run the rsync command on your computer (best for large data: resumable, can delete the source) or drop
+    files here.</p>
+
+<div class="up-card">
+    <h2>1 · Destination</h2>
+    <div class="up-row">
+        <span class="up-mono" id="dest-path">—</span>
+        <span class="up-badge" id="dest-state" hidden></span>
+    </div>
+    <div class="up-dirs" id="dirs"></div>
+    <div class="up-row">
+        <button class="up-btn" id="dir-up" type="button">↑ Up</button>
+        <input type="text" id="new-dir" placeholder="new folder name, e.g. 20261020_biolum">
+        <button class="up-btn" id="dir-make" type="button">Create folder</button>
+    </div>
+</div>
+
+<div class="up-grid">
+    <div class="up-card">
+        <h2>2a · rsync from your computer</h2>
+        <div class="up-row">
+            <input type="text" id="src" placeholder="folder on your computer, e.g. /Volumes/CARD/DCIM or ~/data/cast22">
+        </div>
+        <label class="up-row"><input type="checkbox" id="opt-contents" checked>
+            copy what is <em>in</em> the folder (unticked: the folder itself, with its name)</label>
+        <label class="up-row"><input type="checkbox" id="opt-delete">
+            delete the source files once they have arrived complete</label>
+        <label class="up-row"><input type="checkbox" id="opt-dry">
+            dry run: only list what would be copied</label>
+        <textarea class="up-cmd" id="cmd" readonly></textarea>
+        <div class="up-row">
+            <button class="up-btn primary" id="cmd-copy" type="button">Copy command</button>
+            <button class="up-btn" id="cmd-script" type="button">Download as script</button>
+        </div>
+        <p class="up-muted">Run it in a terminal; it asks for the <span class="up-mono">{{ ssh_user }}</span>
+            password. Interrupted? Run it again: rsync continues. macOS and Linux have rsync; on Windows use it
+            inside WSL, where <span class="up-mono">C:\data</span> is <span class="up-mono">/mnt/c/data</span>.
+            The source files are deleted only with the box ticked, and only each file that arrived complete;
+            empty folders stay.</p>
+    </div>
+
+    <div class="up-card">
+        <h2>2b · Upload from the browser</h2>
+        <div class="up-drop" id="drop">Drop a folder or files here<br>
+            <span class="up-muted">or</span>
+            <div class="up-row" style="justify-content: center;">
+                <label class="up-btn">Choose folder<input type="file" id="pick-dir" webkitdirectory multiple hidden></label>
+                <label class="up-btn">Choose files<input type="file" id="pick-files" multiple hidden></label>
+            </div>
+        </div>
+        <div class="up-row up-muted" id="sel">Nothing selected.</div>
+        <label class="up-row"><input type="checkbox" id="opt-overwrite">
+            replace files that already exist there with another size</label>
+        <div class="up-row">
+            <button class="up-btn primary" id="go" type="button" disabled>Upload</button>
+            <button class="up-btn" id="pause" type="button" disabled>Pause</button>
+            <span class="up-muted" id="status"></span>
+        </div>
+        <div class="up-bar"><div id="bar"></div></div>
+        <div class="up-log" id="log"></div>
+        <p class="up-muted">Files go in 16 MB pieces; if the connection drops, press Upload again and it continues
+            where it stopped. Files already there with the same size are skipped. The browser cannot delete your
+            source files - use rsync for that.</p>
+    </div>
+</div>
+</div>
+
+<script>
+(() => {
+const SSH_USER = {{ ssh_user|tojson }}, SSH_HOST = {{ ssh_host|tojson }};
+const $ = (id) => document.getElementById(id);
+const api = (path, opts = {}) => fetch(`{{ url_for('upload.page') }}${path}`, {showLoader: false, ...opts});
+let dest = "", rsyncPath = "", destWritable = false;
+
+// ---- destination ----
+async function openDir(path) {
+    const r = await api(`dirs?path=${encodeURIComponent(path)}`);
+    const d = await r.json();
+    if (!r.ok) { alert(d.error); return; }
+    dest = path; rsyncPath = d.rsync_path || ""; destWritable = !!d.writable;
+    $("dest-path").textContent = path || "choose a NAS share below";
+    const badge = $("dest-state");
+    badge.hidden = !path;
+    badge.className = "up-badge " + (d.writable ? "ok" : "no");
+    badge.textContent = d.writable ? "writable" : `not writable: ${d.why}`;
+    const list = $("dirs");
+    list.innerHTML = "";
+    for (const e of d.entries) {
+        const row = document.createElement("div");
+        row.textContent = "📁 " + e.name;
+        row.onclick = () => openDir(e.path);
+        list.appendChild(row);
+    }
+    if (!d.entries.length) list.innerHTML = '<div class="up-muted">(no subfolders)</div>';
+    $("dir-up").disabled = !path;
+    $("dir-make").disabled = !path;
+    render();
+}
+$("dir-up").onclick = () => {
+    const parent = dest.replace(/\/[^/]+\/?$/, "");
+    openDir({{ roots|tojson }}.includes(dest) ? "" : parent);
+};
+$("dir-make").onclick = async () => {
+    const name = $("new-dir").value.trim();
+    if (!name) return;
+    const r = await api("mkdir", {method: "POST", headers: {"Content-Type": "application/json"},
+                                  body: JSON.stringify({parent: dest, name})});
+    const d = await r.json();
+    if (!r.ok) { alert(d.error); return; }
+    $("new-dir").value = "";
+    openDir(d.path);
+};
+
+// ---- rsync command ----
+const sq = (s) => "'" + s.replace(/'/g, "'\\''") + "'";
+function command() {
+    let src = $("src").value.trim();
+    if (!dest || !src || !rsyncPath) return "";
+    src = src.replace(/\/+$/, "") + ($("opt-contents").checked ? "/" : "");
+    // ~ only expands unquoted, so keep a leading ~/ outside the quotes.
+    const srcArg = src.startsWith("~/") ? "~/" + sq(src.slice(2)) : sq(src);
+    // -rlt rather than -a: owners and permissions are the NAS's business. --progress
+    // because macOS ships an rsync too old for --info=progress2.
+    const flags = ["-rlth", "--partial", "--progress"];
+    if ($("opt-delete").checked) flags.push("--remove-source-files");
+    if ($("opt-dry").checked) flags.push("--dry-run", "-v");
+    return `rsync ${flags.join(" ")} ${srcArg} ${SSH_USER}@${SSH_HOST}:${sq(rsyncPath + "/")}`;
+}
+function render() {
+    const cmd = command();
+    $("cmd").value = cmd || (!dest ? "Choose a destination first."
+        : !rsyncPath ? "This destination is outside /mnt, where the upload account cannot write; use the browser upload."
+        : "Enter the folder on your computer above.");
+    $("cmd-copy").disabled = $("cmd-script").disabled = !cmd;
+    $("go").disabled = !(files.length && dest && destWritable);
+}
+for (const id of ["src", "opt-contents", "opt-delete", "opt-dry"]) $(id).addEventListener("input", render);
+$("cmd-copy").onclick = async () => {
+    try { await navigator.clipboard.writeText(command()); $("cmd-copy").textContent = "Copied ✓"; }
+    catch (_) { $("cmd").select(); document.execCommand("copy"); }
+    setTimeout(() => { $("cmd-copy").textContent = "Copy command"; }, 1500);
+};
+$("cmd-script").onclick = () => {
+    const body = `#!/usr/bin/env bash\n# PIScO Hub upload to ${dest}\n# Run again to continue an interrupted upload.\nset -e\n${command()}\necho "Upload finished."\n`;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([body], {type: "text/x-shellscript"}));
+    a.download = "pisco_upload.sh";
+    a.click();
+};
+
+// ---- browser upload ----
+let files = [];                  // {file, path}
+let paused = false, running = false;
+const CHUNK = 16 * 1024 * 1024;
+const fmt = (b) => b > 1e9 ? (b / 1e9).toFixed(2) + " GB" : b > 1e6 ? (b / 1e6).toFixed(1) + " MB" : Math.round(b / 1e3) + " kB";
+function setFiles(list) {
+    files = list.filter(f => !f.path.split("/").some(p => p.startsWith(".")));
+    const total = files.reduce((s, f) => s + f.file.size, 0);
+    $("sel").textContent = files.length ? `${files.length} files, ${fmt(total)}` : "Nothing selected.";
+    $("log").textContent = "";
+    $("bar").style.width = "0";
+    render();
+}
+$("pick-dir").onchange = (e) => setFiles([...e.target.files].map(f => ({file: f, path: f.webkitRelativePath || f.name})));
+$("pick-files").onchange = (e) => setFiles([...e.target.files].map(f => ({file: f, path: f.name})));
+const drop = $("drop");
+drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = async (e) => {
+    e.preventDefault(); drop.classList.remove("over");
+    const out = [];
+    async function walk(entry, prefix) {
+        if (entry.isFile) {
+            out.push({file: await new Promise((res, rej) => entry.file(res, rej)), path: prefix + entry.name});
+        } else if (entry.isDirectory) {
+            const reader = entry.createReader();
+            let batch;
+            do {
+                batch = await new Promise((res, rej) => reader.readEntries(res, rej));
+                for (const child of batch) await walk(child, prefix + entry.name + "/");
+            } while (batch.length);
+        }
+    }
+    for (const item of [...e.dataTransfer.items]) {
+        const entry = item.webkitGetAsEntry && item.webkitGetAsEntry();
+        if (entry) await walk(entry, "");
+    }
+    setFiles(out);
+};
+const log = (msg) => { const d = document.createElement("div"); d.textContent = msg; $("log").prepend(d); };
+
+$("pause").onclick = () => { paused = true; $("status").textContent = "pausing after this piece…"; };
+$("go").onclick = async () => {
+    if (running) return;
+    running = true; paused = false;
+    $("go").disabled = true; $("pause").disabled = false;
+    const overwrite = $("opt-overwrite").checked;
+    const total = files.reduce((s, f) => s + f.file.size, 0);
+    let done = 0, skipped = 0, failed = 0;
+    const show = (text) => {
+        $("bar").style.width = (total ? 100 * done / total : 100) + "%";
+        $("status").textContent = text;
+    };
+    try {
+        // Ask what is there already, in batches.
+        const state = {};
+        for (let i = 0; i < files.length; i += 2000) {
+            const part = files.slice(i, i + 2000).map(f => ({path: f.path, size: f.file.size}));
+            const r = await api("check", {method: "POST", headers: {"Content-Type": "application/json"},
+                                          body: JSON.stringify({dest, files: part})});
+            const d = await r.json();
+            if (!r.ok) throw new Error(d.error);
+            for (const s of d.files) state[s.path] = s;
+        }
+        for (const f of files) {
+            if (paused) break;
+            const s = state[f.path];
+            if (s.state === "done") { done += f.file.size; skipped++; continue; }
+            if (s.state === "exists" && !overwrite) {
+                log(`skipped ${f.path}: exists with another size (tick 'replace' to overwrite)`);
+                done += f.file.size; skipped++; continue;
+            }
+            let offset = s.state === "todo" ? s.offset : 0;
+            done += offset;
+            try {
+                do {
+                    const piece = f.file.slice(offset, offset + CHUNK);
+                    const q = `dest=${encodeURIComponent(dest)}&path=${encodeURIComponent(f.path)}` +
+                              `&offset=${offset}&total=${f.file.size}${overwrite ? "&overwrite=1" : ""}`;
+                    const r = await api(`chunk?${q}`, {method: "POST", body: piece});
+                    const d = await r.json();
+                    if (!r.ok) throw new Error(d.error);
+                    done += d.have - offset;
+                    offset = d.have;
+                    show(`${f.path} · ${fmt(done)} of ${fmt(total)}`);
+                } while (offset < f.file.size && !paused);
+            } catch (err) {
+                failed++;
+                log(`failed ${f.path}: ${err.message}`);
+            }
+        }
+        show(paused ? `paused at ${fmt(done)} of ${fmt(total)} - press Upload to continue`
+                    : `finished: ${files.length - skipped - failed} uploaded, ${skipped} already there` +
+                      (failed ? `, ${failed} failed (see below)` : ""));
+    } catch (err) {
+        show(`stopped: ${err.message}`);
+    } finally {
+        running = false;
+        $("pause").disabled = true;
+        render();
+    }
+};
+
+openDir("");
+})();
+</script>
+{% endblock %}
