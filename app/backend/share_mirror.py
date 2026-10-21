@@ -20,6 +20,7 @@ SHARE_MIRROR_INTERVAL, SHARE_MIRROR_LADCP_DIR / SHARE_MIRROR_LISST_DIR
 (subfolders on the share), LISST_DIR, LISST_CLOCK_OFFSET_H.
 """
 
+import errno
 import os
 import threading
 import time
@@ -85,8 +86,10 @@ class Share:
         def walk(rel):
             try:
                 entries = list(self.smb.scandir(self.path(sub, rel)))
-            except FileNotFoundError:
-                return
+            except OSError as e:          # smbprotocol's own class, not FileNotFoundError
+                if e.errno == errno.ENOENT:
+                    return
+                raise
             for e in entries:
                 child = f"{rel}/{e.name}" if rel else e.name
                 if e.is_dir():
