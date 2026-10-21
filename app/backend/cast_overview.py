@@ -250,10 +250,35 @@ def lisst_processed(root):
     return found
 
 
+def clock_offsets(text):
+    """'7, 0@2026-10-21T16:00' → [(None, 7.0), (t, 0.0)]: hours to add to
+    the instrument's clock, each from an instrument-clock time on (the
+    first from the beginning). For a clock that was reset during the cruise."""
+    found = []
+    for part in str(text or "0").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        hours, _, since = part.partition("@")
+        t = datetime.fromisoformat(since.strip()).replace(tzinfo=timezone.utc).timestamp() \
+            if since.strip() else None
+        found.append((t, float(hours)))
+    return sorted(found, key=lambda x: -1e18 if x[0] is None else x[0])
+
+
+def _offset_at(offsets, t):
+    hours = 0.0
+    for since, h in offsets:
+        if since is None or t >= since:
+            hours = h
+    return hours * 3600
+
+
 def lisst_overview(root, ops, offset_h=0.0):
-    """CSV text and row count for the LISST files under root."""
+    """CSV text and row count for the LISST files under root. offset_h is
+    a number of hours or a schedule (see clock_offsets)."""
     ops = cast_ops(ops)
-    shift = offset_h * 3600
+    offsets = clock_offsets(offset_h)
     processed = lisst_processed(root) if os.path.isdir(root) else {}
     rows = []
     for name in sorted(os.listdir(root)) if os.path.isdir(root) else []:
@@ -261,6 +286,7 @@ def lisst_overview(root, ops, offset_h=0.0):
             continue
         path = os.path.join(root, name)
         n, first, last = lisst_rbn(path)
+        shift = _offset_at(offsets, first) if first is not None else 0
         notes = []
         op = None
         if first is None:

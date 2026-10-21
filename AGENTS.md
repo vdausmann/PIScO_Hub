@@ -375,7 +375,7 @@ position. A cast without a recording gets a row too. LADCP rows come from
 the LADCP folder's PD0 files (recorder downloads and serial captures, the
 profile's `dship.json` cross-checked); LISST rows from the LISST-Deep raw
 files in `LISST_DIR`, whose clock is corrected by `LISST_CLOCK_OFFSET_H`
-(MSM147: +7, the instrument runs on PDT), with processed exports tied to
+(MSM147: `7, 0@2026-10-21T16:00` — PDT until the clock was set to UTC), with processed exports tied to
 their raw file. Deck tests under a minute are listed but not matched.
 
 With `SHARE_MIRROR_URL` set (MSM147: `//192.168.100.34/public_wiss/MSM147`,

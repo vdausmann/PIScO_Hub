@@ -75,6 +75,13 @@ def test_lisst_overview_shifts_the_clock_and_skips_deck_tests(tmp_path):
     assert {r["cast"] for r in rows if r["file"] == ""} == {"1", "3"}
 
 
+def test_clock_offset_schedule():
+    offsets = cast_overview.clock_offsets("7, 0@2026-10-21T16:00")
+    assert cast_overview._offset_at(offsets, _ms("2026-10-21 12:45") / 1000) == 7 * 3600
+    assert cast_overview._offset_at(offsets, _ms("2026-10-21 19:45") / 1000) == 0
+    assert cast_overview._offset_at(cast_overview.clock_offsets(7), 0) == 7 * 3600
+
+
 def test_ladcp_overview_matches_files_and_flags_duplicates(tmp_path):
     start = _ms("2026-10-15 18:53") / 1000
     data = b"".join(pd0.encode_ensemble(number=i, time=start + 2 * i, n_cells=10) for i in range(50))
@@ -100,3 +107,13 @@ def test_mirror_leaves_out_unfinished_downloads(tmp_path):
     assert sorted(share_mirror.local_files(str(tmp_path))) == ["013/013UP000.000", "logs/a.log"]
     assert share_mirror.parse_url("//192.168.100.34/public_wiss/MSM147") == \
         ("192.168.100.34", r"\\192.168.100.34\public_wiss\MSM147")
+
+
+def test_share_browse_refuses_paths_out_of_the_share():
+    import pytest
+    from app.backend import share_browse
+    assert share_browse.clean("/MSM147//02_CTD/") == "MSM147/02_CTD"
+    assert share_browse.clean("MSM147\\02_CTD") == "MSM147/02_CTD"
+    for bad in ("../etc", "MSM147/../../x", "./a"):
+        with pytest.raises(share_browse.BrowseError):
+            share_browse.clean(bad)

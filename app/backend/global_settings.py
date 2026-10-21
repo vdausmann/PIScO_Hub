@@ -40,7 +40,7 @@ def seed_settings(app):
         'SHARE_MIRROR_LADCP_DIR': {'value': '07_LADCP', 'type': 'str', 'desc': 'Subfolder of SHARE_MIRROR_URL for the LADCP data.'},
         'SHARE_MIRROR_LISST_DIR': {'value': '08_LISST', 'type': 'str', 'desc': 'Subfolder of SHARE_MIRROR_URL for the LISST data.'},
         'LISST_DIR': {'value': '', 'type': 'str', 'desc': 'Folder of the LISST-Deep raw files (L*.RBN) and their processed exports. Empty means no LISST overview.'},
-        'LISST_CLOCK_OFFSET_H': {'value': '0', 'type': 'str', 'desc': "Hours to add to the LISST's clock to get UTC (MSM147: 7, the instrument runs on PDT)."},
+        'LISST_CLOCK_OFFSET_H': {'value': '0', 'type': 'str', 'desc': "Hours to add to the LISST's clock to get UTC. If the clock was reset, a schedule: '7, 0@2026-10-21T16:00' is +7 h until that instrument-clock time and 0 from then on (MSM147: PDT, then UTC)."},
         'MODULES_FILE': {'value': 'modules.json', 'type': 'str',
                          'desc': 'JSON list of external pages shown in the Visualization Hub. Relative paths are taken from the Hub root.'},
         'UPLOAD_ROOTS': {'value': '/mnt/nas_a,/mnt/nas_b', 'type': 'str',

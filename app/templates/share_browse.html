@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Ship share · PIScO Hub{% endblock %}
+{% block head %}
+<style>
+    .sb-wrap { max-width: 1200px; margin: 0 auto; padding: 0 16px 32px; }
+    .sb-muted { opacity: .7; font-size: .9em; }
+    .sb-mono { font-family: monospace; }
+    .sb-crumbs { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 10px 0; font-size: 1.05em; }
+    .sb-crumbs a { color: var(--accent); cursor: pointer; text-decoration: none; }
+    .sb-card { background: var(--card); border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+               border-radius: 8px; overflow: hidden; }
+    table.sb { width: 100%; border-collapse: collapse; }
+    table.sb th, table.sb td { padding: 6px 12px; text-align: left; }
+    table.sb th { font-weight: 600; opacity: .7; font-size: .85em;
+                  border-bottom: 1px solid color-mix(in srgb, var(--text) 14%, transparent); }
+    table.sb tr:hover td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+    table.sb td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    table.sb td.when { white-space: nowrap; opacity: .75; }
+    table.sb a { color: inherit; text-decoration: none; }
+    table.sb a.dir { font-weight: 600; cursor: pointer; }
+    table.sb a.dl { color: var(--accent); }
+    .sb-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+    .sb-row input { flex: 1; min-width: 10em; padding: 6px 8px; border-radius: 4px; background: var(--bg); color: var(--text);
+                    border: 1px solid color-mix(in srgb, var(--text) 25%, transparent); }
+    .sb-btn { padding: 6px 12px; border-radius: 4px; cursor: pointer; border: 1px solid var(--accent);
+              background: transparent; color: var(--accent); }
+    .sb-error { color: #dc2626; margin: 10px 0; }
+    @media (max-width: 700px) { table.sb td.when, table.sb th.when { display: none; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sb-wrap">
+<h1>Ship share</h1>
+{% if error %}
+<p class="sb-error">{{ error }}</p>
+{% else %}
+<p class="sb-muted">The ship's <span class="sb-mono">{{ conf.share }}</span> share on
+    <span class="sb-mono">{{ conf.server }}</span>, read-only. Images, PDFs and text open in the browser; everything
+    else downloads. From your own computer the same folder is
+    <span class="sb-mono" id="smb-url"></span>
+    <button class="sb-btn" id="smb-copy" type="button" style="padding:2px 8px;">Copy</button></p>
+<div class="sb-row">
+    <input type="text" id="filter" placeholder="filter this folder">
+    <button class="sb-btn" id="start" type="button">Cruise folder</button>
+</div>
+<div class="sb-crumbs" id="crumbs"></div>
+<div class="sb-error" id="err" hidden></div>
+<div class="sb-card">
+    <table class="sb">
+        <thead><tr><th>Name</th><th class="num">Size</th><th class="when">Modified (UTC)</th><th></th></tr></thead>
+        <tbody id="rows"><tr><td colspan="4" class="sb-muted">Loading…</td></tr></tbody>
+    </table>
+</div>
+{% endif %}
+</div>
+
+{% if not error %}
+<script>
+(function () {
+    const SHARE = {{ conf.share|tojson }}, SERVER = {{ conf.server|tojson }}, START = {{ conf.start|tojson }};
+    const base = {{ url_for('share-browse.page')|tojson }};
+    const rows = document.getElementById("rows"), crumbs = document.getElementById("crumbs");
+    const err = document.getElementById("err"), filter = document.getElementById("filter");
+    let current = "", entries = [];
+
+    const esc = s => String(s).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+    const join = (a, b) => a ? a + "/" + b : b;
+    function size(n) {
+        if (n == null) return "";
+        const u = ["B", "kB", "MB", "GB", "TB"]; let i = 0;
+        while (n >= 1000 && i < u.length - 1) { n /= 1000; i++; }
+        return (i ? n.toFixed(n < 10 ? 1 : 0) : n) + " " + u[i];
+    }
+    function fileUrl(path, download) {
+        return base + "file?path=" + encodeURIComponent(path) + (download ? "&download=1" : "");
+    }
+
+    function render() {
+        const q = filter.value.trim().toLowerCase();
+        const shown = entries.filter(e => !q || e.name.toLowerCase().includes(q));
+        rows.innerHTML = shown.length ? shown.map(e => {
+            const p = join(current, e.name);
+            const name = e.dir
+                ? `<a class="dir" data-path="${esc(p)}">📁 ${esc(e.name)}</a>`
+                : `<a href="${fileUrl(p)}" target="_blank" rel="noopener">${esc(e.name)}</a>`;
+            const dl = e.dir ? "" : `<a class="dl" href="${fileUrl(p, true)}" title="Download">⤓</a>`;
+            return `<tr><td>${name}</td><td class="num">${size(e.size)}</td><td class="when">${esc(e.modified)}</td><td class="num">${dl}</td></tr>`;
+        }).join("") : `<tr><td colspan="4" class="sb-muted">${q ? "Nothing matches." : "Empty folder."}</td></tr>`;
+    }
+
+    function renderCrumbs() {
+        const parts = current ? current.split("/") : [];
+        let html = `<a data-path="">${esc(SHARE)}</a>`, acc = "";
+        for (const p of parts) { acc = join(acc, p); html += ` / <a data-path="${esc(acc)}">${esc(p)}</a>`; }
+        crumbs.innerHTML = html;
+        document.getElementById("smb-url").textContent = `smb://${SERVER}/${SHARE}${current ? "/" + current : ""}`;
+    }
+
+    async function go(path, push) {
+        current = path; filter.value = ""; renderCrumbs();
+        if (push) history.pushState({path}, "", base + "?path=" + encodeURIComponent(path));
+        rows.innerHTML = `<tr><td colspan="4" class="sb-muted">Loading…</td></tr>`;
+        err.hidden = true;
+        try {
+            const r = await fetch(base + "list?path=" + encodeURIComponent(path));
+            const data = await r.json();
+            if (!r.ok) throw new Error(data.error || r.statusText);
+            entries = data.entries; render();
+        } catch (e) {
+            entries = []; rows.innerHTML = ""; err.textContent = e.message; err.hidden = false;
+        }
+    }
+
+    document.addEventListener("click", e => {
+        const a = e.target.closest("a[data-path]");
+        if (a) { e.preventDefault(); go(a.dataset.path, true); }
+    });
+    filter.addEventListener("input", render);
+    document.getElementById("start").addEventListener("click", () => go(START, true));
+    document.getElementById("smb-copy").addEventListener("click", () =>
+        navigator.clipboard && navigator.clipboard.writeText(document.getElementById("smb-url").textContent));
+    window.addEventListener("popstate", e => go((e.state && e.state.path) || "", false));
+
+    const initial = new URLSearchParams(location.search).get("path");
+    go(initial !== null ? initial : START, false);
+    history.replaceState({path: current}, "", base + "?path=" + encodeURIComponent(current));
+})();
+</script>
+{% endif %}
+{% endblock %}

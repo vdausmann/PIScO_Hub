@@ -71,10 +71,13 @@ class Share:
         self.smb = smbclient
         self.server, self.root = parse_url(url)
         self.user, self.password = user, password
+        # Its own connections: the mirror thread and page requests must not
+        # close each other's when they are done.
+        self.kw = {"connection_cache": {}}
 
     def connect(self):
         self.smb.register_session(self.server, username=self.user or None,
-                                  password=self.password or None, connection_timeout=20)
+                                  password=self.password or None, connection_timeout=20, **self.kw)
 
     def path(self, *rel):
         return "\\".join([self.root, *(r.replace("/", "\\") for r in rel if r)])
@@ -85,7 +88,7 @@ class Share:
 
         def walk(rel):
             try:
-                entries = list(self.smb.scandir(self.path(sub, rel)))
+                entries = list(self.smb.scandir(self.path(sub, rel), **self.kw))
             except OSError as e:          # smbprotocol's own class, not FileNotFoundError
                 if e.errno == errno.ENOENT:
                     return
@@ -103,20 +106,20 @@ class Share:
     def put(self, local, sub, rel, made):
         folder = os.path.dirname(rel)
         if (sub, folder) not in made:
-            self.smb.makedirs(self.path(sub, folder), exist_ok=True)
+            self.smb.makedirs(self.path(sub, folder), exist_ok=True, **self.kw)
             made.add((sub, folder))
         target = self.path(sub, rel)
         partial = target + ".hubpart"
-        with open(local, "rb") as src, self.smb.open_file(partial, mode="wb") as dst:
+        with open(local, "rb") as src, self.smb.open_file(partial, mode="wb", **self.kw) as dst:
             while True:
                 chunk = src.read(1 << 20)
                 if not chunk:
                     break
                 dst.write(chunk)
-        self.smb.replace(partial, target)
+        self.smb.replace(partial, target, **self.kw)
 
     def close(self):
-        self.smb.reset_connection_cache()
+        self.smb.reset_connection_cache(**self.kw)
 
 
 class ShareMirror:
@@ -129,7 +132,7 @@ class ShareMirror:
             self.password = get("SHARE_MIRROR_PASSWORD", "") or ""
             self.interval = float(get("SHARE_MIRROR_INTERVAL", 600) or 600)
             self.lisst_dir = get("LISST_DIR", "") or ""
-            self.lisst_offset_h = float(get("LISST_CLOCK_OFFSET_H", "0") or 0)
+            self.lisst_offset_h = get("LISST_CLOCK_OFFSET_H", "0") or "0"
             self.subdirs = {"LADCP": get("SHARE_MIRROR_LADCP_DIR", "07_LADCP") or "07_LADCP",
                             "LISST": get("SHARE_MIRROR_LISST_DIR", "08_LISST") or "08_LISST"}
             self.overview_root = os.path.join(
