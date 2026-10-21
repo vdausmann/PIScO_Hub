@@ -458,6 +458,9 @@ def build_spec(server_url):
                 "The cast-device operation a time belongs to (recording may start up to 45 min before it goes in)",
                 params=[{"name": "time", "in": "query", "required": True, "schema": {"type": "string"}},
                         {"name": "device", "in": "query", "required": False, "schema": {"type": "string"}}])},
+            "/mirror/status": {"get": _op(
+                "Share mirror: last run, error, and per instrument the cast-overview rows and files sent")},
+            "/mirror/run": {"post": _op("Write the cast overviews and copy to the share now", scope="operate")},
             "/nav/latest": {"get": _op(
                 "The ship's latest NMEA fix and the state of each feed")},
             "/nav/at": {"get": _op(

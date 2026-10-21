@@ -363,6 +363,28 @@ length). The new-workflow form's *Fill from DSHIP* uses it for station,
 `ctd_cast`, position and date; the EcoTaxa export writes `ctd_cast` as
 `sample_ctd_cast`.
 
+## Share mirror and cast overviews
+
+Each instrument on the rosette keeps its own files and numbers; the DSHIP
+CTD cast ties them together. Every `SHARE_MIRROR_INTERVAL` seconds the
+Hub writes one overview per instrument to `<DATA_ROOT>/overview/` —
+`MSM147_LADCP_casts.csv`, `MSM147_LISST_casts.csv` — with a row per
+recording: its start and end from the data, and the CTD cast it overlaps
+most (from 45 min before in-water to on deck) with station, times and
+position. A cast without a recording gets a row too. LADCP rows come from
+the LADCP folder's PD0 files (recorder downloads and serial captures, the
+profile's `dship.json` cross-checked); LISST rows from the LISST-Deep raw
+files in `LISST_DIR`, whose clock is corrected by `LISST_CLOCK_OFFSET_H`
+(MSM147: +7, the instrument runs on PDT), with processed exports tied to
+their raw file. Deck tests under a minute are listed but not matched.
+
+With `SHARE_MIRROR_URL` set (MSM147: `//192.168.100.34/public_wiss/MSM147`,
+user `wiss`), each instrument's folder and its overview are copied to
+`SHARE_MIRROR_LADCP_DIR` / `SHARE_MIRROR_LISST_DIR` there (`07_LADCP`,
+`08_LISST`) over SMB — new and changed files only, unfinished downloads
+(`_incoming/`) left out, nothing on the share deleted.
+`GET /mirror/status` shows the last run; `POST /mirror/run` starts one now.
+
 ## Endpoint summary
 
 | Method | Path | Scope | Purpose |
@@ -400,6 +422,8 @@ length). The new-workflow form's *Fill from DSHIP* uses it for station,
 | GET | `/api/v1/dship/status` | read | DSHIP connection: expedition, last read, error |
 | GET | `/api/v1/dship/operations` | read | device operations with station, cast number and events (`?device=`) |
 | GET | `/api/v1/dship/at?time=` | read | the cast-device operation a time belongs to |
+| GET | `/api/v1/mirror/status` | read | share mirror: last run, error, overview rows and files sent per instrument |
+| POST | `/api/v1/mirror/run` | operate | write the cast overviews and copy to the share now |
 | GET | `/api/v1/nav/latest` | read | the ship's latest NMEA fix and the state of each feed |
 | GET | `/api/v1/nav/at?time=` | read | ship position at a time (ISO 8601 or epoch), interpolated from the track log |
 | GET/POST | `/api/v1/tokens` | session | list / mint API tokens (`name`, `scope`) |

@@ -101,6 +101,8 @@ def create_app(create_worker=True):
         DshipService(app)
         from .backend.ladcp import create_service
         create_service(app)
+        from .backend.share_mirror import ShareMirror
+        ShareMirror(app)
 
 
     return app

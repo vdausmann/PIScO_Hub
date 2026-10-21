@@ -14,6 +14,9 @@ gunicorn
 # LADCP: talking to the ADCPs over serial / RFC 2217 / TCP
 pyserial
 
+# Copying instrument data to the ship's SMB share (the Hub cannot mount CIFS)
+smbprotocol
+
 # Used by the bundled file viewers, which load at startup.
 # headless: the GUI build of opencv needs libGL, which servers rarely have.
 h5py
