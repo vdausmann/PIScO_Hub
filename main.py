@@ -13,7 +13,14 @@ def index():
         links, links_error = load_links(), None
     except (OSError, ValueError) as e:
         links, links_error = [], str(e)
-    return render_template('index.html', links=links, links_error=links_error)
+    from app.backend import share_browse
+    try:
+        conf = share_browse.settings()
+        share_url = f"smb://{conf['server']}/{conf['share']}"
+    except share_browse.BrowseError:
+        share_url = None
+    return render_template('index.html', links=links, links_error=links_error,
+                           share_url=share_url)
 
 if __name__ == '__main__':
     # Debug off unless asked for: the reloader restarts the process, which
