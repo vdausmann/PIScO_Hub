@@ -43,15 +43,20 @@ class ViewerManager:
 
 
 
-            module = importlib.import_module(
-                module_name
-            )
+            # One viewer with a missing dependency must not take the Hub
+            # down with it; it is left out and says why in the log.
+            try:
+                module = importlib.import_module(
+                    module_name
+                )
 
-
-            blueprint = getattr(
-                module,
-                config["blueprint"]
-            )
+                blueprint = getattr(
+                    module,
+                    config["blueprint"]
+                )
+            except Exception as e:
+                print(f"Viewer {viewer.name} not loaded: {e!r}")
+                continue
 
 
             self.app.register_blueprint(
