@@ -1,0 +1,10 @@
+{
+    "name": "PIScO Data Explorer",
+    "extensions": [
+        "tsv"
+    ],
+    "description": "EcoTaxa TSV explorer: binned depth profiles and ESD size spectra, with per-profile sampled volumes from a portable image-metadata cache",
+    "type": "flask_blueprint",
+    "module": "routes",
+    "blueprint": "pde_bp"
+}

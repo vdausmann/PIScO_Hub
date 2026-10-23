@@ -22,5 +22,6 @@ smbprotocol
 h5py
 hdf5plugin
 numpy
+pandas
 Pillow
 opencv-python-headless

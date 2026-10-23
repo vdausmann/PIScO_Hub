@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('pisco-data-explorer.static', filename='css/pde.css') }}">
+<script src="{{ url_for('pisco-data-explorer.static', filename='js/plotly.min.js') }}"></script>
+{% endblock %}
+
+{% block title %}
+PIScO Data Explorer
+{% endblock %}
+
+{% block content %}
+
+<h1>PIScO Data Explorer</h1>
+
+{% if initial.load_error %}
+<p class="pde-error">Could not load the linked data: {{ initial.load_error }}</p>
+{% endif %}
+
+<div class="pde">
+
+    <div class="pde-sidebar">
+
+        <h3>Controls</h3>
+
+        <label>Hub exports</label>
+        <select id="hub-export-select">
+            <option value="">Loading…</option>
+        </select>
+        <button id="load-hub-btn" class="pde-primary">Load export</button>
+        <div id="hub-status" class="pde-status"></div>
+
+        <hr>
+
+        <details id="tree-browser">
+        <summary>Old pipeline profile tree</summary>
+
+        <label>Root path</label>
+        <div class="pde-row">
+            <input id="root-path" type="text" value="{{ initial.root }}">
+            <button id="scan-btn">Scan</button>
+        </div>
+        <div id="root-status" class="pde-status"></div>
+
+        <label>Portable cache root (CSV only)</label>
+        <input id="cache-root" type="text" value="{{ initial.cache_root }}">
+        <div id="cache-status" class="pde-status"></div>
+
+        <label>Cruise</label>
+        <select id="cruise-select">
+            <option value="">Scan root path first…</option>
+        </select>
+        <div id="cruise-status" class="pde-status"></div>
+
+        <label>Select profile(s)</label>
+        <select id="profile-select" multiple size="8"></select>
+        <button id="load-btn" class="pde-primary">Load selected</button>
+        </details>
+
+        <hr>
+
+        <label>Or TSV path</label>
+        <input id="tsv-path" type="text" placeholder="/path/to/ecotaxa_profile.tsv">
+        <button id="load-path-btn" class="pde-primary">Load path</button>
+        <div id="load-status" class="pde-status pde-info"></div>
+
+        <hr>
+
+        <label>Depth binning (dbar ≈ m)</label>
+        <div class="pde-inline">
+            <label><input type="radio" name="bin-mode" value="preset"> Presets</label>
+            <label><input type="radio" name="bin-mode" value="segments" checked> Segments</label>
+            <label><input type="radio" name="bin-mode" value="manual"> Manual</label>
+        </div>
+
+        <div id="bin-preset-div" style="display:none">
+            <select id="bin-preset">
+                <option value="coarse">Coarse — 4 bins (0/200/1k/4k/10k)</option>
+                <option value="medium">Medium — 8 bins (50/200/500/1k steps)</option>
+                <option value="fine" selected>Fine — 10/50/100 dbar steps</option>
+                <option value="veryfine">Very fine — 5/25/50 dbar steps</option>
+                <option value="1dbar">1 dbar uniform (0–1000)</option>
+                <option value="10dbar">10 dbar uniform (0–5000)</option>
+            </select>
+        </div>
+
+        <div id="bin-segments-div">
+            <div class="pde-hint">Format: start:stop:step, …</div>
+            <input id="bin-segments" type="text" value="0:100:10, 100:1000:50, 1000:5000:100">
+        </div>
+
+        <div id="bin-manual-div" style="display:none">
+            <input id="bin-manual" type="text" value="0, 200, 1000, 4000, 10000">
+        </div>
+
+        <div id="bin-preview" class="pde-status"></div>
+
+        <label>Plot type</label>
+        <div class="pde-inline">
+            <label><input type="radio" name="plot-type" value="depth" checked> Depth profile</label>
+            <label><input type="radio" name="plot-type" value="esd"> ESD spectrum</label>
+        </div>
+
+        <div id="depth-controls">
+            <label>X-axis</label>
+            <select id="x-axis"></select>
+            <label>Y-axis</label>
+            <select id="y-axis"></select>
+            <label>Color / group by</label>
+            <select id="color-select">
+                <option value="">—</option>
+                <option value="object_annotation_category" selected>Taxonomic category</option>
+            </select>
+        </div>
+
+        <div id="esd-controls" style="display:none">
+            <label>ESD range (µm)</label>
+            <div class="pde-row">
+                <input id="esd-min" type="number" value="50" placeholder="min">
+                <input id="esd-max" type="number" value="10000" placeholder="max">
+            </div>
+            <label>Number of ESD bins: <span id="esd-nbins-val">25</span></label>
+            <input id="esd-nbins" type="range" min="5" max="60" step="5" value="25">
+            <label>Y-axis metric</label>
+            <select id="esd-yaxis">
+                <option value="biovolume_mm3_per_L" selected>Biovolume (mm³ L⁻¹)</option>
+                <option value="biovolume_mm3_per_L_per_um">Biovolume norm. (mm³ L⁻¹ µm⁻¹)</option>
+                <option value="count_per_L">Abundance (# L⁻¹)</option>
+                <option value="count_per_L_per_um">Abundance norm. (# L⁻¹ µm⁻¹)</option>
+            </select>
+        </div>
+
+        <label>Plot options</label>
+        <label class="pde-check"><input type="checkbox" id="opt-lines" checked> Connect points</label>
+        <label class="pde-check"><input type="checkbox" id="opt-logx"> Log scale X</label>
+        <label class="pde-check"><input type="checkbox" id="opt-logy"> Log scale Y</label>
+
+        <label>Filter taxonomic classes</label>
+        <select id="taxon-filter" multiple size="8"></select>
+
+        <label class="pde-check"><input type="checkbox" id="validated-only"> Validated annotations only</label>
+    </div>
+
+    <div class="pde-main">
+        <div id="pde-status-line" class="pde-status"></div>
+        <div id="main-plot"></div>
+        <h3>Data preview</h3>
+        <div id="data-table-wrap"></div>
+    </div>
+
+</div>
+
+<script>
+const PDE_INITIAL = {{ initial|tojson }};
+</script>
+<script src="{{ url_for('pisco-data-explorer.static', filename='js/pde.js') }}"></script>
+
+{% endblock %}
