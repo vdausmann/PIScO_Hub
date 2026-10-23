@@ -116,8 +116,10 @@ async function loadHubExports() {
     try {
         const body = await getJSON("/hub_exports");
         const options = body.exports.map(e => [e.path, `${e.workflow}${e.created ? "  · " + e.created.replace("T", " ") : ""}`]);
-        fillSelect($("hub-export-select"), options,
-            { placeholder: options.length ? "Choose a profile…" : "No Hub exports found" });
+        fillSelect($("hub-export-select"), options, {
+            placeholder: options.length ? "Choose a profile…" : "No Hub exports found",
+            selected: PDE_INITIAL.path ? [PDE_INITIAL.path] : [],
+        });
         setStatus("hub-status", body.mask_radius
             ? `${options.length} export(s); field-of-view radius ${body.mask_radius} px`
             : `${options.length} export(s); PDE_MASK_RADIUS_PX is unset, so no concentrations`);

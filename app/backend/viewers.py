@@ -15,6 +15,11 @@ class ViewerManager:
 
     def load_viewers(self):
 
+        # Viewers that also stand on their own (not only as a way to open a
+        # file) declare a "visualization" block; the Visualization Hub lists
+        # them beside the external modules.
+        cards = self.app.config.setdefault("VIEWER_CARDS", [])
+
         for viewer in self.folder.iterdir():
 
             config_file = (
@@ -62,6 +67,17 @@ class ViewerManager:
             self.app.register_blueprint(
                 blueprint
             )
+
+            if "visualization" in config:
+                url = "/viewer/" + config["name"].lower().replace("_", "-").replace(" ", "-")
+                card = config["visualization"]
+                cards.append({
+                    "title": card.get("title", config["name"]),
+                    "description": card.get("description", config["description"]),
+                    "url": url + "/",
+                    "choices_url": (url + "/" + card["choices"]) if card.get("choices") else None,
+                    "choices_label": card.get("choices_label", ""),
+                })
 
 
             existing_tool = Viewer.query.filter_by(name=config["name"]).first()

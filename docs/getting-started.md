@@ -206,6 +206,8 @@ Global settings (defaults seeded on first start; later changes are kept):
 | `LOG_RETENTION_DAYS` | 30 | task log files older than this are deleted (checked hourly); 0 keeps them all |
 | `HOOKS_FILE` | `hooks.json` | lifecycle hooks — commands to run or URLs to POST when a task or workflow ends; absent means none (see `app/backend/hooks.py`) |
 | `HARDWARE_CONTROL_CONFIG_FILE` | `hardware_control/hardware_control_config.json` | sensor/command definitions for the Hardware Control page |
+| `PDE_MASK_RADIUS_PX` | empty | Data Explorer: field-of-view radius in pixels for profiles the Hub processed (π·r²·500 mm per frame); empty = counts, no concentrations |
+| `PDE_ROOT`, `PDE_CACHE_ROOT` | empty | Data Explorer: the old pipeline's cruise/profile tree (empty = `FILE_EXPLORER_ROOT`) and its portable image-metadata cache |
 
 Fixed locations, relative to the checkout: `logs/<tool>/<task-id>.log|.err`
 for task output (the Hub serves them through the API; they stay local

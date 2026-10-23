@@ -174,7 +174,7 @@ Directories named by a workflow id show the workflow's name beside it,
 so `DATA_ROOT/workflows/` is readable. Selecting a file offers
 **download** and the viewers registered for its extension.
 
-Viewers are plugins under `viewers/`; two ship:
+Viewers are plugins under `viewers/`; three ship:
 
 - **HDF Viewer** (`/viewer/hdf-viewer?path=…`): the group/dataset tree
   of any `.h5` file, with dataset shapes, dtypes and attributes, and the
@@ -183,6 +183,16 @@ Viewers are plugins under `viewers/`; two ship:
   segmenter's `result.h5`. Per-frame views with the extracted crops
   (click a crop to select it, toggle isolating it), the raw frame, and a
   depth/count profile of the whole file. The panel split is draggable.
+- **PIScO Data Explorer** (`/viewer/pisco-data-explorer/?path=…`): for an
+  EcoTaxa TSV. Binned depth profiles (count, abundance and biovolume per
+  litre, by taxon) and ESD size spectra, with a table of the binned
+  values. It also has its own entry in the Visualization Hub (below).
+  For a profile the Hub exported, the sampled volume comes from the
+  workflow's `profile_dataset.h5`: the frames per pressure times the field
+  of view in `PDE_MASK_RADIUS_PX` (π·r²·500 mm). While that setting is
+  empty it shows counts only. TSVs from the old pipeline's
+  `<profile>_Results/EcoTaxa/` tree take the radius from its
+  `settings.csv`, as before.
 
 Links of the form `/v/<workflow-id>/<frame>/<object index>` open the
 profile viewer on one object of one frame; the EcoTaxa export writes one
@@ -205,6 +215,13 @@ inside its own layout. The Hub does not run or proxy them; it only knows
 the address. Each card has the title and description, a **Source** link
 (the repository behind it), **Open in new tab**, and **Open**, which
 frames the page at `/visualization/m/<name>` with a way back to the list.
+
+Viewers that stand on their own come first, with a card each: the
+**PIScO Data Explorer**'s card has a dropdown of the profiles the Hub has
+exported, and **Open** goes straight to the chosen one. A viewer gets a card
+by declaring a `visualization` block in its `config.json` (`title`,
+`description`, and optionally `choices`: a route of the viewer answering
+`{"choices": [{"label", "url"}]}`, plus `choices_label` for the dropdown).
 
 Modules are declared in the JSON file named by the `MODULES_FILE` setting
 (default `modules.json` in the Hub root; a relative path is taken from

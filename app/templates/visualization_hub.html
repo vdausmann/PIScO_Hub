@@ -9,6 +9,23 @@
 </div>
 
 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem;">
+    {% for card in viewer_cards %}
+    <div style="background: var(--card); border-radius: 12px; padding: 1.5rem; border-top: 5px solid var(--accent); display: flex; flex-direction: column;">
+        <h3 style="margin-top: 0;">{{ card.title }}</h3>
+        <p style="flex: 1;">{{ card.description }}</p>
+        {% if card.choices_url %}
+        <label style="font-size: 0.85em; font-weight: 600; margin-bottom: 0.3rem;">{{ card.choices_label }}</label>
+        <select class="viewer-choices" data-src="{{ card.choices_url }}"
+                style="width: 100%; padding: 6px; margin-bottom: 1rem; border-radius: 6px; background: var(--card); color: var(--text); border: 1px solid rgba(127,127,127,.4);">
+            <option value="{{ card.url }}">Loading…</option>
+        </select>
+        {% endif %}
+        <a href="{{ card.url }}" class="viewer-open"
+           style="background: var(--accent); color: white; display: block; text-align: center; padding: 10px; border-radius: 6px; text-decoration: none; font-weight: bold;">
+            Open
+        </a>
+    </div>
+    {% endfor %}
     {% for module in modules %}
     <div style="background: var(--card); border-radius: 12px; padding: 1.5rem; border-top: 5px solid #10b981; display: flex; flex-direction: column;">
         <h3 style="margin-top: 0;">{{ module.title }}</h3>
@@ -26,7 +43,26 @@
         </a>
     </div>
     {% else %}
+    {% if not viewer_cards %}
     <p>No modules declared. Add them to <code>{{ modules_file }}</code> (see docs/web-ui.md).</p>
+    {% endif %}
     {% endfor %}
 </div>
+
+<script>
+// A viewer card's dropdown picks what to open; empty opens the viewer itself.
+for (const select of document.querySelectorAll('.viewer-choices')) {
+    const open = select.closest('div').querySelector('.viewer-open');
+    const base = select.options[0].value;
+    select.addEventListener('change', () => { open.href = select.value || base; });
+    fetch(select.dataset.src)
+        .then(r => r.ok ? r.json() : Promise.reject(r.statusText))
+        .then(body => {
+            select.options[0].textContent = body.choices.length ? 'Choose…' : 'Nothing yet';
+            select.options[0].value = '';
+            for (const c of body.choices) select.add(new Option(c.label, c.url));
+        })
+        .catch(() => { select.options[0].textContent = 'Could not load the list'; select.options[0].value = ''; });
+}
+</script>
 {% endblock %}

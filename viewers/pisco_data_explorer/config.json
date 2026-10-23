@@ -6,5 +6,11 @@
     "description": "EcoTaxa TSV explorer: binned depth profiles and ESD size spectra, with per-profile sampled volumes from a portable image-metadata cache",
     "type": "flask_blueprint",
     "module": "routes",
-    "blueprint": "pde_bp"
+    "blueprint": "pde_bp",
+    "visualization": {
+        "title": "PIScO Data Explorer",
+        "description": "Depth profiles and ESD size spectra of the profiles the Hub has exported to EcoTaxa: abundance and biovolume per depth bin and taxon.",
+        "choices": "choices",
+        "choices_label": "Profile"
+    }
 }

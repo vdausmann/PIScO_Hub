@@ -1,6 +1,7 @@
 import os
 
-from flask import Blueprint, abort, redirect, render_template, send_from_directory, url_for
+from flask import (Blueprint, abort, current_app, redirect, render_template,
+                   send_from_directory, url_for)
 from flask_login import login_required
 
 from ..backend.modules import get_module, load_modules, modules_file
@@ -12,7 +13,8 @@ visualization_bp = Blueprint('visualization', __name__)
 @login_required
 def hub():
     return render_template('visualization_hub.html', modules=load_modules(),
-                           modules_file=modules_file())
+                           modules_file=modules_file(),
+                           viewer_cards=current_app.config.get("VIEWER_CARDS", []))
 
 
 @visualization_bp.route('/m/<name>')

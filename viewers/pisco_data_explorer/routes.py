@@ -1,7 +1,7 @@
 import json
 import pathlib
 
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, jsonify, render_template, request, url_for
 from flask_login import login_required
 from werkzeug.exceptions import BadRequest
 
@@ -120,7 +120,8 @@ def index():
     profile = request.args.get("profile") or None
     path = request.args.get("path") or None
 
-    initial = {"root": root, "cache_root": cache_root, "cruise": cruise, "loaded": None}
+    initial = {"root": root, "cache_root": cache_root, "cruise": cruise, "path": path,
+               "loaded": None}
 
     if path:
         try:
@@ -199,6 +200,16 @@ def hub_exports():
     """EcoTaxa TSVs the Hub's own export tasks wrote, newest first."""
     return jsonify({"exports": hub_profiles.hub_exports(),
                     "mask_radius": hub_mask_radius()})
+
+
+@pde_bp.route("/choices")
+@login_required
+def choices():
+    """The exports as links, for the Visualization Hub's card."""
+    return jsonify({"choices": [
+        {"label": f"{e['workflow']} · {e['created'].replace('T', ' ')}" if e["created"] else e["workflow"],
+         "url": url_for(".index", path=e["path"])}
+        for e in hub_profiles.hub_exports()]})
 
 
 @pde_bp.route("/load")
