@@ -109,7 +109,21 @@ Reorder with the arrows. A template may be saved with parameters only;
    scaled and stretched to 8 bit); it follows the range, and ◀ ▶ step
    through the frames around it. The frames are counted
    in the order `pisco_prepare_profile` reads them, so the counts mean the
-   same thing there (`app/backend/frame_preview.py`). **Fill metadata
+   same thing there (`app/backend/frame_preview.py`). A folder of the
+   PISCO3 recorder's `.h5` files works too: the preview takes the files
+   that overlap the cast's start and end time, the frames' own times, and
+   the pressure from the *Sensor log* field when that holds the Keller
+   logs (a `kellerlog_*.csv` or their folder). If the template has
+   `fov_diameter_px`, the preview also finds the **field of view** — the
+   lit disc on the dark frame — by fitting a circle to its edge on the
+   median of seven frames spread over the kept part (`app/backend/fov.py`).
+   The found circle is drawn dashed over the frame; *Use this field of
+   view* writes diameter and centre into the form, and the solid circle
+   shows what the form holds as you correct it. PISCO2's disc is larger
+   than its frame, so only the corners are dark and the fit runs on
+   those arcs; the sampled area is the part of the disc inside the
+   frame. The run keeps these values, with `depth_of_field_mm`, as
+   parameters. **Fill metadata
    from names** copies cruise, station, instrument, position and date
    from the first frame's name into whichever of those fields are empty.
    Latitude and longitude take decimal degrees or the usual written
@@ -188,11 +202,21 @@ Viewers are plugins under `viewers/`; three ship:
   litre, by taxon) and ESD size spectra, with a table of the binned
   values. It also has its own entry in the Visualization Hub (below).
   For a profile the Hub exported, the sampled volume comes from the
-  workflow's `profile_dataset.h5`: the frames per pressure times the field
-  of view in `PDE_MASK_RADIUS_PX` (π·r²·500 mm). While that setting is
-  empty it shows counts only. TSVs from the old pipeline's
-  `<profile>_Results/EcoTaxa/` tree take the radius from its
-  `settings.csv`, as before.
+  workflow: the frames per pressure from its `profile_dataset.h5`, times
+  what one frame samples according to the run's parameters — the part of
+  the field-of-view disc (`fov_diameter_px`, `fov_center_x_px`,
+  `fov_center_y_px`) inside the frame, at `pixel_size_um` (else the
+  instrument's: 22.5 µm PISCO2, 17.13 µm PISCO3), times
+  `depth_of_field_mm` (default 500). The **Optics** panel above the plot
+  shows them over one of the run's frames. A run made before the depth
+  preview found the field of view has none: the panel fits it on the
+  run's own frames, and *Save to this run* adds the values to that
+  workflow's parameters (nothing else of the run changes). *Save to this
+  run and N more* does the same for the cruise's other runs of that
+  instrument that have none yet — the disc stays put within a cruise but
+  moved between M202 and MSM147. Until then it shows counts only. TSVs
+  from the old pipeline's `<profile>_Results/EcoTaxa/` tree take the
+  radius from its `settings.csv`, as before.
 
 Links of the form `/v/<workflow-id>/<frame>/<object index>` open the
 profile viewer on one object of one frame; the EcoTaxa export writes one

@@ -53,8 +53,6 @@ def seed_settings(app):
                      'desc': "Data Explorer: root of the old pipeline's cruise/profile tree. Empty means FILE_EXPLORER_ROOT."},
         'PDE_CACHE_ROOT': {'value': '', 'type': 'str',
                            'desc': 'Data Explorer: portable cache of per-profile image metadata (image_metadata.csv) for the old pipeline tree.'},
-        'PDE_MASK_RADIUS_PX': {'value': '', 'type': 'str',
-                               'desc': 'Data Explorer: field-of-view radius in pixels for profiles processed in the Hub; each frame samples pi*r^2*500 mm. The C++ segmenter has no mask to read it from. Empty means counts only, no concentrations.'},
         'LINKS_FILE': {'value': 'links.json', 'type': 'str',
                        'desc': "JSON list of links on the landing page to services on the ship's network (title, url, description). Relative paths are taken from the Hub root; see links.example.json."},
     }

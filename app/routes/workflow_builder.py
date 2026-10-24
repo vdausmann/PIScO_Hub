@@ -250,11 +250,30 @@ def new_from_template(template_id):
 @workflow_bp.route('/frame-preview')
 @login_required
 def preview_frames():
-    """Depth over time of a frame directory, read from the file names,
-    for the parameter form's plot."""
+    """Depth over time of a profile's frames, from the file names or the
+    sensor log, for the parameter form's plot."""
     try:
-        return jsonify(frame_preview.scan(request.args.get("path", "")))
+        return jsonify(frame_preview.scan(request.args.get("path", ""), **_window()))
     except (frame_preview.PreviewError, OSError) as e:
+        return jsonify({"error": str(e)}), 400
+
+
+def _window():
+    """The cast's time window and sensor log, as the form has them: they
+    decide which frames a recorder folder contributes, and their pressure."""
+    return {key: request.args.get(key) or None for key in ("start", "end", "sensor_log")}
+
+
+@workflow_bp.route('/frame-fov')
+@login_required
+def frame_fov():
+    """The field of view fitted on frames spread over the kept part
+    (first..last), for the user to confirm."""
+    try:
+        return jsonify(frame_preview.detect_fov(
+            request.args.get("path", ""), request.args.get("first", 0),
+            request.args.get("last"), **_window()))
+    except (frame_preview.PreviewError, OSError, ValueError) as e:
         return jsonify({"error": str(e)}), 400
 
 
@@ -286,7 +305,7 @@ def frame_image():
     preview; what the frame is travels in X-Frame-* headers."""
     try:
         jpeg, info = frame_preview.frame_image(request.args.get("path", ""),
-                                               request.args.get("index", 0))
+                                               request.args.get("index", 0), **_window())
     except (frame_preview.PreviewError, OSError, ValueError) as e:
         return jsonify({"error": str(e)}), 400
     response = make_response(jpeg)

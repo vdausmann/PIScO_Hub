@@ -97,6 +97,29 @@
         "default": 22.5,
         "description": "Micrometres per pixel, for the scale bar and object_esd in EcoTaxa: 22.5 for PISCO2, 17.13 for PISCO3."
       },
+      "fov_diameter_px": {
+        "type": "number",
+        "title": "Field of view (px)",
+        "minimum": 1,
+        "description": "Diameter of the lit disc in the frames, in pixels. The depth preview finds it on the raw frames; confirm it there. With the pixel size and the depth of field it gives the volume each frame samples (the part of the disc inside the frame), and so the concentrations in the Data Explorer."
+      },
+      "fov_center_x_px": {
+        "type": "number",
+        "title": "Field of view centre x (px)",
+        "description": "Centre of the disc from the frame's left edge; the depth preview fills it. Empty: the frame's centre."
+      },
+      "fov_center_y_px": {
+        "type": "number",
+        "title": "Field of view centre y (px)",
+        "description": "Centre of the disc from the frame's top edge; the depth preview fills it. Empty: the frame's centre."
+      },
+      "depth_of_field_mm": {
+        "type": "number",
+        "title": "Depth of field (mm)",
+        "minimum": 0.001,
+        "default": 500,
+        "description": "Depth of the imaged volume along the optical axis. 500 mm is the old pipeline's value for PISCO2; nobody has measured either camera's yet."
+      },
       "deconv_model": {
         "type": "string",
         "title": "Deconvolution model",

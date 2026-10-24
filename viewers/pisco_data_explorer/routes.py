@@ -1,10 +1,11 @@
 import json
 import pathlib
 
-from flask import Blueprint, jsonify, render_template, request, url_for
+from flask import Blueprint, jsonify, make_response, render_template, request, url_for
 from flask_login import login_required
 from werkzeug.exceptions import BadRequest
 
+from app.backend import fov, frame_preview
 from app.backend.models import GlobalSetting
 from .backend import hub_profiles, pde
 
@@ -41,29 +42,23 @@ def default_cache_root() -> str:
     return (GlobalSetting.get("PDE_CACHE_ROOT", "") or "").strip() or pde.DEFAULT_CACHE_ROOT
 
 
-def hub_mask_radius():
-    """PDE_MASK_RADIUS_PX as a number, or None while it is unset."""
-    try:
-        value = float(str(GlobalSetting.get("PDE_MASK_RADIUS_PX", "") or "").strip())
-    except ValueError:
-        return None
-    return value if value > 0 else None
-
-
 def hub_frame_source(path):
-    """Volumes for a TSV the Hub exported: its workflow's frames times the
-    per-frame volume of PDE_MASK_RADIUS_PX. The C++ segmenter applies no
-    field-of-view mask, so there is no radius to read from the run."""
+    """Volumes for a TSV the Hub exported: its workflow's frames times what
+    one frame samples, from the run's optics (field of view and depth of
+    field in its parameters). None while the run has no field of view."""
     found = hub_profiles.frame_pressures(path)
     if found is None:
         return None
     pressures, source, warning = found
-    radius = hub_mask_radius()
-    if radius is None:
-        print(f"[PDE] {len(pressures)} frames from {source}, but PDE_MASK_RADIUS_PX is unset")
+    workflow = hub_profiles.workflow_for_path(path)
+    optics = hub_profiles.run_optics(workflow)["optics"]
+    if optics is None:
+        print(f"[PDE] {len(pressures)} frames from {source}, but the run has no field of view")
         return None
-    volumes = pde.volumes_from_pressures(pressures, pde.calculate_volume(radius))
-    return volumes, f"{len(pressures):,} frames from {source}, r = {radius:g} px", warning
+    volumes = pde.volumes_from_pressures(pressures, optics["litres_per_frame"])
+    return volumes, (f"{len(pressures):,} frames from {source} × "
+                     f"{optics['litres_per_frame']:.3f} L (field of view ⌀ "
+                     f"{optics[fov.DIAMETER]:g} px, {optics[fov.DEPTH]:g} mm deep)"), warning
 
 
 def load_path(path, cache_root, cruise):
@@ -86,8 +81,8 @@ def _metadata(cache_key: str, res: dict) -> dict:
     if n_volumes < n_profiles:
         status += (f" — ⚠️ no sampled volume for {n_profiles - n_volumes} profile(s), "
                    "so no concentrations")
-        if res.get("volume_source") is None and hub_mask_radius() is None:
-            status += " (set PDE_MASK_RADIUS_PX for profiles processed in the Hub)"
+        if res.get("volume_source") is None:
+            status += " (a run processed in the Hub needs its field of view: see Optics)"
     elif res.get("volume_source"):
         status += f" — volumes: {res['volume_source']}"
     if res.get("volume_warning"):
@@ -198,8 +193,84 @@ def profiles():
 @login_required
 def hub_exports():
     """EcoTaxa TSVs the Hub's own export tasks wrote, newest first."""
-    return jsonify({"exports": hub_profiles.hub_exports(),
-                    "mask_radius": hub_mask_radius()})
+    return jsonify({"exports": hub_profiles.hub_exports()})
+
+
+def _run(path):
+    workflow = hub_profiles.workflow_for_path(pathlib.Path(path or ""))
+    if workflow is None:
+        raise BadRequest("not the output of a Hub workflow")
+    return workflow
+
+
+@pde_bp.route("/optics")
+@login_required
+def optics():
+    """The optics of the run a TSV came from, and the runs that could take
+    the same ones (same instrument and cruise, none yet)."""
+    workflow = _run(request.args.get("path"))
+    out = hub_profiles.run_optics(workflow)
+    out["siblings"] = len(hub_profiles.sibling_runs(workflow))
+    return jsonify(out)
+
+
+@pde_bp.route("/optics/detect")
+@login_required
+def optics_detect():
+    """The field of view fitted on the run's own frames."""
+    run = hub_profiles.run_optics(_run(request.args.get("path")))
+    if not run["dataset"]:
+        return jsonify({"error": "the run's profile_dataset.h5 is gone, so there are "
+                                 "no frames to find the field of view on"}), 400
+    try:
+        return jsonify(hub_profiles.detect_run_fov(run["dataset"]))
+    except (fov.FovError, OSError) as e:
+        return jsonify({"error": f"field of view not found: {e}"}), 400
+
+
+@pde_bp.route("/optics/frame")
+@login_required
+def optics_frame():
+    """One frame of the run, as a small JPEG to check the circle against."""
+    run = hub_profiles.run_optics(_run(request.args.get("path")))
+    if not run["dataset"]:
+        return jsonify({"error": "no profile_dataset.h5"}), 404
+    index = request.args.get("index")
+    index = run["frames"] // 2 if index in (None, "") else int(index)
+    index, frame = hub_profiles.dataset_frame(run["dataset"], index)
+    response = make_response(frame_preview.to_jpeg(frame))
+    response.headers["Content-Type"] = "image/jpeg"
+    response.headers["Cache-Control"] = "private, max-age=300"
+    response.headers["X-Frame-Index"] = str(index)
+    return response
+
+
+@pde_bp.route("/optics", methods=["POST"])
+@login_required
+def optics_save():
+    """Add the confirmed optics to the run's parameters — and, with
+    scope 'cruise', to every run of that instrument and cruise without one."""
+    body = request.get_json(silent=True) or {}
+    workflow = _run(body.get("path"))
+    values = {}
+    for key in hub_profiles.OPTICS_KEYS:
+        raw = body.get(key)
+        if raw in (None, ""):
+            values[key] = None
+            continue
+        try:
+            values[key] = float(raw)
+        except (TypeError, ValueError):
+            raise BadRequest(f"{key} must be a number")
+    if not values.get(fov.DIAMETER) or values[fov.DIAMETER] <= 0:
+        raise BadRequest("the field of view's diameter is required")
+    if values.get(fov.DEPTH) is not None and values[fov.DEPTH] <= 0:
+        raise BadRequest("the depth of field must be positive")
+    runs = [workflow]
+    if body.get("scope") == "cruise":
+        runs += hub_profiles.sibling_runs(workflow)
+    hub_profiles.save_optics(runs, values)
+    return jsonify({"saved": [w.name or w.id for w in runs]})
 
 
 @pde_bp.route("/choices")

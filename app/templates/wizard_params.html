@@ -72,7 +72,7 @@
             <button type="button" class="btn btn-sm" data-browse="p_{{ key }}" data-kind="{{ prop['format'] }}">Browse…</button>
             {% if prop['format'] == 'directory' %}
             <button type="button" class="btn btn-sm" data-preview="p_{{ key }}"
-                    title="Plot depth over the profile from the frame names">Depth preview</button>
+                    title="Plot depth over the profile (from the frame names, or for the PISCO3 recorder's .h5 files from the sensor log) and find the field of view on the frames">Depth preview</button>
             {% endif %}
         </div>
         {% if prop['format'] == 'directory' %}
@@ -140,8 +140,21 @@
             <button type="button" class="btn btn-sm" data-step="1" title="Next frame">▶</button>
         </span>
     </div>
-    <a class="fs-link" target="_blank" title="Open full size in a new tab"><img alt=""></a>
+    <a class="fs-link" target="_blank" title="Open full size in a new tab"><img alt=""><svg class="fs-fov" preserveAspectRatio="none" hidden><circle class="found"/><circle class="kept"/></svg></a>
     <div class="fs-info muted small"></div>
+    {% if 'fov_diameter_px' in schema.get('properties', {}) %}
+    <div class="fs-fov-box small">
+        <strong>Field of view</strong>
+        <span class="muted">· <span class="fs-fov-key found"></span>found <span class="fs-fov-key"></span>in the form</span>
+        <div class="fs-fov-note muted">Found on the frames when the depth preview loads; check the circle against the lit disc.</div>
+        <div class="fs-fov-actions">
+            <button type="button" class="btn btn-sm" data-fov="detect"
+                    title="Fit the lit disc's edge on frames spread over the kept part">Detect again</button>
+            <button type="button" class="btn btn-sm btn-primary" data-fov="use" disabled
+                    title="Write the found diameter and centre into the form">Use this field of view</button>
+        </div>
+    </div>
+    {% endif %}
 </aside>
 </div>
 
@@ -260,7 +273,8 @@ document.querySelectorAll("input[data-axis]").forEach(input => {
 </script>
 <script>
 // Depth preview: the frame names carry pressure, so a directory listing
-// is the profile. Dragging across the plot keeps that stretch of frames
+// is the profile (a PISCO3 recorder folder: the frames' times, the sensor
+// log's pressure). Dragging across the plot keeps that stretch of frames
 // by writing skip_first / skip_last, which the template hands to the
 // preparer's skipFirstNFrames / skipLastNFrames.
 (() => {
@@ -269,6 +283,13 @@ document.querySelectorAll("input[data-axis]").forEach(input => {
     const css = getComputedStyle(document.body);
     const color = (name, fallback) => (css.getPropertyValue(name) || "").trim() || fallback;
     const fmtTime = t => t == null ? "?" : new Date(t * 1000).toISOString().slice(11, 19);
+    // What decides which frames a recorder folder contributes, and their
+    // pressure: the cast's window and the sensor log, as the form has them.
+    const windowQuery = () => ["start_time:start", "end_time:end", "sensor_log:sensor_log"].map(pair => {
+        const [field, arg] = pair.split(":");
+        const el = document.getElementById("p_" + field);
+        return el && el.value.trim() ? `&${arg}=${encodeURIComponent(el.value.trim())}` : "";
+    }).join("");
 
     // The side panel: the first kept frame, as the Hub renders it (the
     // camera's TIFFs are not something a browser shows). ◀ ▶ step through
@@ -277,12 +298,13 @@ document.querySelectorAll("input[data-axis]").forEach(input => {
         const box = document.getElementById("frame-shot");
         const img = box.querySelector("img"), link = box.querySelector("a");
         const caption = box.querySelector(".fs-info");
-        let path = null, index = 0, total = 0, token = 0, timer = null, url = null;
+        const svg = box.querySelector(".fs-fov");
+        let path = null, index = 0, total = 0, token = 0, timer = null, url = null, size = null;
         async function load() {
             const mine = ++token;
             box.hidden = false;
             caption.textContent = `Loading frame ${index}…`;
-            const r = await fetch(`{{ url_for('workflow.frame_image') }}?path=${encodeURIComponent(path)}&index=${index}`, {showLoader: false});
+            const r = await fetch(`{{ url_for('workflow.frame_image') }}?path=${encodeURIComponent(path)}&index=${index}${windowQuery()}`, {showLoader: false});
             if (mine !== token) return;               // a newer request won
             if (!r.ok) {
                 const body = await r.json().catch(() => ({}));
@@ -294,6 +316,8 @@ document.querySelectorAll("input[data-axis]").forEach(input => {
             if (url) URL.revokeObjectURL(url);
             url = URL.createObjectURL(await r.blob());
             img.src = url; link.href = url;
+            size = [info.width, info.height];
+            fov.draw();
             let text = `frame ${info.index} of ${total.toLocaleString()} · ${info.name}`;
             text += ` · ${info.width}×${info.height}, ${info.bit_depth}-bit`;
             if (info.pressure != null) text += ` · ${info.pressure.toFixed(2)} dbar`;
@@ -308,7 +332,79 @@ document.querySelectorAll("input[data-axis]").forEach(input => {
         return {
             show(p, i, n) { clearTimeout(timer); path = p; index = i; total = n; load(); },
             later(p, i, n) { clearTimeout(timer); timer = setTimeout(() => this.show(p, i, n), 400); },
+            size: () => size,
+            svg,
         };
+    })();
+
+    // The field of view: found on frames spread over the kept part (the
+    // dashed circle), confirmed by writing it into the form (the solid
+    // one, which follows the fields as they are edited). What the run
+    // keeps is the form's, so a wrong fit is corrected by hand there.
+    const fov = (() => {
+        const box = document.querySelector(".fs-fov-box");
+        const field = key => document.getElementById("p_" + key);
+        const diameter = field("fov_diameter_px");
+        const keys = ["fov_diameter_px", "fov_center_x_px", "fov_center_y_px"];
+        let found = null, token = 0;
+        const note = text => { if (box) box.querySelector(".fs-fov-note").textContent = text; };
+        const useBtn = box?.querySelector('[data-fov="use"]');
+
+        function place(circle, d, cx, cy) {
+            const ok = d > 0;
+            circle.style.display = ok ? "" : "none";
+            if (!ok) return;
+            const size = shot.size();
+            circle.setAttribute("cx", cx ?? size[0] / 2);
+            circle.setAttribute("cy", cy ?? size[1] / 2);
+            circle.setAttribute("r", d / 2);
+        }
+        function draw() {
+            const size = shot.size(), svg = shot.svg;
+            if (!diameter || !size) { svg.hidden = true; return; }
+            svg.hidden = false;
+            svg.setAttribute("viewBox", `0 0 ${size[0]} ${size[1]}`);
+            place(svg.querySelector(".found"), found?.fov_diameter_px, found?.fov_center_x_px, found?.fov_center_y_px);
+            const num = key => { const v = parseFloat(field(key)?.value); return isNaN(v) ? null : v; };
+            place(svg.querySelector(".kept"), num("fov_diameter_px"), num("fov_center_x_px"), num("fov_center_y_px"));
+        }
+        function describe(f) {
+            let s = `Found ⌀ ${Math.round(f.fov_diameter_px)} px, centre (${Math.round(f.fov_center_x_px)}, ${Math.round(f.fov_center_y_px)})` +
+                    ` on ${f.frames_used} frames: ${(f.coverage * 100).toFixed(0)} % of the frame is lit`;
+            if (f.inside_frame < 0.999) s += `, ${(f.inside_frame * 100).toFixed(0)} % of the disc lies inside the frame`;
+            s += `; edge fitted to ±${f.fit_rms_px} px.`;
+            if (f.warning) s += ` ⚠️ ${f.warning}.`;
+            const d = parseFloat(diameter.value);
+            if (!isNaN(d)) s += Math.abs(d - f.fov_diameter_px) < 2 ? " The form has it." : ` The form says ⌀ ${d} px.`;
+            return s;
+        }
+        async function detect(path, first, last) {
+            if (!box) return;
+            const mine = ++token;
+            found = null; draw();
+            useBtn.disabled = true;
+            note("Fitting the field of view on frames across the kept part…");
+            const r = await fetch(`{{ url_for('workflow.frame_fov') }}?path=${encodeURIComponent(path)}&first=${first}&last=${last}${windowQuery()}`, {showLoader: false});
+            const body = await r.json().catch(() => ({}));
+            if (mine !== token) return;
+            if (!r.ok) { note(body.error || "The field of view could not be found; enter it by hand."); return; }
+            found = body;
+            useBtn.disabled = false;
+            note(describe(found));
+            draw();
+        }
+        if (box) {
+            useBtn.addEventListener("click", () => {
+                if (!found) return;
+                for (const key of keys) {
+                    const el = field(key);
+                    if (el) { el.value = found[key]; el.dispatchEvent(new Event("input")); }
+                }
+                note(describe(found));
+            });
+            keys.forEach(key => field(key)?.addEventListener("input", draw));
+        }
+        return {draw, detect, wanted: () => !!box, bind(fn) { box?.querySelector('[data-fov="detect"]').addEventListener("click", fn); }};
     })();
 
     function attach(panel, input) {
@@ -384,11 +480,13 @@ document.querySelectorAll("input[data-axis]").forEach(input => {
             const pa = near(a), pb = near(b);
             const kept = b - a + 1;
             let s = `${data.frames.toLocaleString()} frames`;
-            if (!data.with_pressure) s += " · no pressure in the file names, so only the time axis is meaningful";
+            if (!data.with_pressure) s += data.kind === "hdf5"
+                ? " · no pressure: give the Keller logs as sensor log to see the depth"
+                : " · no pressure in the file names, so only the time axis is meaningful";
             else s += ` · max ${data.max_pressure.toFixed(1)} dbar`;
             s += ` · keeping ${kept.toLocaleString()} (frames ${a}–${b}, ${fmtTime(pa[1])}–${fmtTime(pb[1])}`;
             if (pa[2] != null && pb[2] != null) s += `, ${pa[2].toFixed(1)} → ${pb[2].toFixed(1)} dbar`;
-            info.textContent = s + ")";
+            info.textContent = s + ")" + (data.warnings?.length ? " · ⚠️ " + data.warnings.join("; ") : "");
         }
         function setRange(a, b) {
             if (!skipFirst || !skipLast) return;
@@ -415,6 +513,7 @@ document.querySelectorAll("input[data-axis]").forEach(input => {
             if (data) shot.later(input.value.trim(), range()[0], data.frames);
         });
         window.addEventListener("resize", () => data && !panel.hidden && draw());
+        fov.bind(() => { if (data) fov.detect(input.value.trim(), ...range()); });
 
         panel.querySelectorAll("[data-act]").forEach(btn => btn.addEventListener("click", () => {
             if (!data) return;
@@ -432,12 +531,13 @@ document.querySelectorAll("input[data-axis]").forEach(input => {
             info.textContent = "Reading the directory…";
             canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
             data = null;
-            const r = await fetch(`{{ url_for('workflow.preview_frames') }}?path=${encodeURIComponent(path)}`, {showLoader: false});
+            const r = await fetch(`{{ url_for('workflow.preview_frames') }}?path=${encodeURIComponent(path)}${windowQuery()}`, {showLoader: false});
             const body = await r.json();
             if (!r.ok) { info.textContent = body.error || "cannot read the directory"; return; }
             data = body;
             draw();
             shot.show(path, range()[0], data.frames);
+            if (fov.wanted()) fov.detect(path, ...range());
         };
     }
 
@@ -532,7 +632,7 @@ document.querySelectorAll("input[data-axis]").forEach(input => {
         const frames = document.getElementById("p_frames");
         if (time == null && frames && frames.value.trim()) {
             note.textContent = "Reading the frame directory…";
-            const r = await fetch(`{{ url_for('workflow.preview_frames') }}?path=${encodeURIComponent(frames.value.trim())}`, {showLoader: false});
+            const r = await fetch(`{{ url_for('workflow.preview_frames') }}?path=${encodeURIComponent(frames.value.trim())}${windowQuery()}`, {showLoader: false});
             const body = await r.json().catch(() => ({}));
             const first = (body.points || []).find(p => p[1] != null);
             if (r.ok && first) time = first[1];

@@ -120,9 +120,7 @@ async function loadHubExports() {
             placeholder: options.length ? "Choose a profile…" : "No Hub exports found",
             selected: PDE_INITIAL.path ? [PDE_INITIAL.path] : [],
         });
-        setStatus("hub-status", body.mask_radius
-            ? `${options.length} export(s); field-of-view radius ${body.mask_radius} px`
-            : `${options.length} export(s); PDE_MASK_RADIUS_PX is unset, so no concentrations`);
+        setStatus("hub-status", `${options.length} export(s)`);
     } catch (e) {
         fillSelect($("hub-export-select"), [], { placeholder: "—" });
         setStatus("hub-status", `Could not list exports: ${e.message}`, true);
@@ -169,10 +167,164 @@ async function load(params) {
             ...params, root: $("root-path").value, cache_root: $("cache-root").value,
         });
         applyLoaded(body);
+        optics.show(params.path || null);
     } catch (e) {
         setStatus("load-status", e.message, true);
     }
 }
+
+// ─── Optics ───────────────────────────────────────────────────────────────────
+// What one frame samples: the field of view the run's parameters hold,
+// with the depth of field. Runs from before the depth preview found it
+// get it here: fitted on the run's own frames, checked against one of
+// them, saved to the run (and, if wanted, to the cruise's other runs of
+// the instrument that have none).
+
+const optics = (() => {
+    let path = null, run = null, found = null, size = null, imageUrl = null;
+
+    const num = id => { const v = parseFloat($(id).value); return isNaN(v) ? null : v; };
+
+    // Pixels of the circle inside the frame, as fov.area_in_frame counts them.
+    function areaInFrame(cx, cy, r, w, h) {
+        let area = 0;
+        for (let x = 0; x < w; x++) {
+            const dx = x + 0.5 - cx;
+            if (Math.abs(dx) >= r) continue;
+            const half = Math.sqrt(r * r - dx * dx);
+            area += Math.min(cy + half, h) - Math.max(cy - half, 0);
+        }
+        return Math.max(area, 0);
+    }
+
+    function place(circle, d, cx, cy) {
+        if (!(d > 0) || !size) { circle.style.display = "none"; return; }
+        circle.style.display = "";
+        circle.setAttribute("cx", cx ?? size[0] / 2);
+        circle.setAttribute("cy", cy ?? size[1] / 2);
+        circle.setAttribute("r", d / 2);
+    }
+
+    function draw() {
+        const svg = $("optics-svg");
+        if (!size) return;
+        svg.setAttribute("viewBox", `0 0 ${size[0]} ${size[1]}`);
+        place(svg.querySelector(".found"), found?.fov_diameter_px, found?.fov_center_x_px, found?.fov_center_y_px);
+        place(svg.querySelector(".kept"), num("opt-d"), num("opt-cx"), num("opt-cy"));
+        const d = num("opt-d"), dof = num("opt-dof");
+        if (!(d > 0) || !(dof > 0)) { setStatus("optics-volume", ""); return; }
+        const [w, h] = size;
+        const area = areaInFrame(num("opt-cx") ?? w / 2, num("opt-cy") ?? h / 2, d / 2, w, h);
+        const mm2 = area * (run.pixel_size_um / 1000) ** 2;
+        setStatus("optics-volume", `${(area / (w * h) * 100).toFixed(0)} % of the ${w}×${h} frame at ` +
+            `${run.pixel_size_um} µm/px = ${(mm2 / 100).toFixed(1)} cm² × ${dof} mm = ` +
+            `${(mm2 * dof / 1e6).toFixed(3)} L per frame`);
+    }
+
+    function fill(values) {
+        $("opt-d").value = values.fov_diameter_px ?? "";
+        $("opt-cx").value = values.fov_center_x_px ?? "";
+        $("opt-cy").value = values.fov_center_y_px ?? "";
+        if (values.depth_of_field_mm != null) $("opt-dof").value = values.depth_of_field_mm;
+        draw();
+    }
+
+    function summary() {
+        const o = run.optics;
+        $("optics-summary").textContent = o
+            ? `· ${run.workflow}: ⌀ ${o.fov_diameter_px} px, ${o.depth_of_field_mm} mm deep, ${o.litres_per_frame.toFixed(3)} L per frame`
+            : `· ${run.workflow}: no field of view yet, so no concentrations`;
+        const all = $("optics-save-all");
+        all.hidden = !run.siblings;
+        all.textContent = `Save to this run and ${run.siblings} more ${run.instrument} run(s) of ${run.cruise}`;
+    }
+
+    async function detect() {
+        found = null; draw();
+        $("optics-use").disabled = true;
+        setStatus("optics-note", "Fitting the field of view on frames spread over the run…");
+        try {
+            found = await getJSON("/optics/detect", { path });
+        } catch (e) {
+            setStatus("optics-note", e.message, true);
+            return;
+        }
+        $("optics-use").disabled = false;
+        let text = `Found ⌀ ${found.fov_diameter_px} px, centre (${found.fov_center_x_px}, ${found.fov_center_y_px}) ` +
+                   `on ${found.frames_used} frames, edge fitted to ±${found.fit_rms_px} px`;
+        if (found.inside_frame < 0.999) text += `; ${(found.inside_frame * 100).toFixed(0)} % of the disc lies inside the frame`;
+        if (found.warning) text += `. ⚠️ ${found.warning}`;
+        setStatus("optics-note", text + ".", !!found.warning);
+        if (!run.optics) fill({ ...found, depth_of_field_mm: num("opt-dof") });
+        draw();
+    }
+
+    async function save(scope) {
+        setStatus("optics-status", "Saving…");
+        try {
+            const response = await fetch(`${BASE}/optics`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    path, scope,
+                    fov_diameter_px: $("opt-d").value, fov_center_x_px: $("opt-cx").value,
+                    fov_center_y_px: $("opt-cy").value, depth_of_field_mm: $("opt-dof").value,
+                }),
+            });
+            const body = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(body.error || body.description || response.statusText);
+            setStatus("optics-status", `Saved to ${body.saved.join(", ")}.`);
+        } catch (e) {
+            setStatus("optics-status", e.message, true);
+            return;
+        }
+        await load({ path });
+    }
+
+    async function show(newPath) {
+        const box = $("optics");
+        if (!newPath) { box.hidden = true; path = null; return; }
+        try {
+            run = await getJSON("/optics", { path: newPath });
+        } catch {
+            box.hidden = true;              // not the output of a Hub workflow
+            path = null;
+            return;
+        }
+        const samePath = newPath === path;
+        path = newPath;
+        box.hidden = false;
+        summary();
+        if (samePath) { draw(); return; }
+        found = null;
+        size = run.width && run.height ? [run.width, run.height] : null;
+        setStatus("optics-status", "");
+        setStatus("optics-note", run.dataset ? "" : "The run's profile_dataset.h5 is gone: enter the field of view by hand.", !run.dataset);
+        $("opt-dof").value = run.params.depth_of_field_mm ?? run.default_depth_mm;
+        fill(run.params);
+        $("optics-detect").disabled = !run.dataset;
+        if (run.dataset) {
+            const r = await fetch(`${BASE}/optics/frame?path=${encodeURIComponent(path)}`);
+            if (r.ok) {
+                if (imageUrl) URL.revokeObjectURL(imageUrl);
+                imageUrl = URL.createObjectURL(await r.blob());
+                $("optics-img").src = imageUrl;
+                $("optics-link").href = imageUrl;
+            }
+        }
+        box.open = !run.optics;
+        if (!run.optics && run.dataset) detect();
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        for (const id of ["opt-d", "opt-cx", "opt-cy", "opt-dof"]) $(id).addEventListener("input", draw);
+        $("optics-detect").addEventListener("click", detect);
+        $("optics-use").addEventListener("click", () => found && fill(found));
+        $("optics-save").addEventListener("click", () => save("run"));
+        $("optics-save-all").addEventListener("click", () => save("cruise"));
+    });
+
+    return { show };
+})();
 
 function applyLoaded(meta) {
     loaded = meta;
@@ -354,4 +506,5 @@ document.addEventListener("DOMContentLoaded", () => {
     if (PDE_INITIAL.cruise) $("tree-browser").open = true;
     if (PDE_INITIAL.root) scan();
     if (PDE_INITIAL.loaded) applyLoaded(PDE_INITIAL.loaded);
+    if (PDE_INITIAL.path) optics.show(PDE_INITIAL.path);
 });

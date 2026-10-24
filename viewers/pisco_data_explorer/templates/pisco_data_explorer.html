@@ -142,6 +142,40 @@ PIScO Data Explorer
     </div>
 
     <div class="pde-main">
+        <details id="optics" class="pde-optics" hidden>
+            <summary><strong>Optics</strong> <span id="optics-summary" class="pde-muted"></span></summary>
+            <div class="pde-optics-body">
+                <a class="pde-optics-frame" id="optics-link" target="_blank" title="Open the frame in a new tab">
+                    <img id="optics-img" alt="">
+                    <svg id="optics-svg" preserveAspectRatio="none"><circle class="found"/><circle class="kept"/></svg>
+                </a>
+                <div class="pde-optics-form">
+                    <div id="optics-note" class="pde-status"></div>
+                    <label for="opt-d">Field of view ⌀ (px)</label>
+                    <input id="opt-d" type="number" step="any" min="1">
+                    <label>Centre x, y (px) <span class="pde-muted">· empty: the frame's centre</span></label>
+                    <div class="pde-row">
+                        <input id="opt-cx" type="number" step="any" placeholder="x">
+                        <input id="opt-cy" type="number" step="any" placeholder="y">
+                    </div>
+                    <label for="opt-dof">Depth of field (mm)</label>
+                    <input id="opt-dof" type="number" step="any" min="0.001">
+                    <div id="optics-volume" class="pde-status"></div>
+                    <div class="pde-optics-actions">
+                        <button id="optics-detect">Detect on the run's frames</button>
+                        <button id="optics-use" disabled>Use the circle found</button>
+                    </div>
+                    <div class="pde-optics-actions">
+                        <button id="optics-save" class="pde-primary">Save to this run</button>
+                        <button id="optics-save-all" class="pde-primary" hidden></button>
+                    </div>
+                    <div id="optics-status" class="pde-status"></div>
+                    <div class="pde-hint"><span class="pde-key found"></span>found on the frames ·
+                        <span class="pde-key"></span>the values above. Saving adds them to the
+                        workflow's parameters; nothing else of the run changes.</div>
+                </div>
+            </div>
+        </details>
         <div id="pde-status-line" class="pde-status"></div>
         <div id="main-plot"></div>
         <h3>Data preview</h3>
