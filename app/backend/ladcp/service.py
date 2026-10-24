@@ -125,9 +125,10 @@ class Instrument:
         self.stop_reading = threading.Event()
         self.recording = None     # path of the serial recording
 
-    def as_dict(self):
+    def as_dict(self, active=True):
         return {"name": self.name, "port": self.conf["port"], "baud": self.conf.get("baud"),
                 "break": self.conf.get("break"), "enabled": self.conf.get("enabled", True),
+                "active": active,
                 "info": self.info, "role": self.role, "reachable": self.reachable,
                 "checked": self.checked, "error": self.error,
                 "directory": self.directory, "recording": self.recording,
@@ -185,6 +186,13 @@ class LadcpService:
             self._build_instruments()
             return self.config
 
+    def set_mode(self, mode, instrument=None):
+        """Dual or single ADCP; in single mode, which instrument."""
+        new = dict(self.config, mode=mode)
+        if mode == "single":
+            new["single_instrument"] = instrument or self.config.get("single_instrument")
+        return self.update_config(new)
+
     def set_profile(self, number):
         with self.lock:
             if self._busy():
@@ -208,12 +216,13 @@ class LadcpService:
     # ---- status for the page ----
     def status(self):
         with self.lock:
+            active = cfgmod.active_names(self.config)
             return {
                 "config": self.config,
                 "state": self.state,
                 "data_dir": self.data_dir(),
                 "operation": self.operation.as_dict() if self.operation else None,
-                "instruments": [i.as_dict() for i in self.instruments.values()],
+                "instruments": [i.as_dict(i.name in active) for i in self.instruments.values()],
                 "history": self.history[-20:],
             }
 
@@ -238,7 +247,8 @@ class LadcpService:
         return self.operation is not None and self.operation.state == "running"
 
     def _enabled(self):
-        return [i for i in self.instruments.values() if i.conf.get("enabled", True)]
+        names = cfgmod.active_names(self.config)
+        return [i for i in self.instruments.values() if i.name in names]
 
     def _launch(self, kind, steps, fn, *args):
         with self.lock:
@@ -540,7 +550,10 @@ class LadcpService:
                        "START again.", "warning")
             else:
                 op.step("Live data", "done", ", ".join(f"{n}: {c} ensembles" for n, c in got.items()))
-        op.say("ADCPs started. Check within 3 minutes that the UP ADCP pings.", "info")
+        if secondary:
+            op.say("ADCPs started. Check within 3 minutes that the UP ADCP pings.", "info")
+        else:
+            op.say(f"{primary.name} started on its own (no sync).", "info")
         return {"profile": number, "readback": readback}
 
     def _start_one(self, inst, start_command, profile):

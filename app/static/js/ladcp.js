@@ -90,6 +90,7 @@ function renderHeader() {
 	const running = busy();
 	for (const id of ["btn-detect", "btn-erase", "btn-start", "btn-stop", "btn-stop-download"])
 		$(id).disabled = running;
+	renderMode(running || Boolean(st.deployed));
 	$("data-dir").textContent = status.data_dir;
 }
 
@@ -159,8 +160,36 @@ $("edit-profile").onclick = async () => {
 	refreshStatus();
 };
 
+// Dual, or single with one named instrument: one select, values "dual"
+// and "single:<name>". Locked while an operation runs or deployed.
+function renderMode(locked) {
+	const cfg = status.config, sel = $("mode");
+	const options = [["dual", "Dual (primary + secondary)"],
+		...cfg.instruments.map((i) => [`single:${i.name}`, `Single: ${i.name}`])];
+	const current = cfg.mode === "single"
+		? `single:${status.instruments.find((i) => i.active)?.name || ""}` : "dual";
+	const html = options.map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join("");
+	if (sel.dataset.html !== html) { sel.innerHTML = html; sel.dataset.html = html; }
+	if (document.activeElement !== sel) sel.value = current;
+	sel.disabled = locked;
+	sel.title = locked ? "Not while an operation runs or the ADCPs are deployed" : "";
+}
+
+$("mode").onchange = async () => {
+	const [mode, instrument] = $("mode").value.split(":");
+	try {
+		await post("/mode", {mode, instrument: instrument || null});
+	} catch (e) { alert(e.message); }
+	$("mode").blur();
+	await refreshStatus();
+	if (activeTab === "setup" && !formDirty) renderForm();
+};
+
 function renderInstruments() {
 	$("instruments").innerHTML = status.instruments.map((i) => {
+		if (!i.active) return `<div class="inst inactive">
+			<h3><span>${esc(i.name)}</span><span class="badge small">not in use</span></h3>
+			<dl><dt>Port</dt><dd><code>${esc(i.port)}</code></dd></dl></div>`;
 		const reach = i.reachable === null ? `<span class="badge small">not checked</span>`
 			: i.reachable ? `<span class="badge small ok">answers</span>`
 			: `<span class="badge small bad">no answer</span>`;
@@ -552,7 +581,8 @@ function renderForm() {
 			<p class="hint">Port examples: <code>/dev/ttyUSB0</code>, <code>rfc2217://10.0.0.20:4001</code>,
 			<code>socket://10.0.0.20:4001</code> (no hardware break over a raw socket — use <code>===</code>).
 			Break: <code>hardware</code> or the text sent as a software break, usually <code>===</code>.
-			Which instrument is primary follows from its orientation, not from the order here.</p>
+			Which instrument is primary follows from its orientation, not from the order here.
+			Enabled applies in dual mode; in single mode only the instrument chosen next to Detect is used.</p>
 		</fieldset>
 		<fieldset><legend>ADCP setup</legend>
 			<table class="table"><tr><th></th><th>Cmd</th><th>Primary</th><th>Secondary</th></tr>${roles}</table>

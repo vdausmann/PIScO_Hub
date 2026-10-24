@@ -40,6 +40,10 @@ DEFAULT_CONFIG = {
     "ntp_server": "",
     "max_clock_offset_s": 2.0,
     "primary_direction": "DOWN",
+    # "single": only single_instrument is contacted, programmed (without
+    # sync) and downloaded — for a cast with one ADCP on the rosette.
+    "mode": "dual",
+    "single_instrument": None,
     "live_output": True,
     "start_command": "CS",
     "memory_warning_bytes": 10000000,
@@ -98,6 +102,8 @@ SCHEMA = {
         "ntp_server": {"type": "string"},
         "max_clock_offset_s": {"type": "number", "minimum": 0},
         "primary_direction": {"enum": ["DOWN", "UP"]},
+        "mode": {"enum": ["dual", "single"]},
+        "single_instrument": {"type": ["string", "null"]},
         "live_output": {"type": "boolean"},
         "start_command": {"type": "string", "enum": ["CS", "$"]},
         "memory_warning_bytes": {"type": "integer", "minimum": 0},
@@ -162,6 +168,19 @@ def validate(config):
     ports = [i["port"] for i in config["instruments"] if i.get("enabled", True)]
     if len(set(ports)) != len(ports):
         raise ValueError("instruments: two enabled instruments share a port")
+    if config.get("mode") == "single" and config.get("single_instrument") not in (None, *names):
+        raise ValueError(f"single_instrument: no instrument named {config['single_instrument']!r}")
+
+
+def active_names(config):
+    """The instruments an operation talks to: in dual mode the enabled
+    ones; in single mode only single_instrument (the first enabled one
+    when it is not set), whether or not it is ticked as enabled."""
+    enabled = [i["name"] for i in config["instruments"] if i.get("enabled", True)]
+    if config.get("mode") != "single":
+        return enabled
+    chosen = config.get("single_instrument") or (enabled or [i["name"] for i in config["instruments"]])[0]
+    return [chosen]
 
 
 def load(path):

@@ -248,6 +248,47 @@ def test_profile_cycle(rig):
     assert not dn.files and not up.files
 
 
+def test_single_mode(rig):
+    """With one ADCP on the rosette the other port is never touched: no
+    break, no waiting for it, no sync, and only its file comes down."""
+    service, sim, _ = rig
+    dn, up = sim.instruments
+    service.instruments["A"].conf["port"] = "socket://127.0.0.1:9"   # nobody there
+    service.set_mode("single", "B")
+    assert [i.name for i in service._enabled()] == ["B"]
+    assert [i["active"] for i in service.status()["instruments"]] == [False, True]
+
+    t0 = time.time()
+    service.start()
+    op = _wait(service)
+    assert op.state == "done", op.as_dict()
+    assert time.time() - t0 < 15
+    assert "Contact A" not in [s["label"] for s in op.steps]
+    assert service.instruments["B"].role == "single"
+    assert dn.rn == "001DN" and dn.params["SM"] == "0" and up.rn == "RDI_"
+    assert service.preview()["B"]["role"] == "single"
+    with pytest.raises(Exception, match="deployed"):
+        service.set_mode("dual")
+
+    time.sleep(1.0)
+    service.stop(download=True)
+    op = _wait(service)
+    assert op.state == "done", op.as_dict()
+    assert sorted(os.listdir(op.result["folder"])) == ["001DN000.000", "serial"]
+
+    service.set_mode("dual")
+    assert [i.name for i in service._enabled()] == ["A", "B"]
+
+
+def test_single_instrument_must_exist():
+    cfg = cfgmod.merged({"mode": "single", "single_instrument": "nope"})
+    with pytest.raises(ValueError, match="single_instrument"):
+        cfgmod.validate(cfg)
+    cfg["single_instrument"] = None                     # the first enabled one
+    cfgmod.validate(cfg)
+    assert cfgmod.active_names(cfg) == ["ADCP-A"]
+
+
 def test_erase_refuses_undownloaded(rig):
     service, sim, _ = rig
     sim.instruments[0].files["009DN000.000"] = bytearray(b"x" * 100)

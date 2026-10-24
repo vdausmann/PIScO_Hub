@@ -128,6 +128,17 @@ def put_config():
     return jsonify(_service().update_config(_body()))
 
 
+@ladcp_bp.route("/mode", methods=["POST"])
+@login_required
+def set_mode():
+    """{"mode": "dual"} or {"mode": "single", "instrument": "ADCP-A"}."""
+    body = _body()
+    mode = body.get("mode")
+    if mode not in ("dual", "single"):
+        raise ValueError("mode: 'dual' or 'single'")
+    return jsonify(_service().set_mode(mode, body.get("instrument") or None))
+
+
 @ladcp_bp.route("/preview")
 @login_required
 def preview():

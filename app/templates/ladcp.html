@@ -28,13 +28,15 @@
 	</header>
 
 	<section class="actions">
-		<button id="btn-detect" title="Break into both ports, read configuration and recorder">Detect</button>
+		<label class="mode" title="Single: only the chosen ADCP is contacted, programmed (without sync) and downloaded">ADCPs
+			<select id="mode"></select></label>
+		<button id="btn-detect" title="Break into the ADCPs in use, read configuration and recorder">Detect</button>
 		<button id="btn-erase" title="Erase the recorders (asks if files are not downloaded)">Erase</button>
 		<span class="start-group">
 			<label>Deck box <input id="deck-voltage" type="text" inputmode="decimal" size="5" placeholder="V"></label>
 			<button id="btn-start" class="primary">Start</button>
 		</span>
-		<button id="btn-stop" title="Break both instruments, no download">Stop only</button>
+		<button id="btn-stop" title="Break the instruments, no download">Stop only</button>
 		<button id="btn-stop-download" class="primary">Stop &amp; download</button>
 	</section>
 
