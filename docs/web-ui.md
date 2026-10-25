@@ -197,6 +197,9 @@ Viewers are plugins under `viewers/`; three ship:
   segmenter's `result.h5`. Per-frame views with the extracted crops
   (click a crop to select it, toggle isolating it), the raw frame, and a
   depth/count profile of the whole file. The panel split is draggable.
+  The file structure is listed a page (200) at a time and a group opens
+  on click, so casts with tens of thousands of frames load at once; the
+  filter box narrows the frame list by name (a depth such as `0150.`).
 - **PIScO Data Explorer** (`/viewer/pisco-data-explorer/?path=…`): for an
   EcoTaxa TSV. Binned depth profiles (count, abundance and biovolume per
   litre, by taxon) and ESD size spectra, with a table of the binned

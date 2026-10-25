@@ -1,4 +1,7 @@
 import h5py
+import os
+import threading
+from collections import OrderedDict
 import numpy as np
 import io
 import base64
@@ -15,6 +18,14 @@ import cv2
 _DEPTH_IN_NAME = re.compile(r"([0-9]+(?:\.[0-9]+)?)\s*dbar", re.IGNORECASE)
 
 
+# A profile only changes while its segmenter is still writing it, and a
+# PISCO3 cast has tens of thousands of frames to count, so the counts are
+# kept per file and recomputed only when the file's size or mtime moves.
+_PROFILE_CACHE_SIZE = 16
+_profile_cache = OrderedDict()
+_profile_lock = threading.Lock()
+
+
 def profile_counts(file_path: str):
     """Object count per frame, with the depth each frame was taken at.
 
@@ -22,18 +33,41 @@ def profile_counts(file_path: str):
     particles were found at each depth, which is what the plot beside the
     preview draws.
     """
+    st = os.stat(file_path)
+    stamp = (st.st_mtime_ns, st.st_size)
+    with _profile_lock:
+        cached = _profile_cache.get(file_path)
+        if cached and cached[0] == stamp:
+            _profile_cache.move_to_end(file_path)
+            return cached[1]
+
+    result = _count_profile(file_path)
+
+    with _profile_lock:
+        _profile_cache[file_path] = (stamp, result)
+        _profile_cache.move_to_end(file_path)
+        while len(_profile_cache) > _PROFILE_CACHE_SIZE:
+            _profile_cache.popitem(last=False)
+    return result
+
+
+def _count_profile(file_path: str):
     points = []
     with h5py.File(file_path, "r") as f:
         for name in f.keys():
             group = f[name]
-            if not isinstance(group, h5py.Group) or "boundingBoxW" not in group:
+            if not isinstance(group, h5py.Group):
+                continue
+            # One lookup instead of a membership test and then a second open.
+            widths = group.get("boundingBoxW")
+            if not isinstance(widths, h5py.Dataset):
                 continue
 
             match = _DEPTH_IN_NAME.search(name)
             points.append({
                 "name": name,
                 "depth": float(match.group(1)) if match else None,
-                "count": int(group["boundingBoxW"].shape[0]),
+                "count": int(widths.shape[0]),
             })
 
     # Deepest last. Frames whose name carries no depth keep file order at the
@@ -49,30 +83,48 @@ def profile_counts(file_path: str):
     }
 
 
-def build_tree(node):
+# How many children one request lists. A PISCO3 cast has tens of thousands of
+# frame groups; walking all of them, with their datasets, took longer than the
+# server allows a request and gave the browser half a million nodes to build.
+CHILDREN_PAGE = 200
 
-    result = {
-        "name": node.name,
-        "type": "group",
-        "children": []
-    }
 
-    for key, item in node.items():
+def list_children(file_path: str, group_path: str = "/", offset: int = 0,
+                  limit: int = CHILDREN_PAGE, query: str = None):
+    """One page of a group's direct children, optionally filtered by name.
 
-        if isinstance(item, h5py.Group):
+    Only the names are read for the whole group, which is cheap; what each
+    child is (group or dataset) is looked up for the page that is sent.
+    Raises KeyError when the group does not exist.
+    """
+    with h5py.File(file_path, "r") as f:
+        group = f[group_path]
+        if not isinstance(group, h5py.Group):
+            raise KeyError(f"{group_path} is not a group")
 
-            result["children"].append(
-                build_tree(item)
-            )
+        names = list(group.keys())
+        if query:
+            needle = query.lower()
+            names = [n for n in names if needle in n.lower()]
 
-        else:
-
-            result["children"].append({
-                "name": item.name,
-                "type": "dataset"
+        offset = max(0, offset)
+        page = names[offset:offset + max(1, limit)]
+        prefix = group.name.rstrip("/")
+        children = []
+        for n in page:
+            kind = group.get(n, getclass=True)
+            children.append({
+                "name": f"{prefix}/{n}",
+                "type": "group" if kind is h5py.Group else "dataset",
             })
 
-    return result
+        return {
+            "group": group.name,
+            "total": len(names),
+            "offset": offset,
+            "children": children,
+        }
+
 
 def get_attributes(file_path: str, path: str):
 

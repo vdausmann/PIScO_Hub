@@ -18,6 +18,37 @@
 }
 
 
+.tree-filter {
+	width: 100%;
+	box-sizing: border-box;
+	margin-bottom: 4px;
+}
+
+.tree-count {
+	font-size: 0.85em;
+	opacity: 0.7;
+	margin-bottom: 6px;
+}
+
+.tree-label {
+	cursor: pointer;
+}
+
+.tree-group > .tree-label::before {
+	content: "\25B8\00a0";
+	opacity: 0.6;
+}
+
+.tree-group.open > .tree-label::before {
+	content: "\25BE\00a0";
+}
+
+.tree-more {
+	cursor: pointer;
+	opacity: 0.7;
+	font-style: italic;
+}
+
 .hdf-splitter {
 	flex: 0 0 7px;
 

@@ -8,38 +8,112 @@ function hideLoader() {
 	if (globalLoader) globalLoader.style.display = 'none'; 
 }
 
-async function loadTree() {
-    const response = await fetch(`/viewer/hdf-profile-viewer/tree?path=${encodeURIComponent(filePath)}`);
-    const tree = await response.json();
-    renderTree(tree);
+// --- File structure: browsed one group at a time --------------------------
+// A PISCO3 cast holds tens of thousands of frame groups, so the tree is never
+// sent whole: each group lists its children a page at a time when opened, and
+// the frame list at the top can be narrowed by name on the server.
+
+async function fetchChildren(group, offset, query) {
+    const params = new URLSearchParams({ path: filePath, group, offset: String(offset) });
+    if (query) params.set("q", query);
+    const response = await fetch(`/viewer/hdf-profile-viewer/children?${params}`);
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || response.statusText);
+    return payload;
 }
 
-function renderTree(node) {
-    const root = document.getElementById("tree-root");
-    root.innerHTML = "";
-    renderNode(root, node);
+// Appends one page of `group`'s children to `ul`, followed by a "more" entry
+// while there are any left. Returns the page so the caller can show totals.
+async function appendChildren(ul, group, offset, query) {
+    const page = await fetchChildren(group, offset, query);
+    page.children.forEach(child => ul.appendChild(treeNode(child)));
+
+    const shown = page.offset + page.children.length;
+    if (shown < page.total) {
+        const more = document.createElement("li");
+        more.className = "tree-more";
+        more.textContent = `show more (${shown} of ${page.total})`;
+        more.addEventListener("click", async () => {
+            more.textContent = "loading…";
+            try {
+                await appendChildren(ul, group, shown, query);
+                more.remove();
+            } catch (err) {
+                console.error("Error listing group:", err);
+                more.textContent = "could not load more";
+            }
+        });
+        ul.appendChild(more);
+    }
+    return page;
 }
 
-function renderNode(parent, node) {
+function treeNode(node) {
     const li = document.createElement("li");
-    li.textContent = node.name.split("/").pop() || "/";
-    parent.appendChild(li);
+    const label = document.createElement("span");
+    label.className = "tree-label";
+    label.textContent = node.name.split("/").pop() || "/";
+    li.appendChild(label);
 
     if (node.type === "dataset") {
-        li.style.cursor = "pointer";
-        li.addEventListener("click", () => {
+        label.style.cursor = "pointer";
+        label.addEventListener("click", () => {
             showLoader();
             // Fire both layout components
             loadDatasetInfo(node.name);
             loadDatasetData(node.name);
         });
+        return li;
     }
 
-    if (node.children) {
-        const ul = document.createElement("ul");
+    // Groups open on click; their children are fetched the first time only.
+    li.classList.add("tree-group");
+    let ul = null;
+    label.addEventListener("click", async () => {
+        if (ul) {
+            li.classList.toggle("open");
+            ul.hidden = !li.classList.contains("open");
+            return;
+        }
+        ul = document.createElement("ul");
         li.appendChild(ul);
-        node.children.forEach(child => renderNode(ul, child));
+        li.classList.add("open");
+        try {
+            await appendChildren(ul, node.name, 0, null);
+        } catch (err) {
+            console.error("Error listing group:", err);
+            ul.innerHTML = "<li class=\"tree-more\">could not list this group</li>";
+        }
+    });
+    return li;
+}
+
+async function loadTree(query) {
+    const root = document.getElementById("tree-root");
+    const count = document.getElementById("tree-count");
+    root.innerHTML = "";
+    if (count) count.textContent = "loading…";
+    try {
+        const page = await appendChildren(root, "/", 0, query || null);
+        if (count) {
+            count.textContent = query
+                ? `${page.total} matching "${query}"`
+                : `${page.total} entries`;
+        }
+    } catch (err) {
+        console.error("Error listing file:", err);
+        if (count) count.textContent = `could not read the file: ${err.message}`;
     }
+}
+
+function setupTreeFilter() {
+    const input = document.getElementById("tree-filter");
+    if (!input) return;
+    let timer = null;
+    input.addEventListener("input", () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => loadTree(input.value.trim()), 250);
+    });
 }
 
 async function loadDatasetInfo(datasetPath) {
@@ -598,4 +672,6 @@ async function openFocusTarget() {
 
 // Initialize workspace
 setupSplitter();
-loadTree().then(openFocusTarget);
+setupTreeFilter();
+loadTree();
+openFocusTarget();

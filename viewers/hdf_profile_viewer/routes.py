@@ -5,7 +5,7 @@ import h5py
 import h5py
 from flask import Blueprint, jsonify, request, render_template
 
-from .backend.hdf_profile_viewer import (build_tree, generate_crop, get_attributes,
+from .backend.hdf_profile_viewer import (CHILDREN_PAGE, list_children, generate_crop, get_attributes,
                                          get_dataset_info, get_attributes, generate_frame_view,
                                          generate_raw_frame, profile_counts)
 
@@ -54,20 +54,26 @@ def index():
 
 
 
-@hdf_profile_viewer_bp.route("/tree")
+@hdf_profile_viewer_bp.route("/children")
 @login_required
-def tree():
-
+def children():
+    """One page of a group's children, so a file is browsed group by group
+    instead of being sent whole (`q` filters the names, `offset` pages)."""
     path = request.args.get("path")
-
     if not path:
         return jsonify({"error": "missing path"}), 400
 
-    with h5py.File(path, "r") as f:
+    group = request.args.get("group") or "/"
+    offset = request.args.get("offset", 0, type=int)
+    limit = min(request.args.get("limit", CHILDREN_PAGE, type=int), 1000)
+    query = (request.args.get("q") or "").strip() or None
 
-        tree = build_tree(f)
-
-    return jsonify(tree)
+    try:
+        return jsonify(list_children(path, group, offset, limit, query))
+    except KeyError:
+        return jsonify({"error": f"no group {group}"}), 404
+    except OSError as e:
+        return jsonify({"error": str(e)}), 400
 
 
 @hdf_profile_viewer_bp.route("/dataset_info")
