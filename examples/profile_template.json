@@ -131,7 +131,7 @@
         "type": "string",
         "format": "file",
         "title": "Sensor log",
-        "description": "Pressure/temperature log, matched to frames by time"
+        "description": "Pressure/temperature log, matched to frames by time: a file, or a folder of logs. For PISCO3 the folder of Keller logs, of which the files around the cast are read"
       },
       "operator": {
         "type": "string",
@@ -407,7 +407,8 @@
         "instrument": "PISCO3",
         "image_size": 4504,
         "pixel_size_um": 17.13,
-        "frames": "/mnt/nas_a/MSN147/unprocessed/pisco/hdf5/"
+        "frames": "/mnt/nas_a/MSN147/unprocessed/pisco/hdf5/",
+        "sensor_log": "/mnt/nas_a/MSN147/unprocessed/propel_akku_logs/logs_Propel_akku"
       }
     }
   ]
