@@ -39,6 +39,79 @@ const alarmList =
     document.getElementById("alarm-list");
 
 /*
+ * One sensor entry: name, status LED and value.
+ */
+function createSensorElement(shorthand, name) {
+
+    const sensorElement =
+        document.createElement("div");
+
+    sensorElement.className =
+        "sensor-entry";
+
+    sensorElement.dataset.shorthand =
+        shorthand;
+
+    // Hidden until a value arrives.
+    sensorElement.hidden =
+        true;
+
+
+    const headerElement =
+        document.createElement("div");
+
+    headerElement.className =
+        "sensor-header";
+
+
+    const nameElement =
+        document.createElement("span");
+
+    nameElement.className =
+        "sensor-name";
+
+    nameElement.textContent =
+        name;
+
+
+    const statusElement =
+        document.createElement("span");
+
+    statusElement.className =
+        "sensor-status";
+
+
+    const valueElement =
+        document.createElement("span");
+
+    valueElement.className =
+        "sensor-value";
+
+    valueElement.textContent =
+        "N/A";
+
+
+    headerElement.appendChild(
+        nameElement
+    );
+
+    headerElement.appendChild(
+        statusElement
+    );
+
+    sensorElement.appendChild(
+        headerElement
+    );
+
+    sensorElement.appendChild(
+        valueElement
+    );
+
+    return sensorElement;
+}
+
+
+/*
  * Create the sensor layout from the hardware
  * configuration.
  */
@@ -93,72 +166,34 @@ function createSensorLayout() {
             "sensor-grid";
 
 
+        sensorGrid.dataset.device =
+            deviceName;
+
         for (const sensor of device.sensors || []) {
 
-            const sensorElement =
-                document.createElement("div");
-
-            sensorElement.className =
-                "sensor-entry";
-
-            sensorElement.dataset.shorthand =
-                sensor.shorthand;
-
-
-            const headerElement =
-                document.createElement("div");
-
-            headerElement.className =
-                "sensor-header";
-
-
-            const nameElement =
-                document.createElement("span");
-
-            nameElement.className =
-                "sensor-name";
-
-            nameElement.textContent =
-                sensor.name;
-
-
-            const statusElement =
-                document.createElement("span");
-
-            statusElement.className =
-                "sensor-status";
-
-
-            const valueElement =
-                document.createElement("span");
-
-            valueElement.className =
-                "sensor-value";
-
-            valueElement.textContent =
-                "N/A";
-
-
-            headerElement.appendChild(
-                nameElement
-            );
-
-            headerElement.appendChild(
-                statusElement
-            );
-
-            sensorElement.appendChild(
-                headerElement
-            );
-
-            sensorElement.appendChild(
-                valueElement
-            );
-
             sensorGrid.appendChild(
-                sensorElement
+                createSensorElement(
+                    sensor.shorthand,
+                    sensor.name
+                )
             );
         }
+
+
+        /*
+         * Shown while the device has no values.
+         */
+        const emptyElement =
+            document.createElement("p");
+
+        emptyElement.className =
+            "device-empty";
+
+        emptyElement.textContent =
+            "No values.";
+
+        emptyElement.hidden =
+            true;
 
 
         deviceSection.appendChild(
@@ -167,6 +202,10 @@ function createSensorLayout() {
 
         deviceSection.appendChild(
             sensorGrid
+        );
+
+        deviceSection.appendChild(
+            emptyElement
         );
 
         sensorsElement.appendChild(
@@ -199,14 +238,52 @@ function displaySensorData(data) {
         of Object.entries(data)
     ) {
 
-        const sensorElement =
+        let sensorElement =
             document.querySelector(
                 `.sensor-entry[data-shorthand="${CSS.escape(name)}"]`
             );
 
+        /*
+         * A field the controller sends but the
+         * configuration does not declare.
+         */
+        if (!sensorElement && display.extra) {
+
+            const grid =
+                document.querySelector(
+                    `.sensor-grid[data-device="${CSS.escape(display.device_name || "")}"]`
+                );
+
+            if (!grid) {
+                continue;
+            }
+
+            sensorElement =
+                createSensorElement(
+                    name,
+                    name + " (not in config)"
+                );
+
+            sensorElement.classList.add(
+                "sensor-extra"
+            );
+
+            grid.appendChild(
+                sensorElement
+            );
+        }
+
         if (!sensorElement) {
             continue;
         }
+
+
+        /*
+         * Hide fields without a value (not
+         * connected, or not sent at all).
+         */
+        sensorElement.hidden =
+            display.value === null;
 
 		if (display.valid) {
 			sensorElement.classList.remove("sensor-invalid");
@@ -265,6 +342,35 @@ function displaySensorData(data) {
                 `sensor-status-${display.color}`
             );
         }
+    }
+
+
+    /*
+     * Configured fields the controller did not
+     * send at all have no value either.
+     */
+    for (
+        const sensorElement
+        of document.querySelectorAll(
+            ".sensor-entry"
+        )
+    ) {
+
+        if (!(sensorElement.dataset.shorthand in data)) {
+            sensorElement.hidden = true;
+        }
+    }
+
+
+    for (
+        const section
+        of document.querySelectorAll(
+            ".device-section"
+        )
+    ) {
+
+        section.querySelector(".device-empty").hidden =
+            section.querySelector(".sensor-entry:not([hidden])") !== null;
     }
 }
 

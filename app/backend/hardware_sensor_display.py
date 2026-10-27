@@ -294,18 +294,19 @@ def merge_sources(live: dict, devices_meta: dict) -> tuple[dict, dict]:
     one device, e.g. the PIScO camera computer and the NUC. Per shorthand,
     a live source beats a stale one and a real value beats `nan`.
 
-    Returns ({shorthand: (raw value, stale)}, {device: [source meta]})."""
+    Returns ({shorthand: (raw value, stale, device)}, {device: [source meta]})."""
     order = sorted(devices_meta.items(),
                    key=lambda item: (item[1].get("stale", True), item[1].get("changed") is None,
                                      -(_epoch(item[1].get("changed")))))
     values, sources = {}, {}
     for name, meta in order:
-        sources.setdefault(meta.get("config_device") or name, []).append({"name": name, **meta})
+        device = meta.get("config_device") or name
+        sources.setdefault(device, []).append({"name": name, **meta})
         stale = bool(meta.get("stale", True))
         for shorthand, raw in (live.get(name) or {}).items():
             held = values.get(shorthand)
             if held is None or (str(held[0]).lower() == "nan" and str(raw).lower() != "nan"):
-                values[shorthand] = (raw, stale)
+                values[shorthand] = (raw, stale, device)
     return values, sources
 
 
@@ -314,12 +315,14 @@ def _epoch(iso):
 
 
 def display_values(sensors: dict, values: dict) -> dict:
-    """{shorthand: display dict} from {shorthand: (raw value, stale)}. A
-    value from a stale source is shown but raises no alarm: the device
-    status says the source went quiet, the value only says what it last was."""
+    """{shorthand: display dict} from {shorthand: (raw value, stale,
+    device)}. A value from a stale source is shown but raises no alarm: the
+    device status says the source went quiet, the value only says what it
+    last was. A field a controller sends but the config does not declare
+    comes along as it was sent, marked `extra`, with no limits to check."""
     stale = {}
     for name, sensor in sensors.items():
-        raw, stale[name] = values.get(name, (None, False))
+        raw, stale[name], _ = values.get(name, (None, False, None))
         try:
             sensor.set_value(None if raw is None else str(raw))
         except ValueError:
@@ -341,4 +344,18 @@ def display_values(sensors: dict, values: dict) -> dict:
         if stale[name]:
             display["alarm"] = False
         res[name] = display
+
+    # The device a field belongs to by its prefix (Pi-, Bl-, ...), for
+    # sources that do not say (a local test file).
+    by_prefix = {s.shorthand.split("-")[0]: s.device for s in sensors.values()}
+    for name, (raw, is_stale, device) in values.items():
+        if name in res:
+            continue
+        text = "" if raw is None else str(raw).strip()
+        missing = text.lower() in ("", "nan")
+        res[name] = {
+            "value": None if missing else text, "text": "N/A" if missing else text,
+            "valid": True, "alarm": False, "color": None, "stale": is_stale, "extra": True,
+            "device_name": device or by_prefix.get(name.split("-")[0]),
+        }
     return res

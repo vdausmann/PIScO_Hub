@@ -38,7 +38,7 @@ def test_float_keeps_the_sign_below_one():
 
 
 def test_nan_is_not_available_and_raises_no_alarm():
-    shown = display_values(load_sensors(CONFIG), {"Pi-HuCam": ("nan", False)})
+    shown = display_values(load_sensors(CONFIG), {"Pi-HuCam": ("nan", False, "PIScO")})
     assert shown["Pi-HuCam"]["text"] == "N/A"
     assert not shown["Pi-HuCam"]["alarm"]
 
@@ -46,22 +46,22 @@ def test_nan_is_not_available_and_raises_no_alarm():
 def test_each_sensor_gets_its_own_alarm_condition():
     # Pi-TAGLock is out of range, but its condition (recording) is false:
     # no alarm, while Pi-HuCam without a condition alarms on its own.
-    values = {"Pi-TAGLock": ("0", False), "Pi-Record": ("0", False), "Pi-HuCam": ("80", False)}
+    values = {"Pi-TAGLock": ("0", False, "PIScO"), "Pi-Record": ("0", False, "PIScO"), "Pi-HuCam": ("80", False, "PIScO")}
     shown = display_values(load_sensors(CONFIG), values)
     assert not shown["Pi-TAGLock"]["alarm"] and not shown["Pi-TAGLock"]["valid"]
     assert shown["Pi-HuCam"]["alarm"]
-    values["Pi-Record"] = ("1", False)
+    values["Pi-Record"] = ("1", False, "PIScO")
     assert display_values(load_sensors(CONFIG), values)["Pi-TAGLock"]["alarm"]
 
 
 def test_stale_value_is_shown_without_alarm():
-    shown = display_values(load_sensors(CONFIG), {"Pi-HuCam": ("80", True)})
+    shown = display_values(load_sensors(CONFIG), {"Pi-HuCam": ("80", True, "PIScO")})
     assert shown["Pi-HuCam"]["text"] == "80.00" and shown["Pi-HuCam"]["stale"]
     assert not shown["Pi-HuCam"]["alarm"]
 
 
 def test_int_sensor_takes_a_float_spelling():
-    shown = display_values(load_sensors(CONFIG), {"Pi-FramWr": ("46288.0", False)})
+    shown = display_values(load_sensors(CONFIG), {"Pi-FramWr": ("46288.0", False, "PIScO")})
     assert shown["Pi-FramWr"]["value"] == 46288
 
 
@@ -70,9 +70,20 @@ def test_two_controllers_fill_one_device():
             "PIScO-NUC": {"Pi-ExPres": "1700.00", "Pi-TeLED": "-0.5"}}
     values, sources = merge_sources(live, {"PIScO": meta(False),
                                            "PIScO-NUC": meta(True, device="PIScO")})
-    assert values["Pi-ExPres"] == ("1848.59", False)       # the live source wins
-    assert values["Pi-TeLED"] == ("-0.5", True)            # a value beats nan
+    assert values["Pi-ExPres"] == ("1848.59", False, "PIScO")   # the live source wins
+    assert values["Pi-TeLED"] == ("-0.5", True, "PIScO")        # a value beats nan
     assert [s["name"] for s in sources["PIScO"]] == ["PIScO", "PIScO-NUC"]
+
+
+def test_unconfigured_field_comes_along_as_extra():
+    shown = display_values(load_sensors(CONFIG), {"Pi-FramQu": ("0", False, "PIScO"),
+                                                  "Bl-FramWr": ("113858", False, None),
+                                                  "Pi-TAGOn": ("nan", False, "PIScO")})
+    assert shown["Pi-FramQu"] == {"value": "0", "text": "0", "valid": True, "alarm": False,
+                                  "color": None, "stale": False, "extra": True,
+                                  "device_name": "PIScO"}
+    assert shown["Bl-FramWr"]["device_name"] is None            # no Bl- sensor configured here
+    assert shown["Pi-TAGOn"]["value"] is None
 
 
 def test_device_time_field():

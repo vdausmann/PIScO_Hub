@@ -1,5 +1,5 @@
 {
-    "_comment": "One entry per controller the Hub polls. A device is polled when enabled and it has a host. sensor_file is rewritten by the controller every second; command_file is what the Hub copies over when a setting changes. os: windows -> paths are Windows paths. config_device names the device of hardware_control_config.json the values belong to (default: the entry's own key), so the PIScO camera computer and the NUC both fill PIScO. Hosts and paths as in sea-through-controll's scp_targets.txt; the Hub's pisco key is authorised on the four 10.11.15.x devices.",
+    "_comment": "One entry per controller the Hub polls. A device is polled when enabled and it has a host. sensor_file is rewritten by the controller every second; command_file is what the Hub copies over when a setting changes. os: windows -> paths are Windows paths. config_device names the device of hardware_control_config.json the values belong to (default: the entry's own key), so the PIScO camera computer and the NUC both fill PIScO (the NUC is off for now). Hosts and paths as in sea-through-controll's scp_targets.txt; the Hub's pisco key is authorised on the four 10.11.15.x devices.",
     "PIScO": {
         "enabled": true,
         "host": "10.11.15.40",
@@ -11,7 +11,7 @@
         "stale_after_s": 5
     },
     "PIScO-NUC": {
-        "enabled": true,
+        "enabled": false,
         "config_device": "PIScO",
         "host": "10.11.11.160",
         "user": "pisco",

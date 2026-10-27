@@ -118,6 +118,16 @@
 	opacity: 0.5;
 }
 
+.sensor-extra {
+	outline: 1px dashed var(--accent);
+	outline-offset: -1px;
+}
+
+.device-empty {
+	margin: 0;
+	opacity: 0.6;
+}
+
 .sensor-stale .sensor-value {
 	opacity: 0.4;
 }

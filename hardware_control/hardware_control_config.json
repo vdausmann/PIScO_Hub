@@ -21,10 +21,10 @@
 				"type": "float",
 				"format": {
 				  "formatter": "xxxx.xx",
-				  "unit": "dbar"
+				  "unit": "mbar"
 				},
                 "min": null,
-                "max": "12",
+                "max": "1200",
                 "alarm condition": null
             },
             {
@@ -150,11 +150,11 @@
                 "group": "(Gruppe PIScO)",
 				"type": "float",
 				"format": {
-				  "formatter": "xx.xx",
-				  "unit": "A"
+				  "formatter": "xxxx.x",
+				  "unit": "mA"
 				},
                 "min": null,
-                "max": "4",
+                "max": "4000",
                 "alarm condition": null
             },
             {
@@ -293,10 +293,10 @@
                 "group": "(Gruppe PIScO)",
 				"type": "int",
 				"format": {
-				  "unit": "kHz"
+				  "unit": "Hz"
 				},
-                "min": "65",
-                "max": "75",
+                "min": "65000",
+                "max": "75000",
                 "alarm condition": null
             },
             {

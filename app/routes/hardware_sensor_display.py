@@ -46,7 +46,7 @@ def status():
             return jsonify({"error": "File not found"}), 404
         lines = filepath.read_text(encoding="utf-8", errors="replace").strip().splitlines()
         _, raw = parse_line(lines[-1] if lines else "")
-        values = {k: (v, False) for k, v in raw.items()}
+        values = {k: (v, False, None) for k, v in raw.items()}
         sources = {}
     else:
         poller = current_app.extensions.get("hardware_poller")
