@@ -162,6 +162,13 @@
         "description": "PCA basis for EcoTaxa similarity search; the same file for every project that should be comparable",
         "default": "/mnt/pisco/vit/pisco_pca50.npz",
         "sticky": true
+      },
+      "not_living_sample": {
+        "type": "integer",
+        "title": "Not-living objects to export",
+        "minimum": 0,
+        "default": 30000,
+        "description": "The binary ViT calls 99.5% of objects not-living, and a PISCO3 cast has millions. Export only this many of them, picked at random (the same ones on a re-export); every living object is exported. The kept fraction is written to subsample.json beside the export, for scaling not-living abundances back up. Empty or 0 exports all."
       }
     },
     "required": [
@@ -359,6 +366,9 @@
         "linkBase": "http://10.11.11.110:5000",
         "ctdCast": {
           "$param": "ctd_cast"
+        },
+        "subsampleMax": {
+          "$param": "not_living_sample"
         }
       }
     },
