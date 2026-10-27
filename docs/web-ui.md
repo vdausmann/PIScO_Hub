@@ -294,11 +294,18 @@ when the last fix is more than 10 s old. Configured by `NAV_SOURCES`
 (Global Settings, then restart the Hub); the track is logged per day under
 `<DATA_ROOT>/nav/`.
 
-The rest is in progress. Renders the sensors and commands declared in the file named
-by `HARDWARE_CONTROL_CONFIG_FILE` (`hardware_control/hardware_control_config.json`:
-the PIScO compute unit's sensors with their ranges, and its command
-shorthands). The sensor-data endpoints exist but the parser returns
-nothing yet.
+**Status Display** (`/hardware-control/sensor-display/`) shows every sensor
+declared in `HARDWARE_CONTROL_CONFIG_FILE`
+(`hardware_control/hardware_control_config.json`) with the latest value from
+the hardware poller, once a second. A value outside its `min`/`max` turns
+red, and raises an alarm when its `alarm condition` holds (or has none).
+Each device's heading says which controllers feed it and whether they are
+live; the last value of a controller that went quiet is shown faded and
+raises no alarm. `?file=<name>` shows a local `hardware_control/*.txt`
+instead, for working on the page without an instrument.
+
+**Control Devices** reads each controller's command file and sends
+changes back to it.
 
 ## Not in the UI yet
 

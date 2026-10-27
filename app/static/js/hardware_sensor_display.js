@@ -6,15 +6,8 @@ const hardwareConfig =
         hardwareControl.dataset.config
     );
 
-const filesUrl =
-    hardwareControl.dataset.filesUrl;
-
-const sensorDataUrl =
-    hardwareControl.dataset.sensorDataUrl;
-
-
-const fileSelect =
-    document.getElementById("file-select");
+const statusUrl =
+    hardwareControl.dataset.statusUrl;
 
 const sensorsElement =
     document.getElementById("sensors");
@@ -75,6 +68,24 @@ function createSensorLayout() {
             deviceName;
 
 
+        /*
+         * Connection state of the controller(s)
+         * feeding this device.
+         */
+        const deviceState =
+            document.createElement("span");
+
+        deviceState.className =
+            "device-state";
+
+        deviceState.dataset.device =
+            deviceName;
+
+        deviceTitle.appendChild(
+            deviceState
+        );
+
+
         const sensorGrid =
             document.createElement("div");
 
@@ -82,7 +93,7 @@ function createSensorLayout() {
             "sensor-grid";
 
 
-        for (const sensor of device.sensors) {
+        for (const sensor of device.sensors || []) {
 
             const sensorElement =
                 document.createElement("div");
@@ -203,6 +214,15 @@ function displaySensorData(data) {
 			sensorElement.classList.add("sensor-invalid");
 		}
 
+		/*
+		 * Last known value of a controller that
+		 * went quiet.
+		 */
+		sensorElement.classList.toggle(
+			"sensor-stale",
+			Boolean(display.stale)
+		);
+
 
         const valueElement =
             sensorElement.querySelector(
@@ -250,26 +270,92 @@ function displaySensorData(data) {
 
 
 /*
- * Read the currently selected sensor file
- * and update the displayed values.
+ * Show, per device, whether its controller(s)
+ * are delivering.
+ *
+ * devices: { "PIScO": [ { name, host, enabled,
+ *     stale, error, changed }, ... ] }
+ */
+function displayDeviceStatus(devices) {
+
+    for (
+        const element
+        of document.querySelectorAll(
+            ".device-state"
+        )
+    ) {
+
+        const sources =
+            (devices[element.dataset.device] || [])
+                .filter(source => source.enabled);
+
+        element.innerHTML = "";
+
+        if (sources.length === 0) {
+
+            element.textContent =
+                "not connected";
+
+            element.className =
+                "device-state device-state-off";
+
+            continue;
+        }
+
+        let anyLive = false;
+
+        for (const source of sources) {
+
+            const badge =
+                document.createElement("span");
+
+            let text;
+
+            if (!source.stale) {
+                text = "live";
+                anyLive = true;
+            } else if (source.error) {
+                text = "unreachable";
+            } else if (source.changed) {
+                text = "stale since "
+                    + new Date(source.changed)
+                        .toLocaleTimeString();
+            } else {
+                text = "no data yet";
+            }
+
+            badge.textContent =
+                `${source.name} (${source.host}): ${text}`;
+
+            if (source.error) {
+                badge.title = source.error;
+            }
+
+            element.appendChild(
+                badge
+            );
+        }
+
+        element.className =
+            "device-state "
+            + (anyLive
+                ? "device-state-live"
+                : "device-state-stale");
+    }
+}
+
+
+/*
+ * Fetch the latest values and update the
+ * displayed values.
  */
 async function updateSensorData() {
-
-    const file =
-        fileSelect.value;
-
-    if (!file) {
-        return;
-    }
-
 
     try {
 
         const response =
             await fetch(
-                sensorDataUrl
-                + "?file="
-                + encodeURIComponent(file),
+                statusUrl,
                 {
                     showLoader: false
                 }
@@ -287,9 +373,11 @@ async function updateSensorData() {
             await response.json();
 
 
-        displaySensorData(data);
+        displaySensorData(data.sensors);
 
-		updateAlarms(data);
+		displayDeviceStatus(data.devices);
+
+		updateAlarms(data.sensors);
 
 		const now =
             new Date();
@@ -325,8 +413,7 @@ function resetAlarms() {
 }
 
 /*
- * Start polling the selected file once per
- * second.
+ * Start polling once per second.
  *
  * The next request is scheduled only after
  * the previous request has finished.
@@ -385,129 +472,6 @@ function stopPolling() {
     }
 }
 
-
-/*
- * Reset all sensor displays.
- */
-function resetSensorDisplays() {
-
-    for (
-        const valueElement
-        of document.querySelectorAll(
-            ".sensor-value"
-        )
-    ) {
-
-        valueElement.textContent =
-            "N/A";
-    }
-
-
-    for (
-        const statusElement
-        of document.querySelectorAll(
-            ".sensor-status"
-        )
-    ) {
-
-        statusElement.className =
-            "sensor-status";
-
-        statusElement.style.display =
-            "none";
-    }
-}
-
-
-/*
- * Load all available sensor files.
- */
-async function loadFiles() {
-
-    try {
-
-        const response =
-            await fetch(
-                filesUrl
-            );
-
-
-        if (!response.ok) {
-            throw new Error(
-                `HTTP ${response.status}`
-            );
-        }
-
-
-        const files =
-            await response.json();
-
-
-        for (const file of files) {
-
-            const option =
-                document.createElement("option");
-
-            option.value =
-                file;
-
-            option.textContent =
-                file;
-
-            fileSelect.appendChild(
-                option
-            );
-        }
-
-    } catch (error) {
-
-        console.error(
-            "Failed to load sensor files:",
-            error
-        );
-    }
-}
-
-
-/*
- * Handle selecting a different sensor file.
- */
-fileSelect.addEventListener(
-    "change",
-    async () => {
-
-        /*
-         * Stop polling the previous file.
-         */
-        stopPolling();
-
-
-        /*
-         * Reset the displayed values.
-         */
-        resetSensorDisplays();
-
-
-        /*
-         * Nothing to do if no file is selected.
-         */
-        if (!fileSelect.value) {
-            return;
-        }
-
-
-        /*
-         * Immediately load the selected file.
-         */
-        await updateSensorData();
-
-
-        /*
-         * Continue updating it every second.
-         */
-        startPolling();
-    }
-);
 
 function updateAlarms(data) {
 
@@ -727,10 +691,9 @@ async function initialize() {
 
 
     /*
-     * Load the available files into the
-     * selection box.
+     * Fetch the values once per second.
      */
-    await loadFiles();
+    startPolling();
 }
 
 

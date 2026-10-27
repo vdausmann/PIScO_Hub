@@ -1,18 +1,20 @@
 """Live sensor values from the instrument controllers, and commands back.
 
-Each controller (the PISCO NUC first; the other cameras are stubs in the
-same shape) rewrites a one-line text file of `Pi-Name_value` tokens once a
-second and polls another for commands, the way Tim's Unified Controller
-does. The Hub reaches those files over SSH: one thread per enabled device
+Each controller (the PIScO, BIOLUM and LIFI camera computers, the
+Propel-Akku Pi, and the PISCO NUC) rewrites a one-line text file of
+`Pi-Name_value` tokens once a second and polls another for commands, the
+way Tim's Unified Controller does; the device list is the one
+sea-through-controll polls (its scp_targets.txt). The Hub reaches those files over SSH: one thread per enabled device
 reads the sensor file every tick, keeps the latest values in memory for the
 hardware-control page, and appends a row to a CSV log that the profile
 preparer can take as its sensor log. A command is the whole command line
 re-rendered and copied over, only when something actually changed — the
 controller notices by the file's mtime.
 
-Time: the controller does not stamp its sensor line yet. Every reading
+Time: not every controller stamps its sensor line. Every reading
 carries the Hub's receive time; when a line starts with a timestamp
-(ISO 8601 or epoch seconds, then whitespace or a comma), that is taken as
+(ISO 8601 or epoch seconds, then whitespace or a comma), or carries a
+`Xx-Time_YYYYMMDDhhmmsscc` field (BIOLUM, Propel-Akku), that is taken as
 the measurement time and the log records both.
 
 Configured in `hardware_control/devices.json` (see DEVICES_FILE setting).
@@ -78,6 +80,20 @@ def parse_line(line):
         else:
             values["_".join(parts[i:k - 1])] = parts[k - 1]
     return measured, values
+
+
+def device_time(values):
+    """Epoch seconds from a `Bl-Time_2026102713094563` field (UTC,
+    hundredths of a second), else None."""
+    for key, value in values.items():
+        if key.endswith("-Time") and re.fullmatch(r"\d{14,16}", value):
+            try:
+                stamp = datetime.strptime(value[:14], "%Y%m%d%H%M%S")
+            except ValueError:
+                continue
+            fraction = int(value[14:]) / 10 ** (len(value) - 14) if len(value) > 14 else 0.0
+            return stamp.replace(tzinfo=timezone.utc).timestamp() + fraction
+    return None
 
 
 def render_line(values):
@@ -194,6 +210,7 @@ class DeviceState:
                 "values": dict(self.values),
                 "meta": {
                     "enabled": bool(self.config.get("enabled")),
+                    "config_device": self.config.get("config_device") or self.name,
                     "host": self.config.get("host"),
                     "measured": _iso(self.measured), "received": _iso(self.received),
                     "changed": _iso(self.changed), "stale": stale, "error": self.error,
@@ -271,6 +288,8 @@ class HardwarePoller:
     def _ingest(self, state, raw, mtime, received, log):
         line = raw.strip().splitlines()[-1] if raw.strip() else ""
         measured, values = parse_line(line)
+        if measured is None:
+            measured = device_time(values)
         with state.lock:
             if mtime != state.mtime:
                 state.changed = received
@@ -279,7 +298,7 @@ class HardwarePoller:
             state.values = values
             state.measured = measured
             state.received = received
-            state.error = None if values else "sensor file is empty or has no Pi- tokens"
+            state.error = None if values else "sensor file is empty or has no Xx- tokens"
         if values:
             log.append(received, measured, values)
 
@@ -327,7 +346,7 @@ class HardwarePoller:
         raw, _ = link.read_file(state.config["command_file"])
         _, values = parse_line(raw.strip().splitlines()[-1] if raw.strip() else "")
         if not values:
-            raise OSError(f"{name}: the command file on {link.host} has no Pi- tokens")
+            raise OSError(f"{name}: the command file on {link.host} has no Xx- tokens")
         with state.lock:
             state.commands = values
 

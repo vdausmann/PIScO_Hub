@@ -57,10 +57,10 @@ Hub has to know what the instrument is doing while it is in the water.
 ```
 PISCO instrument                                   Hub                                     workers
 ────────────────                                   ───                                     ───────
-controller (NUC, Unified Controller)
-  PiscoComputeSensors.txt  ── ssh, once a second ──▶ hardware poller
-    one line: Pi-ExPres_23.45_Pi-TeCom_…              ├─▶ /hardware-control/live   (the page)
-  PiscoComputeCommands.txt ◀── scp, only on change ── │   data/<device>.dat
+controllers (PIScO/BIOLUM/LIFI Jetsons, Propel-Akku Pi, NUC)
+  <Device>Sensors.txt      ── ssh, once a second ──▶ hardware poller
+    one line: Pi-ExPres_23.45_Pi-TeCom_…              ├─▶ /hardware-control/live   (Status Display)
+  <Device>Commands.txt     ◀── scp, only on change ── │   data/<device>.dat
                                                       └─▶ DATA_ROOT/sensor_logs/<device>/
                                                           sensorlog_<device>_<day>.csv ─┐
 camera computer (Jetson, pisco_record.py)                                               │
@@ -98,11 +98,15 @@ device, and copies it over only if something changed — the controller
 notices by the file's mtime. `GET` on the same URL shows the current line.
 Every push is logged next to the sensor log.
 
-`devices.json` has one entry per device of the hardware-control config
-(host, user, `os`, the two file paths, interval, `stale_after_s`). Only
-PIScO is enabled; the other cameras are stubs in the same shape, so
-bringing one up is a config edit. The Hub's `pisco` key must be in the
-controller's `authorized_keys` (on Windows, for an administrator, that is
+`devices.json` has one entry per controller (host, user, `os`, the two
+file paths, interval, `stale_after_s`, and `config_device` when its values
+belong to another device of the hardware-control config). The hosts are
+the ones sea-through-controll polls (`scp_targets.txt`): PIScO
+`10.11.15.40`, LIFI `.42`, BIOLUM `.43`, Propel-Akku `.11`; the PISCO NUC
+(`PIScO-NUC`, `10.11.11.160`) fills PIScO too. The Propel cameras are stubs,
+so bringing one up is a config edit. A `Xx-Time_YYYYMMDDhhmmsscc` field in
+the line (BIOLUM, Propel-Akku) is taken as the measurement time. The Hub's
+`pisco` key must be in the controller's `authorized_keys` (on Windows, for an administrator, that is
 `C:\ProgramData\ssh\administrators_authorized_keys`).
 
 Two things the poller cannot fix: the controller, the camera computer and

@@ -4,11 +4,7 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import Any
 import re
-
-
-
-sensor_config = {}
-
+from datetime import datetime
 
 
 
@@ -129,25 +125,16 @@ class Formatter:
         if not self.formatter_str:
             text = str(value)
         else:
-            split = self.formatter_str.split(".")
+            integer_part, _, decimal_part = self.formatter_str.partition(".")
 
-            integer_places = len(split[0])
-            decimal_places = len(split[1])
+            integer_places = len(integer_part)
+            decimal_places = len(decimal_part)
 
-            rounded_value = round(float(value), decimal_places)
-
-            integer_text = str(int(rounded_value)).zfill(integer_places)
-
-            decimal_value = round(
-                abs(rounded_value - int(rounded_value)),
-                decimal_places
-            )
-
-            decimal_text = str(
-                int(decimal_value * 10**decimal_places)
-            ).zfill(decimal_places)
-
-            text = f"{integer_text}.{decimal_text}"
+            # Pad the magnitude, then sign it: -0.5 must not lose its sign
+            # to int() truncating towards zero.
+            width = integer_places + (decimal_places + 1 if decimal_places else 0)
+            sign = "-" if value < 0 else ""
+            text = sign + f"{abs(value):0{width}.{decimal_places}f}"
 
         if self.unit:
             text += " " + self.unit
@@ -237,13 +224,20 @@ class Sensor:
 
         value_lower = value.strip().lower()
 
-        if self.value_type == bool:
+        if value_lower in ("", "nan"):
+            # The controllers write `nan` for a sensor that is not connected.
+            self.currentValue = None
+
+        elif self.value_type == bool:
             if value_lower == "0" or value_lower == "false":
                 self.currentValue = False
             elif value_lower == "1" or value_lower == "true":
                 self.currentValue = True
             else:
                 self.currentValue = None
+
+        elif self.value_type == int:
+            self.currentValue = int(float(value))
 
         else:
             self.currentValue = self.value_type(value)
@@ -266,18 +260,10 @@ def parse_config(path: Path):
     with open(path, "r") as f:
         config = json.load(f)
 
-    parsed_config = {}
-
     for device in config:
         device_dict = config[device]
         if not "sensors" in device_dict:
             device_dict["sensors"] = None
-        else:
-            sensors = device_dict["sensors"]
-            for sensor in sensors:
-                s = Sensor(sensor, device)
-                sensor_config[s.shorthand] = s
-
 
         if not "commands" in device_dict:
             device_dict["commands"] = None
@@ -286,52 +272,73 @@ def parse_config(path: Path):
     return config
 
 
-def parse_sensor_data(filepath: Path):
-    try:
-        # get last row of file:
-        with open(filepath, "r") as f:
-            # Assumes the data is written in the format shorthand1_data1_shorthand2_data2...
-            data = f.readlines()[-1].strip().split("_")
+def load_sensors(config: dict) -> dict:
+    """{shorthand: Sensor} for every configured sensor. Built per request:
+    a Sensor holds its current value, so sharing one set between viewers
+    would mix their readings."""
+    sensors = {}
+    for device, device_dict in config.items():
+        if not isinstance(device_dict, dict):
+            continue
+        for sensor in device_dict.get("sensors") or []:
+            s = Sensor(sensor, device)
+            sensors[s.shorthand] = s
+    return sensors
 
-        if len(data) % 2 != 0:
-            raise Exception("Invalid data file")
 
-        data_dict = {data[2 * i]: data[2 * i + 1] for i in range(len(data) // 2)}
+def merge_sources(live: dict, devices_meta: dict) -> tuple[dict, dict]:
+    """Values for each configured device from the poller's devices.
 
-        sensors = {}
-        for name, sensor in sensor_config.items():
+    A poller device feeds the configured device named by its
+    `config_device` (its own name by default), so two controllers can fill
+    one device, e.g. the PIScO camera computer and the NUC. Per shorthand,
+    a live source beats a stale one and a real value beats `nan`.
+
+    Returns ({shorthand: (raw value, stale)}, {device: [source meta]})."""
+    order = sorted(devices_meta.items(),
+                   key=lambda item: (item[1].get("stale", True), item[1].get("changed") is None,
+                                     -(_epoch(item[1].get("changed")))))
+    values, sources = {}, {}
+    for name, meta in order:
+        sources.setdefault(meta.get("config_device") or name, []).append({"name": name, **meta})
+        stale = bool(meta.get("stale", True))
+        for shorthand, raw in (live.get(name) or {}).items():
+            held = values.get(shorthand)
+            if held is None or (str(held[0]).lower() == "nan" and str(raw).lower() != "nan"):
+                values[shorthand] = (raw, stale)
+    return values, sources
+
+
+def _epoch(iso):
+    return datetime.fromisoformat(iso).timestamp() if iso else 0.0
+
+
+def display_values(sensors: dict, values: dict) -> dict:
+    """{shorthand: display dict} from {shorthand: (raw value, stale)}. A
+    value from a stale source is shown but raises no alarm: the device
+    status says the source went quiet, the value only says what it last was."""
+    stale = {}
+    for name, sensor in sensors.items():
+        raw, stale[name] = values.get(name, (None, False))
+        try:
+            sensor.set_value(None if raw is None else str(raw))
+        except ValueError:
+            sensor.set_value(None)
+
+    res = {}
+    for name, sensor in sensors.items():
+        if sensor.alarm_condition is not None:
             try:
-                value = data_dict.get(name, None)
-                # if not value is None:
-                #     value = sensor.parse_value(value)
-                sensor.set_value(value)
+                triggered = bool(sensor.alarm_condition.check(sensors))
+            except (KeyError, TypeError, ValueError):
+                triggered = False
+        else:
+            # No alarm condition means an alarm as soon as the value is invalid.
+            triggered = True
 
-                sensors[name] = sensor
-            except Exception as e:
-                print("#" * 60)
-                print(name, value, type(value), e)
-
-        res = {}
-        # check all alarm conditions:
-        for name, sensor in sensor_config.items():
-            triggered = False
-            if sensor.alarm_condition is not None:
-                try:
-                    if sensor.alarm_condition.check(sensors):
-                        triggered = True
-                except Exception as exception:
-                    # print(name, exception)
-                    ...
-            else:
-                # Assume that no-alarm condition means that an alarm should be triggered
-                # as soon as the value is invalid
-                triggered = True
-
-            res = {name: sensors[name].get_display_value(triggered).to_dict() for name in sensors}
-            print(name, sensors[name].get_display_value(triggered).to_dict())
-
-                
-        return res
-    except Exception as e:
-        print("parse_sensor_data:", e)
-        return {}
+        display = sensor.get_display_value(triggered).to_dict()
+        display["stale"] = stale[name]
+        if stale[name]:
+            display["alarm"] = False
+        res[name] = display
+    return res

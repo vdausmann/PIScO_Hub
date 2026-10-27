@@ -6,7 +6,7 @@
 {% endblock %}
 
 {% block title %}
-Hardware Control
+Status Display
 {% endblock %}
 
 {% block content %}
@@ -14,22 +14,13 @@ Hardware Control
 
 <div id="hardware-control"
      data-config='{{ config | tojson | e }}'
-     data-files-url='{{ url_for("hardware-sensor-display.get_files") }}'
-     data-sensor-data-url='{{ url_for("hardware-sensor-display.get_sensor_data") }}'>
+     data-status-url='{{ url_for("hardware-sensor-display.status", file=test_file or None) }}'>
 
-	<div class="file-selector">
+	<h1>Status Display</h1>
 
-		<label for="file-select">
-			Sensor file
-		</label>
-
-		<select id="file-select">
-			<option value="">
-				Select a file...
-			</option>
-		</select>
-
-	</div>
+	{% if test_file %}
+	<p><strong>Test mode:</strong> showing the local file <code>{{ test_file }}</code>, not the controllers.</p>
+	{% endif %}
 
 	<div id="last-update">
 		Last update: —
