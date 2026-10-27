@@ -216,15 +216,11 @@
     }
 
     shutdownButton.addEventListener('click', () => {
-        const typed = window.prompt(
-            'This powers down LIFI, PIScO, BIOLUM and the Propel-Akku.\n'
-            + 'Do not run it while the instrument is in the water.\n\n'
-            + 'Type SHUTDOWN to continue.');
-        if (typed === null) return;
-        if (typed.trim() !== 'SHUTDOWN') {
-            status.textContent = 'Not started: the confirmation did not match.';
-            return;
-        }
+        if (!window.confirm(
+            'Shutdown All turns off the whole instrument before it comes back on deck:\n\n'
+            + '1. fetch the Keller log from the Propel-Akku\n'
+            + '2. shut down LIFI, PIScO, BIOLUM and the Propel-Akku, one after another\n\n'
+            + 'Do you really want to proceed with the shutdown?')) return;
         start({ confirm: 'SHUTDOWN' });
     });
     dryRunButton.addEventListener('click', () => start({ dry_run: true }));

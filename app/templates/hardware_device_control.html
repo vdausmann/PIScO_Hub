@@ -21,10 +21,10 @@
     <section class="device-section shutdown-all" id="shutdown-all"
              data-url="{{ url_for('hardware-device-control.shutdown_all') }}">
         <h2 class="device-title">Shutdown All</h2>
-        <p>Runs sea-through-controll's shutdown sequence: fetches the Keller log from the
-            Propel-Akku, then sets the shutdown fields of LIFI, PIScO, BIOLUM and Propel-Akku
-            one after another (order and pauses from its <code>upload_order.txt</code>).
-            The controllers power down; there is no undo from here.</p>
+        <p>Turns off the whole instrument before it comes back on deck, with
+            sea-through-controll's shutdown sequence: fetches the Keller log from the
+            Propel-Akku, then shuts down LIFI, PIScO, BIOLUM and the Propel-Akku one after
+            another (order and pauses from its <code>upload_order.txt</code>).</p>
         <div class="shutdown-actions">
             <button type="button" class="shutdown-button" data-shutdown {% if test_mode %}disabled{% endif %}>Shutdown All…</button>
             <button type="button" data-shutdown-dry-run>Dry run</button>

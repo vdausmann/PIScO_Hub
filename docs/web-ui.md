@@ -307,11 +307,13 @@ instead, for working on the page without an instrument.
 **Control Devices** reads each controller's command file and sends
 changes back to it.
 
-**Shutdown All** (top of Control Devices) runs sea-through-controll's
+**Shutdown All** (top of Control Devices) turns off the whole instrument
+before it comes back on deck. It runs sea-through-controll's
 `set_shutdown_and_upload.py` from `SEA_THROUGH_DIR`: Keller log from the
 Propel-Akku first, then each controller's `*-Shutdown` fields set to 1,
-in the order and with the pauses of its `upload_order.txt`. It asks for
-`SHUTDOWN` to be typed; **Dry run** only checks the configuration. One run
+in the order and with the pauses of its `upload_order.txt`. A dialog
+lists the steps and asks to proceed; **Dry run** only checks the
+configuration. One run
 at a time; its output is shown on the page and kept under
 `<DATA_ROOT>/sensor_logs/shutdown/`. API: `POST
 /hardware-control/device-control/shutdown-all` with `{"confirm":
