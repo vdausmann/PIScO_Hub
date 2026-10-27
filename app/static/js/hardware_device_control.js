@@ -147,3 +147,87 @@
         });
     });
 })();
+
+// Shutdown All: sea-through-controll's shutdown sequence, run by the Hub.
+(() => {
+    const section = document.getElementById('shutdown-all');
+    if (!section) return;
+
+    const url = section.dataset.url;
+    const shutdownButton = section.querySelector('[data-shutdown]');
+    const dryRunButton = section.querySelector('[data-shutdown-dry-run]');
+    const status = section.querySelector('[data-shutdown-status]');
+    const log = section.querySelector('[data-shutdown-log]');
+    const testMode = document.getElementById('device-controls').dataset.testMode === 'true';
+    let timer = null;
+
+    function show(state) {
+        const run = state.run;
+        const running = Boolean(state.running);
+        shutdownButton.disabled = running || testMode;
+        dryRunButton.disabled = running;
+        if (!run) {
+            status.textContent = 'Not run since the Hub started.';
+            log.hidden = true;
+            return;
+        }
+        const what = run.dry_run ? 'Dry run' : 'Shutdown All';
+        const started = new Date(run.started).toLocaleString();
+        if (running) {
+            status.textContent = `${what} started by ${run.user} at ${started} — running…`;
+        } else if (run.exit_code === 0) {
+            status.textContent = `${what} by ${run.user} at ${started}: finished.`;
+        } else {
+            status.textContent = `${what} by ${run.user} at ${started}: failed (exit ${run.exit_code}). See the log below.`;
+        }
+        log.textContent = run.log.join('\n');
+        log.hidden = false;
+        clearTimeout(timer);
+        if (running) timer = setTimeout(refresh, 1000);
+    }
+
+    async function refresh() {
+        try {
+            const response = await fetch(url, { credentials: 'same-origin', showLoader: false });
+            const state = await response.json();
+            if (!response.ok) throw new Error(state.error || `Request failed (${response.status})`);
+            show(state);
+        } catch (error) {
+            status.textContent = `Could not read the shutdown status: ${error.message}`;
+        }
+    }
+
+    async function start(body) {
+        shutdownButton.disabled = dryRunButton.disabled = true;
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const state = await response.json();
+            if (!response.ok) throw new Error(state.error || `Request failed (${response.status})`);
+            show(state);
+        } catch (error) {
+            status.textContent = `Could not start: ${error.message}`;
+            refresh();
+        }
+    }
+
+    shutdownButton.addEventListener('click', () => {
+        const typed = window.prompt(
+            'This powers down LIFI, PIScO, BIOLUM and the Propel-Akku.\n'
+            + 'Do not run it while the instrument is in the water.\n\n'
+            + 'Type SHUTDOWN to continue.');
+        if (typed === null) return;
+        if (typed.trim() !== 'SHUTDOWN') {
+            status.textContent = 'Not started: the confirmation did not match.';
+            return;
+        }
+        start({ confirm: 'SHUTDOWN' });
+    });
+    dryRunButton.addEventListener('click', () => start({ dry_run: true }));
+
+    refresh();
+})();

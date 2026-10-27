@@ -136,3 +136,30 @@
 		transition: none;
 	}
 }
+
+#device-controls .shutdown-all {
+	border: 2px solid var(--bad, #ef4444);
+	margin-bottom: 2rem;
+}
+
+#device-controls .shutdown-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+}
+
+#device-controls .shutdown-button {
+	background: var(--bad, #ef4444);
+	color: #fff;
+	font-weight: bold;
+}
+
+#device-controls .shutdown-log {
+	max-height: 20rem;
+	overflow: auto;
+	padding: 0.75rem;
+	border-radius: 6px;
+	background: var(--bg);
+	font-size: 0.8rem;
+	white-space: pre-wrap;
+}

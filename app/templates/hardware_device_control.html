@@ -18,6 +18,20 @@
     <p>Current values are read from each controller's command file. Changes are sent back to that file.</p>
     {% if test_mode %}<p><strong>Test mode:</strong> showing local mock command settings. Sending is disabled.</p>{% endif %}
     <div id="control-message" role="status" aria-live="polite"></div>
+    <section class="device-section shutdown-all" id="shutdown-all"
+             data-url="{{ url_for('hardware-device-control.shutdown_all') }}">
+        <h2 class="device-title">Shutdown All</h2>
+        <p>Runs sea-through-controll's shutdown sequence: fetches the Keller log from the
+            Propel-Akku, then sets the shutdown fields of LIFI, PIScO, BIOLUM and Propel-Akku
+            one after another (order and pauses from its <code>upload_order.txt</code>).
+            The controllers power down; there is no undo from here.</p>
+        <div class="shutdown-actions">
+            <button type="button" class="shutdown-button" data-shutdown {% if test_mode %}disabled{% endif %}>Shutdown All…</button>
+            <button type="button" data-shutdown-dry-run>Dry run</button>
+        </div>
+        <p data-shutdown-status></p>
+        <pre class="shutdown-log" data-shutdown-log hidden></pre>
+    </section>
     <div id="device-control-list">
         {% for name, device in config.items() %}
         {% if name != '_comment' and device is mapping %}

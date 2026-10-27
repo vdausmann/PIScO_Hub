@@ -1,7 +1,7 @@
 import json
 import os
-from flask import Blueprint, render_template, current_app, request
-from flask_login import login_required
+from flask import Blueprint, jsonify, render_template, current_app, request
+from flask_login import current_user, login_required
 
 from ..backend.hardware_device_control import parse_config
 from ..backend.models import GlobalSetting
@@ -39,3 +39,28 @@ def hub():
         test_mode=test_mode,
         test_commands=test_commands,
     )
+
+
+@hardware_device_control_bp.route('/shutdown-all')
+@login_required
+def shutdown_status():
+    """The latest Shutdown-All run: running, who started it, the log tail."""
+    return jsonify(current_app.extensions["sea_through_shutdown"].status())
+
+
+@hardware_device_control_bp.route('/shutdown-all', methods=['POST'])
+@login_required
+def shutdown_all():
+    """Body {"confirm": "SHUTDOWN"} runs sea-through-controll's shutdown
+    sequence; {"dry_run": true} only checks its configuration."""
+    body = request.get_json(silent=True) or {}
+    dry_run = bool(body.get("dry_run"))
+    if not dry_run and body.get("confirm") != "SHUTDOWN":
+        return jsonify({"error": 'confirm with {"confirm": "SHUTDOWN"}'}), 400
+    try:
+        return jsonify(current_app.extensions["sea_through_shutdown"].start(
+            getattr(current_user, "username", "?"), dry_run))
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 409
+    except OSError as e:
+        return jsonify({"error": str(e)}), 500

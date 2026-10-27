@@ -85,6 +85,10 @@ def create_app(create_worker=True):
             os.path.join(hub_root, "viewers")
         ).load_viewers()
 
+    # Shutdown-All runner: starts nothing until asked.
+    from .backend.sea_through import ShutdownRunner
+    ShutdownRunner(app)
+
     # Create objects:
     if create_worker:
         # TaskManager:
