@@ -363,3 +363,39 @@ def display_values(sensors: dict, values: dict) -> dict:
             "device_name": device or by_prefix.get(name.split("-")[0]),
         }
     return res
+
+
+def build_status(config: dict, values: dict, sources: dict, alarms: list) -> dict:
+    """What the Status Display shows, from merged values: the formatted
+    sensors, the devices' sources, and the page's own alarms evaluated.
+    Shared by the status endpoint and the alarm monitor, so both judge the
+    same way."""
+    from . import user_alarms
+    since = {k: v[3] for k, v in values.items() if len(v) > 3 and v[3] is not None}
+    evaluated = []
+    for alarm in alarms:
+        active, value = user_alarms.evaluate(alarm, values, since)
+        evaluated.append({**alarm, "active": active, "current": value})
+    sensors = load_sensors(config)
+    shown = display_values(sensors, values)
+    for name, display in shown.items():
+        display["name"] = sensors[name].name if name in sensors else name
+    return {"sensors": shown, "devices": sources, "alarms": evaluated}
+
+
+def active_alarms(status: dict) -> dict:
+    """{alarm id: {...}} for every alarm that is on: a configured limit
+    (`limit:<shorthand>`) or one set up on the page (`user:<id>`)."""
+    active = {}
+    for shorthand, display in status["sensors"].items():
+        if display.get("alarm"):
+            active[f"limit:{shorthand}"] = {
+                "kind": "limit", "device": display.get("device_name"), "field": shorthand,
+                "name": f"{display.get('name') or shorthand} out of range", "value": display.get("text")}
+    for alarm in status["alarms"]:
+        if alarm["active"]:
+            current = alarm.get("current")
+            active[f"user:{alarm['id']}"] = {
+                "kind": "user", "device": None, "field": alarm["field"], "name": alarm["name"],
+                "value": "no value" if current is None or str(current).lower() == "nan" else str(current)}
+    return active

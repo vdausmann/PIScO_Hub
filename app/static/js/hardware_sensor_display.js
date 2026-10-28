@@ -716,6 +716,18 @@ function updateAlarms(data, userAlarms = []) {
 
 
     /*
+     * With live data the Hub-wide popup
+     * (js/hub_alarms.js) asks for the
+     * acknowledgement; this page's own popup is
+     * only for a local test file, which the Hub's
+     * alarm monitor does not see.
+     */
+    if (!statusUrl.includes("file=")) {
+        return;
+    }
+
+
+    /*
      * Find active alarms that have NOT been
      * acknowledged yet.
      */

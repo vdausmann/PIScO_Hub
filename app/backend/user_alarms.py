@@ -156,6 +156,11 @@ def evaluate(alarm, values, since, now=None):
     return False, raw
 
 
+def store_path(app):
+    # Next to the poller's live state: runtime data, not configuration.
+    return os.path.join(app.config["HUB_ROOT"], "hardware_control", "state", "user_alarms.json")
+
+
 class AlarmStore:
     """The alarms in one JSON file, written atomically."""
 

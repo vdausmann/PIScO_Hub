@@ -1,0 +1,75 @@
+/* The alarm banner and popup on every Hub page (js/hub_alarms.js). */
+
+.hub-alarm-banner {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.25rem 1rem;
+	padding: 0.5rem 1rem;
+	background: #b91c1c;
+	color: #fff;
+	font-size: 0.9rem;
+}
+
+.hub-alarm-banner[hidden] {
+	display: none;
+}
+
+.hub-alarm-banner a {
+	color: #fff;
+	font-weight: bold;
+	margin-left: auto;
+}
+
+.hub-alarm-banner .hub-alarm-items {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25rem 1rem;
+}
+
+.hub-alarm-overlay {
+	position: fixed;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(0, 0, 0, 0.65);
+	z-index: 10000;
+}
+
+.hub-alarm-overlay[hidden] {
+	display: none;
+}
+
+.hub-alarm-popup {
+	width: min(500px, 90vw);
+	max-height: 80vh;
+	overflow: auto;
+	padding: 1.5rem;
+	background: var(--card);
+	color: var(--text);
+	border: 2px solid red;
+	border-radius: 12px;
+	box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
+}
+
+.hub-alarm-popup h2 {
+	margin-top: 0;
+	color: red;
+}
+
+.hub-alarm-popup ul {
+	padding-left: 1.2rem;
+}
+
+.hub-alarm-popup button {
+	width: 100%;
+	padding: 0.75rem;
+	border: none;
+	border-radius: 6px;
+	background: red;
+	color: #fff;
+	font-size: 1rem;
+	font-weight: bold;
+	cursor: pointer;
+}

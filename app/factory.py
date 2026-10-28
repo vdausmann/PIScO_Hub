@@ -100,6 +100,8 @@ def create_app(create_worker=True):
         TaskWatcher(app)
         MachineMonitor(app)
         HardwarePoller(app)
+        from .backend.alarm_monitor import AlarmMonitor
+        AlarmMonitor(app)
         from .backend.nav import NavService
         NavService(app)
         from .backend.dship import DshipService

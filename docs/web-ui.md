@@ -313,7 +313,18 @@ has no value; optionally *only while* another field meets a condition
 (`hardware_control/state/user_alarms.json`) and evaluated there, so all
 viewers share them; an active one goes to the alarm board and popup like a
 configured alarm and outlines its field. A stale controller raises none.
-"Unchanged" counts from the Hub's last start. API: `POST
+"Unchanged" counts from the Hub's last start. 
+
+**Alarms on every page.** The Hub checks the configured limits and these
+alarms once a second whether or not anyone has a page open
+(`app/backend/alarm_monitor.py`). While any is on, every Hub page shows a
+red banner linking to the Status Display, and a popup for alarms this
+browser has not acknowledged; an alarm that ends and starts again pops up
+again. Acknowledgements are kept per browser. Starts, ends and
+acknowledgements (with the user) are logged to
+`<DATA_ROOT>/sensor_logs/alarms/alarms_<YYYYMMDD>.csv`. Pages poll `GET
+/hardware-control/sensor-display/alarms/active`; `POST …/alarms/ack`
+with `{"ids": [...]}` logs an acknowledgement. API: `POST
 /hardware-control/sensor-display/alarms`, `PATCH …/alarms/<id>`
 (`{"enabled": false}`), `DELETE …/alarms/<id>`; the status endpoint returns
 them under `alarms`.

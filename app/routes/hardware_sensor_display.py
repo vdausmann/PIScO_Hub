@@ -1,10 +1,7 @@
-import os
-
 from flask import Blueprint, current_app, jsonify, render_template, request
 from flask_login import current_user, login_required
 
-from ..backend.hardware_sensor_display import (display_values, load_sensors, merge_sources,
-                                               parse_config)
+from ..backend.hardware_sensor_display import build_status, merge_sources, parse_config
 from ..backend.hardware_poller import parse_line
 from ..backend import user_alarms
 from ..backend.models import GlobalSetting
@@ -26,9 +23,7 @@ def _config():
 
 
 def _alarm_store():
-    # Next to the poller's live state: runtime data, not configuration.
-    return user_alarms.AlarmStore(os.path.join(
-        current_app.config["HUB_ROOT"], "hardware_control", "state", "user_alarms.json"))
+    return user_alarms.AlarmStore(user_alarms.store_path(current_app))
 
 
 @hardware_sensor_display_bp.route('/')
@@ -64,17 +59,33 @@ def status():
         live = poller.live()
         values, sources = merge_sources(live, live.pop("_meta", {}))
 
-    since = {k: v[3] for k, v in values.items() if len(v) > 3 and v[3] is not None}
-    alarms = []
-    for alarm in _alarm_store().load():
-        active, value = user_alarms.evaluate(alarm, values, since)
-        alarms.append({**alarm, "active": active, "current": value})
+    return jsonify(build_status(config, values, sources, _alarm_store().load()))
 
-    return jsonify({
-        "sensors": display_values(load_sensors(config), values),
-        "devices": sources,
-        "alarms": alarms,
-    })
+
+@hardware_sensor_display_bp.route('/alarms/active')
+@login_required
+def active():
+    """{"active": [alarm], "checked": time}: what the alarm monitor found on
+    its last pass. Every Hub page polls this for its alarm banner."""
+    monitor = current_app.extensions.get("alarm_monitor")
+    if monitor is None:
+        return jsonify({"error": "the alarm monitor is not running"}), 503
+    return jsonify(monitor.snapshot())
+
+
+@hardware_sensor_display_bp.route('/alarms/ack', methods=['POST'])
+@login_required
+def acknowledge():
+    """Body {"ids": [alarm id]}: logs who acknowledged which alarm. The
+    acknowledgement itself is per browser."""
+    monitor = current_app.extensions.get("alarm_monitor")
+    ids = (request.get_json(silent=True) or {}).get("ids")
+    if monitor is None:
+        return jsonify({"error": "the alarm monitor is not running"}), 503
+    if not isinstance(ids, list):
+        return jsonify({"error": "body must be {\"ids\": [...]}"}), 400
+    monitor.acknowledge([str(i) for i in ids], getattr(current_user, "username", "?"))
+    return "", 204
 
 
 @hardware_sensor_display_bp.route('/alarms', methods=['POST'])

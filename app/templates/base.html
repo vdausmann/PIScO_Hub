@@ -95,6 +95,12 @@
             {% endif %}
         </div>
     </nav>
+    {% if current_user.is_authenticated %}
+    <div id="hub-alarm-banner" class="hub-alarm-banner" hidden
+         data-active-url="{{ url_for('hardware-sensor-display.active') }}"
+         data-ack-url="{{ url_for('hardware-sensor-display.acknowledge') }}"
+         data-page-url="{{ url_for('hardware-sensor-display.hub') }}"></div>
+    {% endif %}
     <div class="container">
         {% block content %}{% endblock %}
     </div>
@@ -180,5 +186,9 @@
 	</script>
 
 
+{% if current_user.is_authenticated %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/hub_alarms.css') }}">
+<script src="{{ url_for('static', filename='js/hub_alarms.js') }}"></script>
+{% endif %}
 {% block scripts %}{% endblock %}</body>
 </html>
