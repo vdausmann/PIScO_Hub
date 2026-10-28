@@ -39,6 +39,80 @@ Status Display
 
 	<div id="sensors"></div>
 
+	<section class="device-section user-alarms" id="user-alarms"
+	         data-url='{{ url_for("hardware-sensor-display.add_alarm") }}'>
+
+		<h2 class="device-title">My alarms</h2>
+
+		<p class="user-alarms-hint">Alarms of your own, on any field above, for everyone on this page.</p>
+
+		<div id="user-alarm-list"></div>
+
+		<form id="user-alarm-form" class="user-alarm-form">
+
+			<label>Field
+				<input name="field" list="user-alarm-fields" required placeholder="Pi-ExPres">
+			</label>
+
+			<datalist id="user-alarm-fields"></datalist>
+
+			<label>Condition
+				<select name="kind">
+					<option value="threshold">compare with a value</option>
+					<option value="outside">outside a range</option>
+					<option value="on">is on (1)</option>
+					<option value="off">is off (0)</option>
+					<option value="unchanged">unchanged for</option>
+					<option value="missing">has no value</option>
+				</select>
+			</label>
+
+			<label data-for="threshold">Operator
+				<select name="op">
+					<option>&gt;</option><option>&gt;=</option><option>&lt;</option>
+					<option>&lt;=</option><option>==</option><option>!=</option>
+				</select>
+			</label>
+
+			<label data-for="threshold">Value
+				<input name="value" placeholder="1500">
+			</label>
+
+			<label data-for="outside">Min
+				<input name="min" type="number" step="any">
+			</label>
+
+			<label data-for="outside">Max
+				<input name="max" type="number" step="any">
+			</label>
+
+			<label data-for="unchanged">Seconds
+				<input name="seconds" type="number" min="1" step="any" value="30">
+			</label>
+
+			<label>Only while (optional)
+				<span class="user-alarm-guard">
+					<input name="guard_field" list="user-alarm-fields" placeholder="Pi-Record">
+					<select name="guard_op">
+						<option>==</option><option>!=</option><option>&gt;</option>
+						<option>&gt;=</option><option>&lt;</option><option>&lt;=</option>
+					</select>
+					<input name="guard_value" placeholder="1">
+				</span>
+			</label>
+
+			<label>Name (optional)
+				<input name="name" placeholder="described from the condition">
+			</label>
+
+			<button type="submit">Add alarm</button>
+
+			<p id="user-alarm-message" role="status"></p>
+
+		</form>
+
+	</section>
+
 
 	<div id="alarm-overlay" class="alarm-overlay">
 

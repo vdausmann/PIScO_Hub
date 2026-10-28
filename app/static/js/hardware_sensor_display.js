@@ -483,7 +483,9 @@ async function updateSensorData() {
 
 		displayDeviceStatus(data.devices);
 
-		updateAlarms(data.sensors);
+		displayUserAlarms(data.alarms || [], data.sensors);
+
+		updateAlarms(data.sensors, data.alarms || []);
 
 		const now =
             new Date();
@@ -579,10 +581,37 @@ function stopPolling() {
 }
 
 
-function updateAlarms(data) {
+function updateAlarms(data, userAlarms = []) {
 
     const activeAlarms =
         new Map();
+
+
+    /*
+     * Alarms set up on this page.
+     */
+    for (const alarm of userAlarms) {
+
+        if (!alarm.active) {
+            continue;
+        }
+
+        activeAlarms.set(
+            "user:" + alarm.id,
+            {
+                deviceName:
+                    "My alarm",
+
+                sensorName:
+                    alarm.name,
+
+                text:
+                    alarm.current == null
+                        ? "no value"
+                        : String(alarm.current)
+            }
+        );
+    }
 
 
     /*
@@ -804,3 +833,267 @@ async function initialize() {
 
 
 initialize();
+
+
+/*
+ * Alarms set up on this page: the list with
+ * their state, and the form to add one.
+ */
+const userAlarmsSection =
+    document.getElementById("user-alarms");
+
+const userAlarmsUrl =
+    userAlarmsSection.dataset.url;
+
+const userAlarmList =
+    document.getElementById("user-alarm-list");
+
+const userAlarmForm =
+    document.getElementById("user-alarm-form");
+
+const userAlarmMessage =
+    document.getElementById("user-alarm-message");
+
+const userAlarmFields =
+    document.getElementById("user-alarm-fields");
+
+let shownUserAlarms = "";
+
+let shownFieldNames = "";
+
+
+function displayUserAlarms(alarms, sensors) {
+
+    /*
+     * Fields to pick from: everything with a
+     * value first, then the rest.
+     */
+    const names =
+        Object.keys(sensors).sort((a, b) =>
+            (sensors[a].value === null) - (sensors[b].value === null)
+            || a.localeCompare(b));
+
+    if (names.join() !== shownFieldNames) {
+
+        shownFieldNames = names.join();
+
+        userAlarmFields.replaceChildren(
+            ...names.map(name => {
+                const option = document.createElement("option");
+                option.value = name;
+                option.label = sensors[name].value === null
+                    ? `${name} (no value)` : `${name} = ${sensors[name].text}`;
+                return option;
+            })
+        );
+    }
+
+
+    /*
+     * Mark the field's tile while its alarm is
+     * active.
+     */
+    for (
+        const element
+        of document.querySelectorAll(".sensor-user-alarm")
+    ) {
+        element.classList.remove("sensor-user-alarm");
+    }
+
+    for (const alarm of alarms) {
+
+        if (!alarm.active) {
+            continue;
+        }
+
+        const tile =
+            document.querySelector(
+                `.sensor-entry[data-shorthand="${CSS.escape(alarm.field)}"]`
+            );
+
+        if (tile) {
+            tile.classList.add("sensor-user-alarm");
+        }
+    }
+
+
+    /*
+     * Rebuild the list only when something in
+     * it changed, so a click is not lost.
+     */
+    const key =
+        JSON.stringify(alarms.map(a =>
+            [a.id, a.enabled, a.active, a.current]));
+
+    if (key === shownUserAlarms) {
+        return;
+    }
+
+    shownUserAlarms = key;
+
+    if (alarms.length === 0) {
+        userAlarmList.textContent = "No alarms set up yet.";
+        return;
+    }
+
+    userAlarmList.replaceChildren(
+        ...alarms.map(alarm => {
+
+            const row = document.createElement("div");
+            row.className = "user-alarm-row"
+                + (alarm.active ? " user-alarm-active" : "");
+
+            const enabled = document.createElement("input");
+            enabled.type = "checkbox";
+            enabled.checked = alarm.enabled !== false;
+            enabled.title = "Switch this alarm on or off";
+            enabled.addEventListener("change", () =>
+                changeUserAlarm(alarm.id, "PATCH", { enabled: enabled.checked }));
+
+            const label = document.createElement("span");
+            label.className = "user-alarm-name";
+            label.textContent = alarm.name;
+
+            const state = document.createElement("span");
+            state.className = "user-alarm-state";
+            state.textContent =
+                alarm.enabled === false ? "off"
+                    : (alarm.active ? "ALARM" : "ok")
+                    + ` · ${alarm.field} = ${alarm.current == null ? "no value" : alarm.current}`;
+
+            const who = document.createElement("span");
+            who.className = "user-alarm-who";
+            who.textContent = `by ${alarm.created_by}`;
+
+            const remove = document.createElement("button");
+            remove.type = "button";
+            remove.textContent = "Delete";
+            remove.addEventListener("click", () => {
+                if (window.confirm(`Delete the alarm "${alarm.name}"?`)) {
+                    changeUserAlarm(alarm.id, "DELETE");
+                }
+            });
+
+            row.append(enabled, label, state, who, remove);
+            return row;
+        })
+    );
+}
+
+
+async function changeUserAlarm(id, method, body) {
+
+    try {
+
+        const response =
+            await fetch(
+                `${userAlarmsUrl}/${encodeURIComponent(id)}`,
+                {
+                    method,
+                    headers: { "Content-Type": "application/json" },
+                    body: body ? JSON.stringify(body) : undefined,
+                }
+            );
+
+        if (!response.ok) {
+            const result = await response.json().catch(() => ({}));
+            throw new Error(result.error || `HTTP ${response.status}`);
+        }
+
+        shownUserAlarms = "";
+        await updateSensorData();
+
+    } catch (error) {
+
+        userAlarmMessage.textContent =
+            `Could not change the alarm: ${error.message}`;
+    }
+}
+
+
+/*
+ * Show only the inputs the chosen condition
+ * needs.
+ */
+function showConditionInputs() {
+
+    const kind =
+        userAlarmForm.elements.kind.value;
+
+    for (
+        const label
+        of userAlarmForm.querySelectorAll("[data-for]")
+    ) {
+        label.hidden = label.dataset.for !== kind;
+    }
+}
+
+userAlarmForm.elements.kind.addEventListener(
+    "change",
+    showConditionInputs
+);
+
+showConditionInputs();
+
+
+userAlarmForm.addEventListener(
+    "submit",
+    async event => {
+
+        event.preventDefault();
+
+        const form = userAlarmForm.elements;
+
+        const body = {
+            field: form.field.value.trim(),
+            kind: form.kind.value,
+            name: form.name.value.trim(),
+            op: form.op.value,
+            value: form.value.value.trim(),
+            min: form.min.value === "" ? null : Number(form.min.value),
+            max: form.max.value === "" ? null : Number(form.max.value),
+            seconds: Number(form.seconds.value),
+        };
+
+        if (form.guard_field.value.trim()) {
+            body.only_while = {
+                field: form.guard_field.value.trim(),
+                op: form.guard_op.value,
+                value: form.guard_value.value.trim(),
+            };
+        }
+
+        try {
+
+            const response =
+                await fetch(
+                    userAlarmsUrl,
+                    {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(body),
+                    }
+                );
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || `HTTP ${response.status}`);
+            }
+
+            userAlarmMessage.textContent =
+                `Added: ${result.name}`;
+
+            userAlarmForm.reset();
+            showConditionInputs();
+
+            shownUserAlarms = "";
+            await updateSensorData();
+
+        } catch (error) {
+
+            userAlarmMessage.textContent =
+                `Not added: ${error.message}`;
+        }
+    }
+);

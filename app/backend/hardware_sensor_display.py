@@ -294,19 +294,22 @@ def merge_sources(live: dict, devices_meta: dict) -> tuple[dict, dict]:
     one device, e.g. the PIScO camera computer and the NUC. Per shorthand,
     a live source beats a stale one and a real value beats `nan`.
 
-    Returns ({shorthand: (raw value, stale, device)}, {device: [source meta]})."""
+    Returns ({shorthand: (raw value, stale, device, epoch it last changed)},
+    {device: [source meta]})."""
     order = sorted(devices_meta.items(),
                    key=lambda item: (item[1].get("stale", True), item[1].get("changed") is None,
                                      -(_epoch(item[1].get("changed")))))
     values, sources = {}, {}
     for name, meta in order:
         device = meta.get("config_device") or name
-        sources.setdefault(device, []).append({"name": name, **meta})
+        sources.setdefault(device, []).append(
+            {"name": name, **{k: v for k, v in meta.items() if k != "since"}})
         stale = bool(meta.get("stale", True))
+        since = meta.get("since") or {}
         for shorthand, raw in (live.get(name) or {}).items():
             held = values.get(shorthand)
             if held is None or (str(held[0]).lower() == "nan" and str(raw).lower() != "nan"):
-                values[shorthand] = (raw, stale, device)
+                values[shorthand] = (raw, stale, device, since.get(shorthand))
     return values, sources
 
 
@@ -322,7 +325,7 @@ def display_values(sensors: dict, values: dict) -> dict:
     comes along as it was sent, marked `extra`, with no limits to check."""
     stale = {}
     for name, sensor in sensors.items():
-        raw, stale[name], _ = values.get(name, (None, False, None))
+        raw, stale[name], _ = values.get(name, (None, False, None))[:3]
         try:
             sensor.set_value(None if raw is None else str(raw))
         except ValueError:
@@ -348,9 +351,10 @@ def display_values(sensors: dict, values: dict) -> dict:
     # The device a field belongs to by its prefix (Pi-, Bl-, ...), for
     # sources that do not say (a local test file).
     by_prefix = {s.shorthand.split("-")[0]: s.device for s in sensors.values()}
-    for name, (raw, is_stale, device) in values.items():
+    for name, held in values.items():
         if name in res:
             continue
+        raw, is_stale, device = held[:3]
         text = "" if raw is None else str(raw).strip()
         missing = text.lower() in ("", "nan")
         res[name] = {

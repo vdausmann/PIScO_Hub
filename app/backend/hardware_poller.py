@@ -198,6 +198,7 @@ class DeviceState:
         self.raw = None
         self.error = None
         self.commands = None           # full command state, or None until read
+        self.since = {}                # shorthand -> Hub time its value last changed
 
     def snapshot(self):
         with self.lock:
@@ -216,6 +217,7 @@ class DeviceState:
                     "changed": _iso(self.changed), "stale": stale, "error": self.error,
                     "clock_offset_s": (round(self.received - self.measured, 3)
                                        if self.measured and self.received else None),
+                    "since": {k: round(t, 3) for k, t in self.since.items()},
                 },
             }
 
@@ -295,6 +297,9 @@ class HardwarePoller:
                 state.changed = received
             state.mtime = mtime
             state.raw = line
+            for key, value in values.items():
+                if key not in state.since or state.values.get(key) != value:
+                    state.since[key] = received
             state.values = values
             state.measured = measured
             state.received = received

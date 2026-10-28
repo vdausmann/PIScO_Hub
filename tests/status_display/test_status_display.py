@@ -70,8 +70,8 @@ def test_two_controllers_fill_one_device():
             "PIScO-NUC": {"Pi-ExPres": "1700.00", "Pi-TeLED": "-0.5"}}
     values, sources = merge_sources(live, {"PIScO": meta(False),
                                            "PIScO-NUC": meta(True, device="PIScO")})
-    assert values["Pi-ExPres"] == ("1848.59", False, "PIScO")   # the live source wins
-    assert values["Pi-TeLED"] == ("-0.5", True, "PIScO")        # a value beats nan
+    assert values["Pi-ExPres"][:3] == ("1848.59", False, "PIScO")   # the live source wins
+    assert values["Pi-TeLED"][:3] == ("-0.5", True, "PIScO")        # a value beats nan
     assert [s["name"] for s in sources["PIScO"]] == ["PIScO", "PIScO-NUC"]
 
 

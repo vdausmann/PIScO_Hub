@@ -128,6 +128,72 @@
 	opacity: 0.6;
 }
 
+.sensor-user-alarm {
+	box-shadow: 0 0 0 2px var(--bad, #ef4444);
+}
+
+.user-alarms {
+	margin-top: 2rem;
+}
+
+.user-alarms-hint {
+	margin-top: 0;
+	opacity: 0.7;
+	font-size: 0.9rem;
+}
+
+.user-alarm-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem 1rem;
+	padding: 0.5rem 0;
+	border-bottom: 1px solid var(--bg);
+}
+
+.user-alarm-active .user-alarm-state {
+	color: var(--bad, #ef4444);
+	font-weight: bold;
+}
+
+.user-alarm-name {
+	font-weight: bold;
+}
+
+.user-alarm-who {
+	opacity: 0.6;
+	font-size: 0.85rem;
+}
+
+.user-alarm-form {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 0.75rem;
+	margin-top: 1rem;
+}
+
+.user-alarm-form label {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	font-size: 0.85rem;
+}
+
+.user-alarm-form label[hidden] {
+	display: none;
+}
+
+.user-alarm-guard {
+	display: flex;
+	gap: 0.25rem;
+}
+
+.user-alarm-form #user-alarm-message {
+	flex-basis: 100%;
+	margin: 0;
+}
+
 .sensor-stale .sensor-value {
 	opacity: 0.4;
 }

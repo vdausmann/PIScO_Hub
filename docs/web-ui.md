@@ -304,6 +304,20 @@ live; the last value of a controller that went quiet is shown faded and
 raises no alarm. `?file=<name>` shows a local `hardware_control/*.txt`
 instead, for working on the page without an instrument.
 
+**My alarms** (bottom of the Status Display): alarms anyone can add on
+any field, configured or not, on top of the configured limits. Conditions:
+compare with a value (`>` `>=` `<` `<=` `==` `!=`), outside a range, is on (1)
+/ is off (0), unchanged for N seconds (e.g. a frame counter that stopped),
+has no value; optionally *only while* another field meets a condition
+(`Pi-Record == 1`). They are kept on the Hub
+(`hardware_control/state/user_alarms.json`) and evaluated there, so all
+viewers share them; an active one goes to the alarm board and popup like a
+configured alarm and outlines its field. A stale controller raises none.
+"Unchanged" counts from the Hub's last start. API: `POST
+/hardware-control/sensor-display/alarms`, `PATCH …/alarms/<id>`
+(`{"enabled": false}`), `DELETE …/alarms/<id>`; the status endpoint returns
+them under `alarms`.
+
 **Control Devices** reads each controller's command file and sends
 changes back to it.
 
