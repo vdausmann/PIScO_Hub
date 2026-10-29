@@ -254,6 +254,7 @@ function renderFrame(payload) {
                             <option value="2">2 dbar</option>
                         </select>
                     </label>
+                    <label><input type="checkbox" id="profile-log"> log</label>
                 </div>
                 <canvas id="profile-plot" width="360" height="460"></canvas>
                 <div id="profile-readout" class="profile-readout">objects against depth</div>
@@ -315,6 +316,12 @@ function renderFrame(payload) {
     binSelect.value = String(profileBin);
     binSelect.addEventListener("change", () => {
         profileBin = parseFloat(binSelect.value) || 0;
+        drawProfile();
+    });
+    const logBox = document.getElementById("profile-log");
+    logBox.checked = profileLog;
+    logBox.addEventListener("change", () => {
+        profileLog = logBox.checked;
         drawProfile();
     });
     document.getElementById("profile-plot")
@@ -436,6 +443,7 @@ let cropIsolate = false;  // show only the detected object in a crop
 let profileData = null;   // as returned by /profile, for the current file
 let profileBin = 0;       // dbar per bin; 0 draws one point per frame
 let profilePlot = null;   // last drawn geometry, for hit-testing the hover
+let profileLog = false;   // log count axis
 
 async function loadProfile() {
     if (profileData) return profileData;
@@ -507,8 +515,16 @@ function drawProfile() {
     const maxDepth = Math.max(...pts.map(p => p.depth));
     const depthSpan = (maxDepth - minDepth) || 1;
 
+    // On the log axis a frame with no objects has no place, so it sits on
+    // the left edge with the smallest count seen.
+    const minPositive = Math.min(...pts.map(p => p.count).filter(c => c > 0));
+    const logLo = Math.log10(Math.min(isFinite(minPositive) ? minPositive : 1, maxCount));
+    const logSpan = (Math.log10(maxCount) - logLo) || 1;
+    const x = profileLog
+        ? c => M.l + ((Math.log10(Math.max(c, 10 ** logLo)) - logLo) / logSpan) * plotW
+        : c => M.l + (c / maxCount) * plotW;
+
     // Depth increases downwards, the way a profile is read.
-    const x = c => M.l + (c / maxCount) * plotW;
     const y = d => M.t + ((d - minDepth) / depthSpan) * plotH;
 
     ctx.strokeStyle = ink;
@@ -530,11 +546,15 @@ function drawProfile() {
     }
     ctx.globalAlpha = 0.6;
     ctx.textAlign = "center";
-    for (let i = 0; i <= 2; i++) {
-        const c = (maxCount * i) / 2;
-        ctx.fillText(String(Math.round(c)), x(c), H - 16);
+    const ticks = [];
+    if (profileLog) {
+        for (let e = Math.ceil(logLo); e <= Math.floor(Math.log10(maxCount)); e++) ticks.push(10 ** e);
+        if (ticks.length < 2) ticks.unshift(10 ** logLo), ticks.push(maxCount);
+    } else {
+        for (let i = 0; i <= 2; i++) ticks.push((maxCount * i) / 2);
     }
-    ctx.fillText("objects", M.l + plotW / 2, H - 4);
+    for (const c of ticks) ctx.fillText(String(Math.round(c)), x(c), H - 16);
+    ctx.fillText(profileLog ? "objects (log)" : "objects", M.l + plotW / 2, H - 4);
     ctx.save();
     ctx.translate(11, M.t + plotH / 2);
     ctx.rotate(-Math.PI / 2);
