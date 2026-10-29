@@ -33,7 +33,8 @@ from datetime import datetime, timezone
 from . import machines
 from .models import GlobalSetting
 
-TOKEN = re.compile(r"^[A-Za-z]{1,4}-[A-Za-z0-9-]+$")      # Pi-ExPres, Pi-Shutdown-now
+TOKEN = re.compile(r"^[A-Z][A-Za-z]{0,3}\d?-[A-Za-z0-9-]+$")   # Pi-ExPres, Pk1-FPS, Pi-Shutdown-now
+VALUE = re.compile(r"^(?:[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?|nan|inf|true|false)$", re.I)
 CONTROL_DIR = "/tmp/pisco-hub-ssh"
 
 
@@ -62,7 +63,10 @@ def parse_line(line):
     or a comma; then `Name_value` pairs joined by `_`. Shorthands begin
     with a `Xx-` piece and may themselves contain underscores
     (`Pi-LED_DCDC_con_1`), values never do: so a key runs from its `Xx-`
-    piece to just before the next one, and its last piece is the value."""
+    piece to just before the next one, and its last piece is the value.
+    Unless the piece after the key is already a value: then what follows
+    are plain `name_value` pairs without a prefix (the Propel camera's
+    `Pk1-FramDr_nan_recording_1_live-preview_1`)."""
     line = line.strip()
     measured = None
     head = re.split(r"[\s,]+", line, maxsplit=1)
@@ -77,6 +81,11 @@ def parse_line(line):
         k = starts[n + 1] if n + 1 < len(starts) else len(parts)
         if k - i < 2:
             values[parts[i]] = ""          # a key with no value
+        elif k - i > 3 and VALUE.match(parts[i + 1]):
+            values[parts[i]] = parts[i + 1]
+            rest = parts[i + 2:k]
+            for j in range(0, len(rest), 2):
+                values[rest[j]] = rest[j + 1] if j + 1 < len(rest) else ""
         else:
             values["_".join(parts[i:k - 1])] = parts[k - 1]
     return measured, values

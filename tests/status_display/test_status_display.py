@@ -96,3 +96,16 @@ def test_device_time_field():
 def test_parse_line_keeps_underscored_keys():
     _, values = parse_line("Pi-LED_DCDC_con_1_Pi-LED_DCDC_0_Pi-SetLEDV_1.75")
     assert values == {"Pi-LED_DCDC_con": "1", "Pi-LED_DCDC": "0", "Pi-SetLEDV": "1.75"}
+
+
+def test_parse_line_propel_camera():
+    # Prefix with a digit, and plain lower-case pairs after the last field.
+    _, values = parse_line(
+        "Pk1-Hu_12.580_Pk1-InPres_1100.700_Pk1-FramDr_nan_recording_1_live-preview_1"
+        "_h5-frames-written_000094_h5-frames-dropped_000")
+    assert values == {"Pk1-Hu": "12.580", "Pk1-InPres": "1100.700", "Pk1-FramDr": "nan",
+                      "recording": "1", "live-preview": "1",
+                      "h5-frames-written": "000094", "h5-frames-dropped": "000"}
+    _, commands = parse_line("Pk1-Shutdown_0_Pk1-SetGain_0.0_Pk1-AcqTime_200_Pk1-ResCam_0")
+    assert commands == {"Pk1-Shutdown": "0", "Pk1-SetGain": "0.0",
+                        "Pk1-AcqTime": "200", "Pk1-ResCam": "0"}
