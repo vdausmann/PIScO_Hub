@@ -269,6 +269,16 @@ def generate_raw_frame(file_path: str, group_name: str):
     source_dir = Path(str(source))
 
     stem = group_name.strip("/").split("/")[0]
+
+    # Since the profile-dataset handover the segmenters read
+    # profile_dataset.h5 (the file, or the directory holding it), so the raw
+    # frame is a row of /frames there rather than an image file.
+    dataset = source_dir
+    if dataset.is_dir():
+        dataset = dataset / "profile_dataset.h5"
+    if dataset.suffix == ".h5" and dataset.is_file():
+        return _raw_frame_from_dataset(dataset, stem)
+
     candidate = None
     for ext in _RAW_EXTENSIONS:
         probe = source_dir / (stem + ext)
@@ -284,13 +294,56 @@ def generate_raw_frame(file_path: str, group_name: str):
     if image is None:
         return {"error": f"could not read {candidate}"}
 
+    return _raw_preview(image, str(candidate))
+
+
+# A PISCO3 cast holds ~100k frame names; reading them all per click would
+# cost more than the frame itself, so the name -> row map is kept per file.
+_NAME_INDEX_CACHE_SIZE = 8
+_name_index_cache = OrderedDict()
+_name_index_lock = threading.Lock()
+
+
+def _dataset_name_index(dataset: Path, f):
+    stat = dataset.stat()
+    key = (str(dataset), stat.st_size, stat.st_mtime)
+    with _name_index_lock:
+        if key in _name_index_cache:
+            _name_index_cache.move_to_end(key)
+            return _name_index_cache[key]
+    names = f["names"].asstr()[:]
+    index = {name: i for i, name in enumerate(names)}
+    with _name_index_lock:
+        _name_index_cache[key] = index
+        while len(_name_index_cache) > _NAME_INDEX_CACHE_SIZE:
+            _name_index_cache.popitem(last=False)
+    return index
+
+
+def _raw_frame_from_dataset(dataset: Path, stem: str):
+    try:
+        with h5py.File(dataset, "r") as f:
+            row = _dataset_name_index(dataset, f).get(stem)
+            if row is None:
+                return {"error": f"frame '{stem}' not in {dataset}"}
+            image = f["frames"][row]
+            bit_depth = int(f.attrs.get("bit_depth", 8))
+    except OSError as e:
+        return {"error": f"could not read {dataset}: {e}"}
+
+    if image.dtype != np.uint8:
+        image = (image >> max(bit_depth - 8, 0)).clip(0, 255).astype(np.uint8)
+    return _raw_preview(image, f"{dataset}:/frames[{row}]")
+
+
+def _raw_preview(image, path: str):
     image = cv2.resize(image, (PREVIEW_SIZE, PREVIEW_SIZE))
     buf = io.BytesIO()
     Image.fromarray(image, mode="L").save(buf, format="PNG")
     buf.seek(0)
     return {
         "image": base64.b64encode(buf.read()).decode("utf-8"),
-        "path": str(candidate),
+        "path": path,
         "preview_size": PREVIEW_SIZE,
     }
 
