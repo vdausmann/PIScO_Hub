@@ -442,3 +442,46 @@
 .user-alarm-message {
 	margin: 0.5rem 0 0 0;
 }
+
+/* Links between Status Display and Control Devices */
+
+.page-shortcuts {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	margin: 0.25rem 0 1rem 0;
+}
+
+.page-shortcuts a {
+	padding: 0.3rem 0.75rem;
+	border: 1px solid color-mix(in srgb, var(--text) 20%, transparent);
+	border-radius: 999px;
+	font-size: 0.9rem;
+	text-decoration: none;
+	color: inherit;
+}
+
+.page-shortcuts a:hover {
+	border-color: var(--accent);
+}
+
+.page-shortcuts a.shortcut-danger {
+	color: var(--bad, #ef4444);
+	border-color: color-mix(in srgb, var(--bad, #ef4444) 50%, transparent);
+}
+
+.device-shortcut {
+	margin-left: 0.75rem;
+	font-size: 0.85rem;
+	font-weight: normal;
+	vertical-align: middle;
+}
+
+.device-section {
+	scroll-margin-top: 4.5rem;
+}
+
+.device-section:target {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}

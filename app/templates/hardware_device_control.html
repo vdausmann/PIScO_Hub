@@ -15,6 +15,10 @@
       data-test-commands='{{ test_commands | tojson | e }}'
       data-command-url="{{ url_for('hardware-live.commands', device='DEVICE_NAME') }}">
     <h1>Device controls</h1>
+    <nav class="page-shortcuts">
+        <a href="{{ url_for('hardware-sensor-display.hub') }}">Status Display</a>
+        <a href="#shutdown-all" class="shortcut-danger">Shutdown All</a>
+    </nav>
     <p>Current values are read from each controller's command file. Changes are sent back to that file.</p>
     {% if test_mode %}<p><strong>Test mode:</strong> showing local mock command settings. Sending is disabled.</p>{% endif %}
     <div id="control-message" role="status" aria-live="polite"></div>
@@ -35,8 +39,10 @@
     <div id="device-control-list">
         {% for name, device in config.items() %}
         {% if name != '_comment' and device is mapping %}
-        <section class="device-section" data-device="{{ name }}">
-            <h2 class="device-title">{{ name }}</h2>
+        <section class="device-section" data-device="{{ name }}" id="control-{{ name }}">
+            <h2 class="device-title">{{ name }}
+                {% if device.sensors %}<a class="device-shortcut" href="{{ url_for('hardware-sensor-display.hub') }}#status-{{ name | urlencode }}"
+                   title="{{ name }}'s values on the Status Display">Status →</a>{% endif %}</h2>
             <p class="device-status" data-status>Loading current settings…</p>
             <form data-command-form>
                 <div class="sensor-grid" data-command-fields></div>

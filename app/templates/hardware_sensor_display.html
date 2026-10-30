@@ -14,9 +14,16 @@ Status Display
 
 <div id="hardware-control"
      data-config='{{ config | tojson | e }}'
-     data-status-url='{{ url_for("hardware-sensor-display.status", file=test_file or None) }}'>
+     data-status-url='{{ url_for("hardware-sensor-display.status", file=test_file or None) }}'
+     data-control-url='{{ url_for("hardware-device-control.hub") }}'>
 
 	<h1>Status Display</h1>
+
+	<nav class="page-shortcuts">
+		<a href='{{ url_for("hardware-device-control.hub") }}'>Control Devices</a>
+		<a href='{{ url_for("hardware-device-control.hub") }}#shutdown-all' class="shortcut-danger">Shutdown All</a>
+		<a href="#user-alarms">All alarms ↓</a>
+	</nav>
 
 	{% if test_file %}
 	<p><strong>Test mode:</strong> showing the local file <code>{{ test_file }}</code>, not the controllers.</p>

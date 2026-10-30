@@ -6,6 +6,9 @@ const hardwareConfig =
         hardwareControl.dataset.config
     );
 
+const controlUrl =
+    hardwareControl.dataset.controlUrl;
+
 const statusUrl =
     hardwareControl.dataset.statusUrl;
 
@@ -130,6 +133,10 @@ function createSensorLayout() {
         deviceSection.className =
             "device-section";
 
+        // Target of the Control Devices page's links.
+        deviceSection.id =
+            `status-${deviceName}`;
+
 
         const deviceTitle =
             document.createElement("h2");
@@ -157,6 +164,32 @@ function createSensorLayout() {
         deviceTitle.appendChild(
             deviceState
         );
+
+
+        /*
+         * Shortcut to this device's settings.
+         */
+        if ((device.commands || []).length > 0) {
+
+            const controls =
+                document.createElement("a");
+
+            controls.className =
+                "device-shortcut";
+
+            controls.href =
+                `${controlUrl}#control-${encodeURIComponent(deviceName)}`;
+
+            controls.textContent =
+                "Controls →";
+
+            controls.title =
+                `Change ${deviceName}'s settings on Control Devices`;
+
+            deviceTitle.appendChild(
+                controls
+            );
+        }
 
 
         const sensorGrid =
@@ -840,6 +873,14 @@ async function initialize() {
      * Create the sensor layout first.
      */
     createSensorLayout();
+
+    // The sections are built here, after the browser
+    // looked for the #status-<device> of the link.
+    if (location.hash) {
+        document.getElementById(
+            decodeURIComponent(location.hash.slice(1))
+        )?.scrollIntoView();
+    }
 
 
     /*
