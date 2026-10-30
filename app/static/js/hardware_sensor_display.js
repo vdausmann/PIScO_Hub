@@ -485,6 +485,8 @@ async function updateSensorData() {
 
 		displayUserAlarms(data.alarms || [], data.sensors);
 
+		displayLimits(data.limits || []);
+
 		updateAlarms(data.sensors, data.alarms || []);
 
 		const now =
@@ -876,6 +878,8 @@ let shownFieldNames = "";
 
 function displayUserAlarms(alarms, sensors) {
 
+    lastSensors = sensors;
+
     /*
      * Fields to pick from: everything with a
      * value first, then the rest.
@@ -933,9 +937,16 @@ function displayUserAlarms(alarms, sensors) {
      * Rebuild the list only when something in
      * it changed, so a click is not lost.
      */
+    lastUserAlarms = alarms;
+
+    const listed =
+        alarms.filter(alarm => listedByTools(
+            alarm.active,
+            [alarm.field, alarm.name, alarm.created_by]));
+
     const key =
-        JSON.stringify(alarms.map(a =>
-            [a.id, a.enabled, a.active, a.current]));
+        JSON.stringify([listFilterKey(), listed.map(a =>
+            [a.id, a.enabled, a.active, a.current, a.name])]);
 
     if (key === shownUserAlarms) {
         return;
@@ -943,13 +954,14 @@ function displayUserAlarms(alarms, sensors) {
 
     shownUserAlarms = key;
 
-    if (alarms.length === 0) {
-        userAlarmList.textContent = "No alarms set up yet.";
+    if (listed.length === 0) {
+        userAlarmList.textContent = alarms.length === 0
+            ? "No alarms set up yet." : "None match the filter.";
         return;
     }
 
     userAlarmList.replaceChildren(
-        ...alarms.map(alarm => {
+        ...listed.map(alarm => {
 
             const row = document.createElement("div");
             row.className = "user-alarm-row"
@@ -975,7 +987,13 @@ function displayUserAlarms(alarms, sensors) {
 
             const who = document.createElement("span");
             who.className = "user-alarm-who";
-            who.textContent = `by ${alarm.created_by}`;
+            who.textContent = `by ${alarm.created_by}`
+                + (alarm.changed_by ? `, changed by ${alarm.changed_by}` : "");
+
+            const edit = document.createElement("button");
+            edit.type = "button";
+            edit.textContent = "Edit";
+            edit.addEventListener("click", () => editUserAlarm(alarm));
 
             const remove = document.createElement("button");
             remove.type = "button";
@@ -986,7 +1004,7 @@ function displayUserAlarms(alarms, sensors) {
                 }
             });
 
-            row.append(enabled, label, state, who, remove);
+            row.append(enabled, label, state, who, edit, remove);
             return row;
         })
     );
@@ -1075,13 +1093,17 @@ userAlarmForm.addEventListener(
             };
         }
 
+        const editing = editingAlarmId;
+
         try {
 
             const response =
                 await fetch(
-                    userAlarmsUrl,
+                    editing
+                        ? `${userAlarmsUrl}/${encodeURIComponent(editing)}`
+                        : userAlarmsUrl,
                     {
-                        method: "POST",
+                        method: editing ? "PATCH" : "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify(body),
                     }
@@ -1094,10 +1116,9 @@ userAlarmForm.addEventListener(
             }
 
             userAlarmMessage.textContent =
-                `Added: ${result.name}`;
+                `${editing ? "Changed" : "Added"}: ${result.name}`;
 
-            userAlarmForm.reset();
-            showConditionInputs();
+            stopEditingUserAlarm();
 
             shownUserAlarms = "";
             await updateSensorData();
@@ -1105,7 +1126,351 @@ userAlarmForm.addEventListener(
         } catch (error) {
 
             userAlarmMessage.textContent =
-                `Not added: ${error.message}`;
+                `${editing ? "Not changed" : "Not added"}: ${error.message}`;
         }
     }
 );
+
+
+
+/*
+ * Editing one of your own alarms: the form
+ * above is filled with it and saves it in
+ * place.
+ */
+let editingAlarmId = null;
+
+let lastUserAlarms = [];
+
+const userAlarmSubmit =
+    document.getElementById("user-alarm-submit");
+
+const userAlarmCancel =
+    document.getElementById("user-alarm-cancel");
+
+
+function editUserAlarm(alarm) {
+
+    const form = userAlarmForm.elements;
+
+    userAlarmForm.reset();
+
+    form.field.value = alarm.field;
+    form.kind.value = alarm.kind;
+    form.name.value = alarm.name;
+    form.op.value = alarm.op || ">";
+    form.value.value = alarm.value ?? "";
+    form.min.value = alarm.min ?? "";
+    form.max.value = alarm.max ?? "";
+    form.seconds.value = alarm.seconds ?? 30;
+
+    if (alarm.only_while) {
+        form.guard_field.value = alarm.only_while.field;
+        form.guard_op.value = alarm.only_while.op;
+        form.guard_value.value = alarm.only_while.value;
+    }
+
+    editingAlarmId = alarm.id;
+    userAlarmSubmit.textContent = "Save changes";
+    userAlarmCancel.hidden = false;
+    userAlarmMessage.textContent = `Editing: ${alarm.name}`;
+
+    showConditionInputs();
+    userAlarmForm.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+
+function stopEditingUserAlarm() {
+
+    editingAlarmId = null;
+    userAlarmForm.reset();
+    userAlarmSubmit.textContent = "Add alarm";
+    userAlarmCancel.hidden = true;
+    showConditionInputs();
+}
+
+userAlarmCancel.addEventListener("click", () => {
+    stopEditingUserAlarm();
+    userAlarmMessage.textContent = "";
+});
+
+
+/*
+ * The filter above both lists.
+ */
+const activeOnlyInput =
+    document.getElementById("alarm-list-active-only");
+
+const listFilterInput =
+    document.getElementById("alarm-list-filter");
+
+
+function listFilterKey() {
+    return `${activeOnlyInput.checked}|${listFilterInput.value.trim().toLowerCase()}`;
+}
+
+
+function listedByTools(active, words) {
+
+    if (activeOnlyInput.checked && !active) {
+        return false;
+    }
+
+    const filter =
+        listFilterInput.value.trim().toLowerCase();
+
+    return !filter
+        || words.some(word => String(word ?? "").toLowerCase().includes(filter));
+}
+
+for (const input of [activeOnlyInput, listFilterInput]) {
+    input.addEventListener("input", () => {
+        displayLimits(lastLimits);
+        displayUserAlarms(lastUserAlarms, lastSensors);
+    });
+}
+
+
+/*
+ * The configured limits: on/off, min, max
+ * and condition, edited in their row.
+ */
+const limitList =
+    document.getElementById("limit-list");
+
+const limitMessage =
+    document.getElementById("limit-message");
+
+const limitsUrl =
+    userAlarmsSection.dataset.limitsUrl;
+
+let lastLimits = [];
+
+let lastSensors = {};
+
+let shownLimits = "";
+
+let editingLimit = null;
+
+
+function limitText(value) {
+    return value === null || value === undefined || value === "" ? "–" : String(value);
+}
+
+
+function displayLimits(limits) {
+
+    lastLimits = limits;
+
+    // A rebuild would throw away what is being typed.
+    if (editingLimit) {
+        return;
+    }
+
+    const listed =
+        limits.filter(limit => listedByTools(
+            limit.active,
+            [limit.field, limit.name, limit.device]));
+
+    const key =
+        JSON.stringify([listFilterKey(), listed]);
+
+    if (key === shownLimits) {
+        return;
+    }
+
+    shownLimits = key;
+
+    if (listed.length === 0) {
+        const row = document.createElement("tr");
+        const cell = document.createElement("td");
+        cell.colSpan = 9;
+        cell.textContent = limits.length === 0
+            ? "No limits configured." : "None match the filter.";
+        row.append(cell);
+        limitList.replaceChildren(row);
+        return;
+    }
+
+    limitList.replaceChildren(...listed.map(limitRow));
+}
+
+
+function cell(text, className) {
+    const td = document.createElement("td");
+    td.textContent = text;
+    if (className) {
+        td.className = className;
+    }
+    return td;
+}
+
+
+function limitRow(limit) {
+
+    const row = document.createElement("tr");
+    row.className = limit.active ? "limit-active" : "";
+
+    const enabled = document.createElement("input");
+    enabled.type = "checkbox";
+    enabled.checked = limit.enabled;
+    enabled.title = "Switch this limit's alarm on or off";
+    enabled.addEventListener("change", () =>
+        saveLimit(limit, { ...limit, enabled: enabled.checked }));
+
+    const on = document.createElement("td");
+    on.append(enabled);
+
+    const field = document.createElement("td");
+    const name = document.createElement("span");
+    name.className = "user-alarm-name";
+    name.textContent = limit.name;
+    const shorthand = document.createElement("span");
+    shorthand.className = "user-alarm-who";
+    shorthand.textContent = ` ${limit.field}${limit.unit ? ` (${limit.unit})` : ""}`;
+    field.append(name, shorthand);
+
+    if (limit.changed) {
+        const changed = document.createElement("span");
+        changed.className = "limit-changed";
+        const c = limit.configured;
+        changed.textContent = "changed";
+        changed.title = `by ${limit.changed_by || "?"}; in the config file: `
+            + `min ${limitText(c.min)}, max ${limitText(c.max)}`
+            + (c.condition ? `, only while ${c.condition}` : "");
+        field.append(" ", changed);
+    }
+
+    const state =
+        !limit.enabled ? "off"
+            : limit.stale ? "stale"
+                : limit.active ? "ALARM"
+                    : limit.valid ? "ok" : "out of range (condition not met)";
+
+    const buttons = document.createElement("td");
+    buttons.className = "limit-buttons";
+
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.textContent = "Edit";
+    edit.addEventListener("click", () => editLimit(row, limit));
+    buttons.append(edit);
+
+    if (limit.changed) {
+        const reset = document.createElement("button");
+        reset.type = "button";
+        reset.textContent = "Reset";
+        reset.title = "Back to the config file's limit";
+        reset.addEventListener("click", () => resetLimit(limit));
+        buttons.append(reset);
+    }
+
+    row.append(
+        on,
+        cell(limit.device),
+        field,
+        cell(limitText(limit.min)),
+        cell(limitText(limit.max)),
+        cell(limitText(limit.condition)),
+        cell(limitText(limit.current)),
+        cell(state, "limit-state"),
+        buttons,
+    );
+
+    return row;
+}
+
+
+function editLimit(row, limit) {
+
+    editingLimit = limit.field;
+
+    const inputs = {};
+
+    for (const [index, key] of [[3, "min"], [4, "max"], [5, "condition"]]) {
+        const input = document.createElement("input");
+        input.value = limit[key] ?? "";
+        input.placeholder = key === "condition" ? "Pa-PiPwr==1" : "none";
+        input.size = key === "condition" ? 14 : 7;
+        inputs[key] = input;
+        row.children[index].replaceChildren(input);
+    }
+
+    const save = document.createElement("button");
+    save.type = "button";
+    save.textContent = "Save";
+    save.addEventListener("click", () => saveLimit(limit, {
+        min: inputs.min.value.trim() || null,
+        max: inputs.max.value.trim() || null,
+        condition: inputs.condition.value.trim() || null,
+        enabled: limit.enabled,
+    }));
+
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.textContent = "Cancel";
+    cancel.addEventListener("click", () => {
+        editingLimit = null;
+        shownLimits = "";
+        displayLimits(lastLimits);
+    });
+
+    for (const input of Object.values(inputs)) {
+        input.addEventListener("keydown", event => {
+            if (event.key === "Enter") save.click();
+            if (event.key === "Escape") cancel.click();
+        });
+    }
+
+    row.lastChild.replaceChildren(save, cancel);
+    inputs.min.focus();
+}
+
+
+async function limitRequest(limit, method, body) {
+
+    const response =
+        await fetch(
+            `${limitsUrl}${encodeURIComponent(limit.field)}`,
+            {
+                method,
+                headers: { "Content-Type": "application/json" },
+                body: body ? JSON.stringify(body) : undefined,
+            }
+        );
+
+    if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.error || `HTTP ${response.status}`);
+    }
+}
+
+
+async function saveLimit(limit, body) {
+
+    try {
+        await limitRequest(limit, "PUT", {
+            min: body.min, max: body.max,
+            condition: body.condition, enabled: body.enabled,
+        });
+        limitMessage.textContent = `Changed: ${limit.name} (${limit.field})`;
+        editingLimit = null;
+        shownLimits = "";
+        await updateSensorData();
+    } catch (error) {
+        limitMessage.textContent = `Not changed: ${error.message}`;
+    }
+}
+
+
+async function resetLimit(limit) {
+
+    try {
+        await limitRequest(limit, "DELETE");
+        limitMessage.textContent = `Back to the config file: ${limit.name} (${limit.field})`;
+        shownLimits = "";
+        await updateSensorData();
+    } catch (error) {
+        limitMessage.textContent = `Not reset: ${error.message}`;
+    }
+}

@@ -161,6 +161,10 @@ def store_path(app):
     return os.path.join(app.config["HUB_ROOT"], "hardware_control", "state", "user_alarms.json")
 
 
+def limits_path(app):
+    return os.path.join(app.config["HUB_ROOT"], "hardware_control", "state", "limit_overrides.json")
+
+
 class AlarmStore:
     """The alarms in one JSON file, written atomically."""
 
@@ -192,14 +196,23 @@ class AlarmStore:
             self._save(alarms)
         return alarm
 
-    def update(self, alarm_id, changes):
-        """Only `enabled` changes in place; anything else is a new alarm."""
+    def update(self, alarm_id, changes, user=None):
+        """`{"enabled": bool}` switches the alarm on or off; a body with a
+        `field` replaces its condition (validated as for a new one), keeping
+        its id, its author and whether it is on."""
+        edited = validate(changes) if "field" in changes else None
         with _lock:
             alarms = self.load()
-            for alarm in alarms:
+            for i, alarm in enumerate(alarms):
                 if alarm.get("id") == alarm_id:
+                    if edited:
+                        alarm = {**edited, **{k: alarm[k] for k in ("id", "enabled", "created_by", "created")
+                                             if k in alarm},
+                                 "changed_by": user,
+                                 "changed": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
                     if "enabled" in changes:
                         alarm["enabled"] = bool(changes["enabled"])
+                    alarms[i] = alarm
                     self._save(alarms)
                     return alarm
         raise KeyError(alarm_id)
@@ -211,3 +224,64 @@ class AlarmStore:
             if len(kept) == len(alarms):
                 raise KeyError(alarm_id)
             self._save(kept)
+
+
+def validate_limit(spec, sensor_config):
+    """A clean override of a configured limit, or ValueError. Checked by
+    building the sensor with it, so a value the sensor's type cannot take
+    (11.5 for an int) is refused here, not when the page is drawn."""
+    from .hardware_sensor_display import AlarmCondition, Sensor
+    if not isinstance(spec, dict):
+        raise ValueError("body must be a JSON object")
+    limit = {}
+    for key in ("min", "max"):
+        text = str(spec.get(key) if spec.get(key) is not None else "").strip()
+        if text and _number(text) is None:
+            raise ValueError(f"{key} must be a number")
+        limit[key] = text or None
+    if limit["min"] is None and limit["max"] is None:
+        raise ValueError("give a min, a max, or both")
+    if limit["min"] is not None and limit["max"] is not None \
+            and float(limit["min"]) > float(limit["max"]):
+        raise ValueError("min is above max")
+    condition = str(spec.get("condition") or "").strip() or None
+    if condition:
+        AlarmCondition(condition, None)       # ValueError on a bad expression
+    limit["condition"] = condition
+    limit["enabled"] = bool(spec.get("enabled", True))
+    try:
+        Sensor({**sensor_config, "min": limit["min"], "max": limit["max"],
+                "alarm condition": condition}, "check")
+    except ValueError as e:
+        raise ValueError(f"not a {sensor_config.get('type')} limit: {e}")
+    return limit
+
+
+class LimitStore(AlarmStore):
+    """Configured limits changed on the Status Display, {shorthand: limit},
+    kept on the Hub on top of hardware_control_config.json."""
+
+    def load(self):
+        try:
+            with open(self.path, encoding="utf-8") as f:
+                limits = json.load(f)
+        except FileNotFoundError:
+            return {}
+        return limits if isinstance(limits, dict) else {}
+
+    def set(self, shorthand, spec, sensor_config, user):
+        limit = validate_limit(spec, sensor_config)
+        limit.update(changed_by=user, changed=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+        with _lock:
+            limits = self.load()
+            limits[shorthand] = limit
+            self._save(limits)
+        return limit
+
+    def reset(self, shorthand):
+        """Back to the config file's limit."""
+        with _lock:
+            limits = self.load()
+            if limits.pop(shorthand, None) is None:
+                raise KeyError(shorthand)
+            self._save(limits)

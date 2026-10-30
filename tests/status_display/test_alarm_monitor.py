@@ -87,3 +87,26 @@ def test_active_endpoint(setup):
     assert client.post("/hardware-control/sensor-display/alarms/ack",
                        json={"ids": ["limit:Pi-HuCam"]}).status_code == 204
     assert client.post("/hardware-control/sensor-display/alarms/ack", json={}).status_code == 400
+
+
+def test_changed_limit_reaches_the_monitor_and_the_page(setup):
+    app, poller, monitor = setup
+    app.add_url_rule("/", "index", lambda: "")
+    app.config["LOGIN_DISABLED"] = True
+    client = app.test_client()
+    poller.values["Pi-HuCam"] = "80"
+    url = "/hardware-control/sensor-display/limits/Pi-HuCam"
+    assert client.put(url, json={"max": "90"}).status_code == 200
+    assert client.put(url, json={"max": "hot"}).status_code == 400
+    assert client.put("/hardware-control/sensor-display/limits/Pi-Nope",
+                      json={"max": "1"}).status_code == 404
+    monitor.check(1000.0)
+    assert monitor.snapshot()["active"] == []
+    hu = next(l for l in client.get("/hardware-control/sensor-display/status").get_json()["limits"]
+              if l["field"] == "Pi-HuCam")
+    assert hu["max"] == "90" and hu["changed"]
+    assert client.delete(url).status_code == 204
+    monitor.check(1001.0)
+    assert [a["id"] for a in monitor.snapshot()["active"]] == ["limit:Pi-HuCam"]
+    page = client.get("/hardware-control/sensor-display/").get_data(as_text=True)
+    assert 'data-limits-url=\'/hardware-control/sensor-display/limits/\'' in page

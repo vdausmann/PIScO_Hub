@@ -20,7 +20,7 @@ from pathlib import Path
 
 from .hardware_sensor_display import active_alarms, build_status, merge_sources, parse_config
 from .models import GlobalSetting
-from .user_alarms import AlarmStore, store_path
+from .user_alarms import AlarmStore, LimitStore, limits_path, store_path
 
 INTERVAL_S = 1.0
 LOG_FIELDS = ["time_utc", "event", "id", "device", "field", "name", "value", "user"]
@@ -66,7 +66,8 @@ class AlarmMonitor:
                                   else Path(self.app.config["HUB_ROOT"]) / config_file)
         live = poller.live()
         values, sources = merge_sources(live, live.pop("_meta", {}))
-        status = build_status(config, values, sources, AlarmStore(store_path(self.app)).load())
+        status = build_status(config, values, sources, AlarmStore(store_path(self.app)).load(),
+                              LimitStore(limits_path(self.app)).load())
         found = active_alarms(status)
 
         with self.lock:

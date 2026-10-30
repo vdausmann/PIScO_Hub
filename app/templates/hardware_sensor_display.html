@@ -40,11 +40,42 @@ Status Display
 	<div id="sensors"></div>
 
 	<section class="device-section user-alarms" id="user-alarms"
-	         data-url='{{ url_for("hardware-sensor-display.add_alarm") }}'>
+	         data-url='{{ url_for("hardware-sensor-display.add_alarm") }}'
+	         data-limits-url='{{ url_for("hardware-sensor-display.set_limit", shorthand="_").rstrip("_") }}'>
 
-		<h2 class="device-title">My alarms</h2>
+		<h2 class="device-title">All alarms</h2>
 
-		<p class="user-alarms-hint">Alarms of your own, on any field above, for everyone on this page.</p>
+		<p class="user-alarms-hint">Every alarm that is set, for everyone on this page and
+		the banner on every Hub page. Changes take effect at once.</p>
+
+		<div class="alarm-list-tools">
+			<label><input type="checkbox" id="alarm-list-active-only"> only alarms that are on now</label>
+			<input type="search" id="alarm-list-filter" placeholder="Filter: field, name or device">
+		</div>
+
+		<h3 class="alarm-list-title">Configured limits</h3>
+
+		<p class="user-alarms-hint">From <code>hardware_control_config.json</code>. A limit changed
+		here is kept on the Hub and marked <em>changed</em>; <em>Reset</em> goes back to the file.
+		An empty min or max is no bound; <em>Only while</em> is a condition such as <code>Pa-PiPwr==1</code>.</p>
+
+		<div class="limit-table-wrap">
+			<table class="limit-table">
+				<thead>
+					<tr>
+						<th title="On">On</th><th>Device</th><th>Field</th><th>Min</th><th>Max</th>
+						<th>Only while</th><th>Now</th><th>State</th><th></th>
+					</tr>
+				</thead>
+				<tbody id="limit-list"></tbody>
+			</table>
+		</div>
+
+		<p id="limit-message" class="user-alarm-message" role="status"></p>
+
+		<h3 class="alarm-list-title">Your own alarms</h3>
+
+		<p class="user-alarms-hint">Alarms of your own, on any field above.</p>
 
 		<div id="user-alarm-list"></div>
 
@@ -105,7 +136,9 @@ Status Display
 				<input name="name" placeholder="described from the condition">
 			</label>
 
-			<button type="submit">Add alarm</button>
+			<button type="submit" id="user-alarm-submit">Add alarm</button>
+
+			<button type="button" id="user-alarm-cancel" hidden>Cancel</button>
 
 			<p id="user-alarm-message" role="status"></p>
 

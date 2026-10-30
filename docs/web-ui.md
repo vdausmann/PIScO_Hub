@@ -304,12 +304,28 @@ live; the last value of a controller that went quiet is shown faded and
 raises no alarm. `?file=<name>` shows a local `hardware_control/*.txt`
 instead, for working on the page without an instrument.
 
-**My alarms** (bottom of the Status Display): alarms anyone can add on
+**All alarms** (bottom of the Status Display) lists every alarm that is
+set, with a filter and an *only alarms that are on now* switch.
+
+*Configured limits*: each sensor of `hardware_control_config.json` with a
+min or max, its *only while* condition, the value now and the state. Each
+can be switched off, edited in its row (min, max, condition such as
+`Pa-PiPwr==1`; empty means none) and reset. A change is kept on the Hub
+(`hardware_control/state/limit_overrides.json`) on top of the config file,
+which stays as it is in the controllers' repository, and the row is marked
+*changed* (hover for who and the file's limit). A switched-off limit still
+colours its field, but raises no alarm. API: `PUT
+/hardware-control/sensor-display/limits/<shorthand>` with `{"min", "max",
+"condition", "enabled"}`, `DELETE …/limits/<shorthand>` to reset; the
+status endpoint returns them under `limits`.
+
+*Your own alarms*: alarms anyone can add on
 any field, configured or not, on top of the configured limits. Conditions:
 compare with a value (`>` `>=` `<` `<=` `==` `!=`), outside a range, is on (1)
 / is off (0), unchanged for N seconds (e.g. a frame counter that stopped),
 has no value; optionally *only while* another field meets a condition
-(`Pi-Record == 1`). They are kept on the Hub
+(`Pi-Record == 1`). *Edit* loads one into the form and saves it in place.
+They are kept on the Hub
 (`hardware_control/state/user_alarms.json`) and evaluated there, so all
 viewers share them; an active one goes to the alarm board and popup like a
 configured alarm and outlines its field. A stale controller raises none.
@@ -326,7 +342,8 @@ acknowledgements (with the user) are logged to
 /hardware-control/sensor-display/alarms/active`; `POST …/alarms/ack`
 with `{"ids": [...]}` logs an acknowledgement. API: `POST
 /hardware-control/sensor-display/alarms`, `PATCH …/alarms/<id>`
-(`{"enabled": false}`), `DELETE …/alarms/<id>`; the status endpoint returns
+(`{"enabled": false}`, or a body like POST's to change it), `DELETE
+…/alarms/<id>`; the status endpoint returns
 them under `alarms`.
 
 **Control Devices** reads each controller's command file and sends

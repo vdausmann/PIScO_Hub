@@ -200,13 +200,11 @@ class Sensor:
         self.group: str = config["group"]
         self.device: str = device
 
-        self.min_value = config["min"]
-        if not self.min_value is None:
-            self.min_value = self.value_type(self.min_value)
+        self.min_value = self._limit(config["min"])
+        self.max_value = self._limit(config["max"])
 
-        self.max_value = config["max"]
-        if not self.max_value is None:
-            self.max_value = self.value_type(self.max_value)
+        # Switched off on the Status Display: shown, but never an alarm.
+        self.alarm_enabled = config.get("alarm enabled", True)
 
         alarm_condition_str = config["alarm condition"]
         self.alarm_condition = None
@@ -216,6 +214,14 @@ class Sensor:
         self.formatter = Formatter(config["format"], self.device)
 
         self.currentValue = None
+
+    def _limit(self, text):
+        if text is None:
+            return None
+        if self.value_type == bool:
+            # bool("0") is True; a limit of 0 must stay 0.
+            return bool(int(float(text)))
+        return self.value_type(text)
 
     def set_value(self, value: str | None):
         if value is None:
@@ -344,7 +350,7 @@ def display_values(sensors: dict, values: dict) -> dict:
 
         display = sensor.get_display_value(triggered).to_dict()
         display["stale"] = stale[name]
-        if stale[name]:
+        if stale[name] or not sensor.alarm_enabled:
             display["alarm"] = False
         res[name] = display
 
@@ -365,22 +371,77 @@ def display_values(sensors: dict, values: dict) -> dict:
     return res
 
 
-def build_status(config: dict, values: dict, sources: dict, alarms: list) -> dict:
+def apply_limit_overrides(config: dict, overrides: dict) -> dict:
+    """The config with the limits changed on the Status Display put in
+    place of the configured ones. The config file itself is left alone: it
+    is shared with the controllers' repository."""
+    if not overrides:
+        return config
+    changed = {}
+    for device, device_dict in config.items():
+        if not isinstance(device_dict, dict) or not device_dict.get("sensors"):
+            changed[device] = device_dict
+            continue
+        sensors = []
+        for sensor in device_dict["sensors"]:
+            override = overrides.get(sensor["shorthand"])
+            if override:
+                sensor = {**sensor, "min": override.get("min"), "max": override.get("max"),
+                          "alarm condition": override.get("condition"),
+                          "alarm enabled": override.get("enabled", True)}
+            sensors.append(sensor)
+        changed[device] = {**device_dict, "sensors": sensors}
+    return changed
+
+
+def limit_list(config: dict, shown: dict, overrides: dict) -> list:
+    """Every configured sensor with a limit, as the page lists them: the
+    limit in force, what the config file says, and whether it is on now."""
+    limits = []
+    for device, device_dict in config.items():
+        if not isinstance(device_dict, dict):
+            continue
+        for sensor in device_dict.get("sensors") or []:
+            shorthand = sensor["shorthand"]
+            override = overrides.get(shorthand)
+            configured = {"min": sensor.get("min"), "max": sensor.get("max"),
+                          "condition": sensor.get("alarm condition")}
+            current = ({k: override.get(k) for k in ("min", "max", "condition")}
+                       if override else configured)
+            if not override and configured["min"] is None and configured["max"] is None:
+                continue
+            display = shown.get(shorthand, {})
+            limits.append({
+                "field": shorthand, "name": sensor.get("name") or shorthand, "device": device,
+                "type": sensor.get("type"), "unit": (sensor.get("format") or {}).get("unit", ""),
+                **current, "enabled": override.get("enabled", True) if override else True,
+                "configured": configured, "changed": bool(override),
+                "changed_by": override.get("changed_by") if override else None,
+                "active": bool(display.get("alarm")), "valid": display.get("valid", True),
+                "current": display.get("text"), "stale": display.get("stale", False),
+            })
+    return limits
+
+
+def build_status(config: dict, values: dict, sources: dict, alarms: list,
+                 limit_overrides: dict | None = None) -> dict:
     """What the Status Display shows, from merged values: the formatted
-    sensors, the devices' sources, and the page's own alarms evaluated.
-    Shared by the status endpoint and the alarm monitor, so both judge the
-    same way."""
+    sensors, the devices' sources, the configured limits and the page's own
+    alarms evaluated. Shared by the status endpoint and the alarm monitor,
+    so both judge the same way."""
     from . import user_alarms
+    limit_overrides = limit_overrides or {}
     since = {k: v[3] for k, v in values.items() if len(v) > 3 and v[3] is not None}
     evaluated = []
     for alarm in alarms:
         active, value = user_alarms.evaluate(alarm, values, since)
         evaluated.append({**alarm, "active": active, "current": value})
-    sensors = load_sensors(config)
+    sensors = load_sensors(apply_limit_overrides(config, limit_overrides))
     shown = display_values(sensors, values)
     for name, display in shown.items():
         display["name"] = sensors[name].name if name in sensors else name
-    return {"sensors": shown, "devices": sources, "alarms": evaluated}
+    return {"sensors": shown, "devices": sources, "alarms": evaluated,
+            "limits": limit_list(config, shown, limit_overrides)}
 
 
 def active_alarms(status: dict) -> dict:

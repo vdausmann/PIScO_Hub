@@ -26,6 +26,14 @@ def _alarm_store():
     return user_alarms.AlarmStore(user_alarms.store_path(current_app))
 
 
+def _limit_store():
+    return user_alarms.LimitStore(user_alarms.limits_path(current_app))
+
+
+def _user():
+    return getattr(current_user, "username", "?")
+
+
 @hardware_sensor_display_bp.route('/')
 @login_required
 def hub():
@@ -59,7 +67,8 @@ def status():
         live = poller.live()
         values, sources = merge_sources(live, live.pop("_meta", {}))
 
-    return jsonify(build_status(config, values, sources, _alarm_store().load()))
+    return jsonify(build_status(config, values, sources, _alarm_store().load(),
+                                _limit_store().load()))
 
 
 @hardware_sensor_display_bp.route('/alarms/active')
@@ -84,7 +93,7 @@ def acknowledge():
         return jsonify({"error": "the alarm monitor is not running"}), 503
     if not isinstance(ids, list):
         return jsonify({"error": "body must be {\"ids\": [...]}"}), 400
-    monitor.acknowledge([str(i) for i in ids], getattr(current_user, "username", "?"))
+    monitor.acknowledge([str(i) for i in ids], _user())
     return "", 204
 
 
@@ -94,8 +103,7 @@ def add_alarm():
     """Body {"field": "Pi-ExPres", "kind": "threshold", "op": ">", "value": 1500,
     "only_while": {...}?, "name": "..."?}; kinds in user_alarms."""
     try:
-        alarm = _alarm_store().add(request.get_json(silent=True),
-                                   getattr(current_user, "username", "?"))
+        alarm = _alarm_store().add(request.get_json(silent=True), _user())
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     return jsonify(alarm), 201
@@ -104,11 +112,14 @@ def add_alarm():
 @hardware_sensor_display_bp.route('/alarms/<alarm_id>', methods=['PATCH'])
 @login_required
 def update_alarm(alarm_id):
-    """Body {"enabled": false} switches an alarm off without deleting it."""
+    """Body {"enabled": false} switches an alarm off without deleting it;
+    a body like POST's changes its condition."""
     try:
-        return jsonify(_alarm_store().update(alarm_id, request.get_json(silent=True) or {}))
+        return jsonify(_alarm_store().update(alarm_id, request.get_json(silent=True) or {}, _user()))
     except KeyError:
         return jsonify({"error": "no such alarm"}), 404
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
 
 
 @hardware_sensor_display_bp.route('/alarms/<alarm_id>', methods=['DELETE'])
@@ -118,4 +129,30 @@ def delete_alarm(alarm_id):
         _alarm_store().delete(alarm_id)
     except KeyError:
         return jsonify({"error": "no such alarm"}), 404
+    return "", 204
+
+
+@hardware_sensor_display_bp.route('/limits/<shorthand>', methods=['PUT'])
+@login_required
+def set_limit(shorthand):
+    """Body {"min": 11.5, "max": 13, "condition": "Pa-PiPwr==1", "enabled": true}:
+    a configured limit changed on the Hub, in place of the config file's."""
+    sensor = next((s for d in _config().values() if isinstance(d, dict)
+                   for s in d.get("sensors") or [] if s["shorthand"] == shorthand), None)
+    if sensor is None:
+        return jsonify({"error": f"{shorthand} is not a configured sensor"}), 404
+    try:
+        return jsonify(_limit_store().set(shorthand, request.get_json(silent=True), sensor, _user()))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@hardware_sensor_display_bp.route('/limits/<shorthand>', methods=['DELETE'])
+@login_required
+def reset_limit(shorthand):
+    """Back to the limit in the config file."""
+    try:
+        _limit_store().reset(shorthand)
+    except KeyError:
+        return jsonify({"error": "this limit is not changed"}), 404
     return "", 204
