@@ -363,14 +363,17 @@ function displaySensorData(data) {
 
 
     for (
-        const section
+        const empty
         of document.querySelectorAll(
-            ".device-section"
+            ".device-section .device-empty"
         )
     ) {
 
-        section.querySelector(".device-empty").hidden =
-            section.querySelector(".sensor-entry:not([hidden])") !== null;
+        // Only the device sections have one: the
+        // alarm list below shares their look.
+        empty.hidden =
+            empty.closest(".device-section")
+                .querySelector(".sensor-entry:not([hidden])") !== null;
     }
 }
 
