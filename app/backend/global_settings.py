@@ -53,9 +53,13 @@ def seed_settings(app):
                      'desc': "Data Explorer: root of the old pipeline's cruise/profile tree. Empty means FILE_EXPLORER_ROOT."},
         'PDE_CACHE_ROOT': {'value': '', 'type': 'str',
                            'desc': 'Data Explorer: portable cache of per-profile image metadata (image_metadata.csv) for the old pipeline tree.'},
-        'LINKS_FILE': {'value': 'links.json', 'type': 'str',
         'SEA_THROUGH_DIR': {'value': '/opt/pisco/tools/sea-through-controll', 'type': 'str',
                             'desc': "Checkout of sea-through-controll; the Device controls page's Shutdown-All runs its set_shutdown_and_upload.py there (targets and order from its scp_targets.txt and upload_order.txt)."},
+        'LIFI_SOURCE_DIR': {'value': '/mnt/nas_b/MSM147/unprocessed/lightfield/hdf5', 'type': 'str',
+                            'desc': "Folder of the LIFI camera's recordings (lifi_*.h5). The Lightfield page indexes it and zooms into its frames."},
+        'LIFI_INDEX_DIR': {'value': '', 'type': 'str',
+                           'desc': 'Where the LIFI index (thumbnails per frame) and the exports go; must be on the share the workers write to. Empty means <DATA_ROOT>/lifi_index.'},
+        'LINKS_FILE': {'value': 'links.json', 'type': 'str',
                        'desc': "JSON list of links on the landing page to services on the ship's network (title, url, description). Relative paths are taken from the Hub root; see links.example.json."},
     }
 

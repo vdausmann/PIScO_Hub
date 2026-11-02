@@ -1,7 +1,8 @@
 from flask import Flask
 from .routes import (auth, processing, visualization, task_manager, global_settings,
     workflow_builder, file_explorer, deep_link, hardware_control, hardware_device_control,
-                     hardware_sensor_display, hardware_live, ladcp, upload, share_browse)
+                     hardware_sensor_display, hardware_live, ladcp, upload, share_browse,
+                     lightfield)
 from .routes.api_v1 import api_v1_bp
 from .backend.models import db, login_manager
 from .backend.viewers import ViewerManager
@@ -71,6 +72,7 @@ def create_app(create_worker=True):
     app.register_blueprint(deep_link.deep_link_bp, url_prefix='/v')
     app.register_blueprint(upload.upload_bp, url_prefix='/upload')
     app.register_blueprint(share_browse.share_browse_bp, url_prefix='/share')
+    app.register_blueprint(lightfield.lightfield_bp, url_prefix='/lightfield')
 
     # Register tools and viewers:
     with app.app_context():
