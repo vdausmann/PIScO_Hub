@@ -1,11 +1,13 @@
-from flask import Blueprint, jsonify, render_template, request, send_file
+from flask import Blueprint, Response, jsonify, render_template, request, send_file
 from flask_login import login_required
 from pathlib import Path
 import json
 import os
+from urllib.parse import quote
 
 from ..backend.file_explorer import get_files
 from ..backend.models import Viewer
+from ..backend.zip_stream import directory_entries, zip_stream
 
 
 file_explorer_bp = Blueprint('file-explorer', __name__)
@@ -41,9 +43,18 @@ def download():
     if not os.path.exists(path):
         return jsonify({"error": "File not found"}), 404
 
+    if os.path.isdir(path):
+        # A folder comes as <name>.zip, sent while it is packed: no
+        # temporary copy, so its size is not known and the browser shows
+        # only the bytes received so far.
+        name = os.path.basename(os.path.normpath(path)) or "root"
+        return Response(
+            zip_stream(directory_entries(path)),
+            mimetype="application/zip",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}.zip"})
+
     if not os.path.isfile(path):
         return jsonify({"error": "Path is not a file"}), 400
-
 
     return send_file(
         path,

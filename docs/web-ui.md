@@ -186,7 +186,10 @@ Browses the server's filesystem below `FILE_EXPLORER_ROOT` (Global
 Settings). Breadcrumbs, folders first, sizes and modification times.
 Directories named by a workflow id show the workflow's name beside it,
 so `DATA_ROOT/workflows/` is readable. Selecting a file offers
-**download** and the viewers registered for its extension.
+**download** and the viewers registered for its extension. Downloading a
+folder gives `<folder>.zip` with everything below it (uncompressed,
+symlinks skipped), sent while it is packed — so the browser shows bytes
+received, not a percentage.
 
 Viewers are plugins under `viewers/`; three ship:
 

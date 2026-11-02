@@ -17,13 +17,12 @@ import json
 import os
 import re
 import threading
-import time
-import zipfile
 from datetime import datetime, timezone
 
 import numpy as np
 
 from .models import GlobalSetting
+from .zip_stream import zip_stream  # noqa: F401  (the export download)
 
 INDEX_TOOL = "pisco_index_lifi"
 EXPORT_TOOL = "pisco_export_lifi"
@@ -293,45 +292,3 @@ def export_file(root, name, filename):
     if filename.startswith(".") or not os.path.isfile(path) or filename.endswith(".json"):
         raise LightfieldError(f"no file {filename!r} in {name}")
     return path
-
-
-# ---- downloading everything at once -------------------------------------------
-
-class _Sink:
-    """Write-only stream for zipfile: it cannot seek, so the archive gets
-    data descriptors and can be sent while it is written."""
-
-    def __init__(self):
-        self.parts = []
-
-    def write(self, data):
-        self.parts.append(bytes(data))
-        return len(data)
-
-    def flush(self):
-        pass
-
-    def take(self):
-        data = b"".join(self.parts)
-        self.parts = []
-        return data
-
-
-def zip_stream(paths, chunk=8 << 20):
-    """A stored (uncompressed: PNG and JPEG are compressed already) ZIP64
-    archive of `paths`, yielded in pieces as it is read."""
-    sink = _Sink()
-    with zipfile.ZipFile(sink, "w", zipfile.ZIP_STORED, allowZip64=True) as zf:
-        for path in paths:
-            info = zipfile.ZipInfo(os.path.basename(path),
-                                   time.gmtime(os.path.getmtime(path))[:6])
-            info.compress_type = zipfile.ZIP_STORED
-            with open(path, "rb") as src, zf.open(info, "w", force_zip64=True) as dst:
-                while True:
-                    data = src.read(chunk)
-                    if not data:
-                        break
-                    dst.write(data)
-                    yield sink.take()
-            yield sink.take()
-    yield sink.take()
