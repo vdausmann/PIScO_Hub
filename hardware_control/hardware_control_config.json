@@ -993,14 +993,88 @@
 	"Propel-Kamera1": {
 		"sensors": [
 			{
-				"shorthand": "Pk1-JetPwr",
-				"name": "JETSON Power ON",
+				"shorthand": "Pk1-Hu",
+				"name": "Humidity",
+				"group": "(Gruppe Propel-Kamera1)",
+				"type": "float",
+				"format": {
+					"formatter": "xx.xx",
+					"unit": "%"
+				},
+				"min": null,
+				"max": "75",
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk1-Pipetemp",
+				"name": "Pipe Temperature",
+				"group": "(Gruppe Propel-Kamera1)",
+				"type": "float",
+				"format": {
+					"formatter": "xx.xx",
+					"unit": "°C"
+				},
+				"min": null,
+				"max": "65",
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk1-InPres",
+				"name": "Internal Pressure",
+				"group": "(Gruppe Propel-Kamera1)",
+				"type": "float",
+				"format": {
+					"formatter": "xxxx.xx",
+					"unit": "mbar"
+				},
+				"min": null,
+				"max": "1200",
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk1-Storage",
+				"name": "Storage Used (%)",
+				"group": "(Gruppe Propel-Kamera1)",
+				"type": "float",
+				"format": {
+					"formatter": "xx.xx",
+					"unit": ""
+				},
+				"min": null,
+				"max": "90",
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk1-Record",
+				"name": "Record",
 				"group": "(Gruppe Propel-Kamera1)",
 				"type": "bool",
 				"format": {
-				  "formatter": "button",
-				  "colors": ["red", "green", "gray"],
-				  "unit": ""
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk1-Stream",
+				"name": "Stream",
+				"group": "(Gruppe Propel-Kamera1)",
+				"type": "bool",
+				"format": {
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
 				},
 				"min": null,
 				"max": null,
@@ -1012,8 +1086,52 @@
 				"group": "(Gruppe Propel-Kamera1)",
 				"type": "int",
 				"format": {
-				  "formatter": "xxxxxx",
-				  "unit": ""
+					"formatter": "xxxxxx",
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk1-FramQu",
+				"name": "Frames Queued",
+				"group": "(Gruppe Propel-Kamera1)",
+				"type": "int",
+				"format": {
+					"formatter": "xxxxxx",
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk1-FramDr",
+				"name": "Frames Dropped",
+				"group": "(Gruppe Propel-Kamera1)",
+				"type": "int",
+				"format": {
+					"formatter": "xxxxxx",
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk1-JetPwr",
+				"name": "JETSON Power ON",
+				"group": "(Gruppe Propel-Kamera1)",
+				"type": "bool",
+				"format": {
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
 				},
 				"min": null,
 				"max": null,
@@ -1025,8 +1143,8 @@
 				"group": "(Gruppe Propel-Kamera1)",
 				"type": "float",
 				"format": {
-				  "formatter": "xx.xx",
-				  "unit": "°C"
+					"formatter": "xx.xx",
+					"unit": "°C"
 				},
 				"min": null,
 				"max": "65",
@@ -1038,135 +1156,28 @@
 				"group": "(Gruppe Propel-Kamera1)",
 				"type": "float",
 				"format": {
-				  "formatter": "xx.xx",
-				  "unit": ""
+					"formatter": "xx.xx",
+					"unit": ""
 				},
 				"min": null,
 				"max": "20",
-				"alarm condition": null
-			},
-			{
-				"shorthand": "Pk1-Record",
-				"name": "Record",
-				"group": "(Gruppe Propel-Kamera1)",
-				"type": "bool",
-				"format": {
-				  "formatter": "button",
-				  "colors": ["red", "green", "gray"],
-				  "unit": ""
-				},
-				"min": null,
-				"max": null,
-				"alarm condition": null
-			},
-			{
-				"shorthand": "Pk1-Stream",
-				"name": "Stream",
-				"group": "(Gruppe Propel-Kamera1)",
-				"type": "bool",
-				"format": {
-				  "formatter": "button",
-				  "colors": ["red", "green", "gray"],
-				  "unit": ""
-				},
-				"min": null,
-				"max": null,
-				"alarm condition": null
-			},
-			{
-				"shorthand": "Pk1-Storage",
-				"name": "Storage Used (%)",
-				"group": "(Gruppe Propel-Kamera1)",
-				"type": "float",
-				"format": {
-				  "formatter": "xx.xx",
-				  "unit": ""
-				},
-				"min": null,
-				"max": "90",
 				"alarm condition": null
 			}
 		],
 		"commands": [
 			{
-				"shorthand": "Pk1-StartRec",
-				"name": "start Recording ",
+				"shorthand": "Pk1-Shutdown",
+				"name": "Shutdown",
 				"group": "(Gruppe Propel-Kamera1)",
 				"type": "bool",
 				"format": {
-				  "formatter": "button",
-				  "colors": ["red", "green", "gray"],
-				  "unit": ""
-				},
-				"min": null,
-				"max": null,
-				"alarm condition": null
-			},
-			{
-				"shorthand": "Pk1-StopRec",
-				"name": "stop Recording ",
-				"group": "(Gruppe Propel-Kamera1)",
-				"type": "bool",
-				"format": {
-				  "formatter": "button",
-				  "colors": ["red", "green", "gray"],
-				  "unit": ""
-				},
-				"min": null,
-				"max": null,
-				"alarm condition": null
-			},
-			{
-				"shorthand": "Pk1-DeckMode",
-				"name": "switch to Deckmode",
-				"group": "(Gruppe Propel-Kamera1)",
-				"type": "bool",
-				"format": {
-				  "formatter": "button",
-				  "colors": ["red", "green", "gray"],
-				  "unit": ""
-				},
-				"min": null,
-				"max": null,
-				"alarm condition": null
-			},
-			{
-				"shorthand": "Pk1-StartDown",
-				"name": "start Download ",
-				"group": "(Gruppe Propel-Kamera1)",
-				"type": "bool",
-				"format": {
-				  "formatter": "button",
-				  "colors": ["red", "green", "gray"],
-				  "unit": ""
-				},
-				"min": null,
-				"max": null,
-				"alarm condition": null
-			},
-			{
-				"shorthand": "Pk1-DeployMode",
-				"name": "switch to Deploymode",
-				"group": "(Gruppe Propel-Kamera1)",
-				"type": "bool",
-				"format": {
-				  "formatter": "button",
-				  "colors": ["red", "green", "gray"],
-				  "unit": ""
-				},
-				"min": null,
-				"max": null,
-				"alarm condition": null
-			},
-			{
-				"shorthand": "Pk1-Stream",
-				"name": "start / stop Stream",
-				"group": "(Gruppe Propel-Kamera1)",
-				"type": "bool",
-				"format": {
-				  "formatter": "button",
-				  "colors": ["red", "green", "gray"],
-				  "unit": ""
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
 				},
 				"min": null,
 				"max": null,
@@ -1178,8 +1189,8 @@
 				"group": "(Gruppe Propel-Kamera1)",
 				"type": "float",
 				"format": {
-				  "formatter": "xx.xx",
-				  "unit": ""
+					"formatter": "xx.xx",
+					"unit": ""
 				},
 				"min": null,
 				"max": null,
@@ -1191,8 +1202,170 @@
 				"group": "(Gruppe Propel-Kamera1)",
 				"type": "int",
 				"format": {
-				  "formatter": "xxxxx",
-				  "unit": "us"
+					"formatter": "xxxxx",
+					"unit": "us"
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk1-StartStream",
+				"name": "start Stream",
+				"group": "(Gruppe Propel-Kamera1)",
+				"type": "bool",
+				"format": {
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk1-StartRec",
+				"name": "start Recording ",
+				"group": "(Gruppe Propel-Kamera1)",
+				"type": "bool",
+				"format": {
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk1-Startcam",
+				"name": "start Camera",
+				"group": "(Gruppe Propel-Kamera1)",
+				"type": "bool",
+				"format": {
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk1-StartDown",
+				"name": "start Download ",
+				"group": "(Gruppe Propel-Kamera1)",
+				"type": "bool",
+				"format": {
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk1-ResCam",
+				"name": "reset Camera",
+				"group": "(Gruppe Propel-Kamera1)",
+				"type": "bool",
+				"format": {
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk1-StopRec",
+				"name": "stop Recording ",
+				"group": "(Gruppe Propel-Kamera1)",
+				"type": "bool",
+				"format": {
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk1-DeckMode",
+				"name": "switch to Deckmode",
+				"group": "(Gruppe Propel-Kamera1)",
+				"type": "bool",
+				"format": {
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk1-DeployMode",
+				"name": "switch to Deploymode",
+				"group": "(Gruppe Propel-Kamera1)",
+				"type": "bool",
+				"format": {
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk1-Stream",
+				"name": "start / stop Stream",
+				"group": "(Gruppe Propel-Kamera1)",
+				"type": "bool",
+				"format": {
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
 				},
 				"min": null,
 				"max": null,
@@ -1202,8 +1375,7 @@
 				"shorthand": "Pk1-CamMode",
 				"name": "set Cameraeramode  lalala",
 				"group": "(Gruppe Propel-Kamera1)",
-				"format": {
-				},
+				"format": {},
 				"min": null,
 				"max": null,
 				"alarm condition": null
@@ -1213,56 +1385,55 @@
 	"Propel-Kamera2": {
 		"sensors": [
 			{
-				"shorthand": "Pk2-JetPwr",
-				"name": "JETSON Power ON",
+				"shorthand": "Pk2-Hu",
+				"name": "Humidity",
 				"group": "(Gruppe Propel-Kamera2)",
-				"type": "bool",
+				"type": "float",
 				"format": {
-				  "formatter": "button",
-				  "colors": ["red", "green", "gray"],
-				  "unit": ""
+					"formatter": "xx.xx",
+					"unit": "%"
 				},
 				"min": null,
-				"max": null,
+				"max": "75",
 				"alarm condition": null
 			},
 			{
-				"shorthand": "Pk2-FrameCnt",
-				"name": "Frame Count",
+				"shorthand": "Pk2-Pipetemp",
+				"name": "Pipe Temperature",
 				"group": "(Gruppe Propel-Kamera2)",
-				"type": "int",
+				"type": "float",
 				"format": {
-				  "formatter": "xxxxxx",
-				  "unit": ""
+					"formatter": "xx.xx",
+					"unit": "°C"
 				},
 				"min": null,
 				"max": "65",
 				"alarm condition": null
 			},
 			{
-				"shorthand": "Pk2-CamTeIn",
-				"name": "Camera Temperature-Inside",
+				"shorthand": "Pk2-InPres",
+				"name": "Internal Pressure",
 				"group": "(Gruppe Propel-Kamera2)",
 				"type": "float",
 				"format": {
-				  "formatter": "xx.xx",
-				  "unit": "°C"
+					"formatter": "xxxx.xx",
+					"unit": "mbar"
 				},
 				"min": null,
-				"max": "20",
+				"max": "1200",
 				"alarm condition": null
 			},
 			{
-				"shorthand": "Pk2-FPS",
-				"name": "Framerate",
+				"shorthand": "Pk2-Storage",
+				"name": "Storage Used (%)",
 				"group": "(Gruppe Propel-Kamera2)",
 				"type": "float",
 				"format": {
-				  "formatter": "xx.xx",
-				  "unit": ""
+					"formatter": "xx.xx",
+					"unit": ""
 				},
 				"min": null,
-				"max": null,
+				"max": "90",
 				"alarm condition": null
 			},
 			{
@@ -1271,9 +1442,13 @@
 				"group": "(Gruppe Propel-Kamera2)",
 				"type": "bool",
 				"format": {
-				  "formatter": "button",
-				  "colors": ["red", "green", "gray"],
-				  "unit": ""
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
 				},
 				"min": null,
 				"max": null,
@@ -1285,108 +1460,116 @@
 				"group": "(Gruppe Propel-Kamera2)",
 				"type": "bool",
 				"format": {
-				  "formatter": "button",
-				  "colors": ["red", "green", "gray"],
-				  "unit": ""
-				},
-				"min": null,
-				"max": "90",
-				"alarm condition": null
-			},
-			{
-				"shorthand": "Pk2-Storage",
-				"name": "Storage Used (%)",
-				"group": "(Gruppe Propel-Kamera2)",
-				"type": "float",
-				"format": {
-				  "formatter": "xx.xx",
-				  "unit": ""
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
 				},
 				"min": null,
 				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk2-FrameCnt",
+				"name": "Frame Count",
+				"group": "(Gruppe Propel-Kamera2)",
+				"type": "int",
+				"format": {
+					"formatter": "xxxxxx",
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk2-FramQu",
+				"name": "Frames Queued",
+				"group": "(Gruppe Propel-Kamera2)",
+				"type": "int",
+				"format": {
+					"formatter": "xxxxxx",
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk2-FramDr",
+				"name": "Frames Dropped",
+				"group": "(Gruppe Propel-Kamera2)",
+				"type": "int",
+				"format": {
+					"formatter": "xxxxxx",
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk2-JetPwr",
+				"name": "JETSON Power ON",
+				"group": "(Gruppe Propel-Kamera2)",
+				"type": "bool",
+				"format": {
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk2-CamTeIn",
+				"name": "Camera Temperature-Inside",
+				"group": "(Gruppe Propel-Kamera2)",
+				"type": "float",
+				"format": {
+					"formatter": "xx.xx",
+					"unit": "°C"
+				},
+				"min": null,
+				"max": "65",
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk2-FPS",
+				"name": "Framerate",
+				"group": "(Gruppe Propel-Kamera2)",
+				"type": "float",
+				"format": {
+					"formatter": "xx.xx",
+					"unit": ""
+				},
+				"min": null,
+				"max": "20",
 				"alarm condition": null
 			}
 		],
 		"commands": [
 			{
-				"shorthand": "Pk2-StartRec",
-				"name": "start Recording ",
+				"shorthand": "Pk2-Shutdown",
+				"name": "Shutdown",
 				"group": "(Gruppe Propel-Kamera2)",
 				"type": "bool",
 				"format": {
-				  "formatter": "button",
-				  "colors": ["red", "green", "gray"],
-				  "unit": ""
-				},
-				"min": null,
-				"max": null,
-				"alarm condition": null
-			},
-			{
-				"shorthand": "Pk2-StopRec",
-				"name": "stop Recording ",
-				"group": "(Gruppe Propel-Kamera2)",
-				"type": "bool",
-				"format": {
-				  "formatter": "button",
-				  "colors": ["red", "green", "gray"],
-				  "unit": ""
-				},
-				"min": null,
-				"max": null,
-				"alarm condition": null
-			},
-			{
-				"shorthand": "Pk2-DeckMode",
-				"name": "switch to Deckmode",
-				"group": "(Gruppe Propel-Kamera2)",
-				"type": "bool",
-				"format": {
-				  "formatter": "button",
-				  "colors": ["red", "green", "gray"],
-				  "unit": ""
-				},
-				"min": null,
-				"max": null,
-				"alarm condition": null
-			},
-			{
-				"shorthand": "Pk2-StartDown",
-				"name": "start Download ",
-				"group": "(Gruppe Propel-Kamera2)",
-				"type": "bool",
-				"format": {
-				  "formatter": "button",
-				  "colors": ["red", "green", "gray"],
-				  "unit": ""
-				},
-				"min": null,
-				"max": null,
-				"alarm condition": null
-			},
-			{
-				"shorthand": "Pk2-DeployMode",
-				"name": "switch to Deploymode",
-				"group": "(Gruppe Propel-Kamera2)",
-				"type": "bool",
-				"format": {
-				  "formatter": "button",
-				  "colors": ["red", "green", "gray"],
-				  "unit": ""
-				},
-				"min": null,
-				"max": null,
-				"alarm condition": null
-			},
-			{
-				"shorthand": "Pk2-Stream",
-				"name": "start / stop Stream",
-				"group": "(Gruppe Propel-Kamera2)",
-				"type": "bool",
-				"format": {
-				  "formatter": "button",
-				  "colors": ["red", "green", "gray"],
-				  "unit": ""
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
 				},
 				"min": null,
 				"max": null,
@@ -1398,8 +1581,8 @@
 				"group": "(Gruppe Propel-Kamera2)",
 				"type": "float",
 				"format": {
-				  "formatter": "xx.xx",
-				  "unit": ""
+					"formatter": "xx.xx",
+					"unit": ""
 				},
 				"min": null,
 				"max": null,
@@ -1411,8 +1594,170 @@
 				"group": "(Gruppe Propel-Kamera2)",
 				"type": "int",
 				"format": {
-				  "formatter": "xxxxx",
-				  "unit": "us"
+					"formatter": "xxxxx",
+					"unit": "us"
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk2-StartStream",
+				"name": "start Stream",
+				"group": "(Gruppe Propel-Kamera2)",
+				"type": "bool",
+				"format": {
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk2-StartRec",
+				"name": "start Recording ",
+				"group": "(Gruppe Propel-Kamera2)",
+				"type": "bool",
+				"format": {
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk2-Startcam",
+				"name": "start Camera",
+				"group": "(Gruppe Propel-Kamera2)",
+				"type": "bool",
+				"format": {
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk2-StartDown",
+				"name": "start Download ",
+				"group": "(Gruppe Propel-Kamera2)",
+				"type": "bool",
+				"format": {
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk2-ResCam",
+				"name": "reset Camera",
+				"group": "(Gruppe Propel-Kamera2)",
+				"type": "bool",
+				"format": {
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk2-StopRec",
+				"name": "stop Recording ",
+				"group": "(Gruppe Propel-Kamera2)",
+				"type": "bool",
+				"format": {
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk2-DeckMode",
+				"name": "switch to Deckmode",
+				"group": "(Gruppe Propel-Kamera2)",
+				"type": "bool",
+				"format": {
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk2-DeployMode",
+				"name": "switch to Deploymode",
+				"group": "(Gruppe Propel-Kamera2)",
+				"type": "bool",
+				"format": {
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
+				},
+				"min": null,
+				"max": null,
+				"alarm condition": null
+			},
+			{
+				"shorthand": "Pk2-Stream",
+				"name": "start / stop Stream",
+				"group": "(Gruppe Propel-Kamera2)",
+				"type": "bool",
+				"format": {
+					"formatter": "button",
+					"colors": [
+						"red",
+						"green",
+						"gray"
+					],
+					"unit": ""
 				},
 				"min": null,
 				"max": null,

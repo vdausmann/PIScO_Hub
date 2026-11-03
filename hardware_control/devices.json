@@ -62,7 +62,13 @@
         "stale_after_s": 5
     },
     "Propel-Kamera2": {
-        "enabled": false, "host": null, "user": "pisco", "os": "linux",
-        "sensor_file": null, "command_file": null, "interval_s": 1.0, "stale_after_s": 5
+        "enabled": true,
+        "host": "10.11.15.45",
+        "user": "pisco",
+        "os": "linux",
+        "sensor_file": "/home/pisco/propel-cam-controll/Propel2CamSensors.txt",
+        "command_file": "/home/pisco/propel-cam-controll/Propel2CamCommands.txt",
+        "interval_s": 1.0,
+        "stale_after_s": 5
     }
 }
