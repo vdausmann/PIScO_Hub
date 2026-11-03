@@ -2184,7 +2184,7 @@
                 "shorthand": "Bl-TrigLen",
                 "name": "set Trigger length",
                 "group": "(Gruppe BIOLUMl)",
-				"type": "int",
+				"type": "float",
 				"format": {
 				  "formatter": "xxxxx",
 				  "unit": "us"
