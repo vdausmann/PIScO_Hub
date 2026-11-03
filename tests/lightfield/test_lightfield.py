@@ -133,3 +133,29 @@ def test_index_specs_split_the_recordings():
     specs = lightfield.index_specs("/idx", "/nas/hdf5", 10, 3, "/idx/windows.json")
     assert [s["settings"]["shard"] for s in specs] == ["0/3", "1/3", "2/3"]
     assert all(s["tool"] == "pisco_index_lifi" and s["settings"]["step"] == 10 for s in specs)
+
+
+def test_sources_say_why_a_recording_is_left_out(index, tmp_path):
+    src = tmp_path / "hdf5"
+    src.mkdir()
+    for stem in ("lifi_20261012_2356", "lifi_20261013_0011", "lifi_20261013_0100",
+                 "lifi_20261013_0200", "lifi_20261013_0300", "lifi_20261013_0400"):
+        (src / f"{stem}.h5").write_bytes(b"")
+    os.makedirs(os.path.join(index, "skipped"))
+    for stem, reason in (("lifi_20261013_0100", "outside_casts"), ("lifi_20261013_0200", "broken"),
+                         ("lifi_20261013_0300", "unreadable")):           # readable again since
+        with open(os.path.join(index, "skipped", stem + ".json"), "w") as f:
+            json.dump({"reason": reason, "detail": "why"}, f)
+    if os.geteuid() != 0:
+        os.chmod(src / "lifi_20261013_0400.h5", 0)
+
+    got = lightfield.sources(str(src), index)
+    stems = {r: [x["stem"] for x in v] for r, v in got["left_out"].items()}
+    assert (got["total"], got["indexed"]) == (6, 2)
+    assert stems["outside_casts"] == ["lifi_20261013_0100"]
+    assert stems["broken"] == ["lifi_20261013_0200"]
+    if os.geteuid() != 0:
+        assert stems["unreadable"] == ["lifi_20261013_0400"]
+        assert got["left_out"]["unreadable"][0]["detail"] == "mode 0"
+        assert stems["waiting"] == ["lifi_20261013_0300"]
+    assert [r["stem"] for r in lightfield.recordings(index)] == ["lifi_20261012_2356", "lifi_20261013_0011"]

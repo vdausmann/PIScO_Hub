@@ -35,7 +35,6 @@ def page():
 def state():
     conf = _conf()
     recs = lightfield.recordings(conf["index"])
-    total, unreadable = lightfield.source_files(conf["source"])
     running = [{"id": w.id, "name": w.name, "status": w.status}
                for w in Workflow.query.filter(Workflow.status.in_(("Pending", "Running")))
                .order_by(Workflow.created_at).all()
@@ -44,7 +43,7 @@ def state():
         Tool.name.in_((lightfield.INDEX_TOOL, lightfield.EXPORT_TOOL))).all() if t.available}
     return jsonify({
         "index_dir": conf["index"], "source_dir": conf["source"],
-        "source_files": total, "source_unreadable": unreadable,
+        "sources": lightfield.sources(conf["source"], conf["index"]),
         "recordings": recs, "casts": lightfield.casts(recs),
         "indexing": running, "tools": sorted(tools),
     })

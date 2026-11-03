@@ -105,7 +105,7 @@ def recordings(root):
         return []
     out = []
     for stem in sorted(os.listdir(root)):
-        if not _STEM.match(stem) or stem == "exports":
+        if not _STEM.match(stem) or stem in ("exports", "skipped"):
             continue
         if not os.path.exists(os.path.join(root, stem, "frames.csv")):
             continue
@@ -147,13 +147,39 @@ def cast_frames(root, recs, label):
     return out
 
 
-def source_files(source):
-    """(recordings, unreadable ones) in the source folder."""
+# Why a recording in the source folder is not in the index. The index
+# tool notes its reason in skipped/<stem>.json; readability is checked
+# here, since a file's mode can change after the index ran.
+LEFT_OUT = ("unreadable", "broken", "outside_casts", "no_cast_frames", "waiting")
+
+
+def sources(source, root):
+    """Every recording in the source folder, sorted by what became of it:
+    {"total", "indexed", "left_out": {reason: [{"stem", "detail"}]}}."""
+    out = {"total": 0, "indexed": 0, "left_out": {r: [] for r in LEFT_OUT}}
     if not source or not os.path.isdir(source):
-        return 0, 0
-    names = [n for n in os.listdir(source) if n.startswith("lifi_") and n.endswith(".h5")]
-    unreadable = sum(1 for n in names if not os.access(os.path.join(source, n), os.R_OK))
-    return len(names), unreadable
+        return out
+    for name in sorted(os.listdir(source)):
+        if not (name.startswith("lifi_") and name.endswith(".h5")):
+            continue
+        stem = name[:-3]
+        out["total"] += 1
+        if _STEM.match(stem) and os.path.exists(os.path.join(root, stem, "frames.csv")):
+            out["indexed"] += 1
+            continue
+        path = os.path.join(source, name)
+        if not os.access(path, os.R_OK):
+            reason, detail = "unreadable", f"mode {os.stat(path).st_mode & 0o777:o}"
+        else:
+            try:
+                note = _cached(os.path.join(root, "skipped", stem + ".json"), _read_json) or {}
+            except ValueError:
+                note = {}
+            reason, detail = note.get("reason"), note.get("detail", "")
+            if reason not in LEFT_OUT or reason == "unreadable":   # readable by now
+                reason, detail = "waiting", ""
+        out["left_out"][reason].append({"stem": stem, "detail": detail})
+    return out
 
 
 def image_path(root, stem, kind, index):

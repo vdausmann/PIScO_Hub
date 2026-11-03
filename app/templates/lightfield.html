@@ -15,6 +15,9 @@
     .lf-row select, .lf-row input { padding: 4px 6px; border-radius: 4px; background: var(--bg); color: var(--text);
                                      border: 1px solid color-mix(in srgb, var(--text) 25%, transparent); font: inherit; }
     .lf-error { color: #dc2626; }
+    #left-out { margin-top: 6px; font-size: .9em; }
+    .lf-left { margin: 6px 0 0 14px; }
+    .lf-left .lf-mono { font-size: .85em; opacity: .85; max-height: 8em; overflow: auto; margin-top: 2px; }
     .lf-layout { display: grid; grid-template-columns: 230px minmax(0, 1fr) 300px; gap: 14px; margin-top: 12px; }
     @media (max-width: 1100px) { .lf-layout { grid-template-columns: 1fr; } }
     .lf-casts { max-height: 75vh; overflow: auto; padding: 4px; }
@@ -60,6 +63,7 @@
 
 <div class="lf-card">
     <div class="lf-row" id="status">Loading…</div>
+    <details id="left-out" hidden></details>
     <div class="lf-row" style="margin-top:6px;">
         <span class="lf-muted">Index the recordings:</span>
         <label>every <select id="ix-step"><option>10</option><option>5</option><option>2</option><option>1</option></select>th frame</label>
@@ -131,6 +135,14 @@
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
     const key = (f) => f.stem + ":" + f.index;
+    // [reason, in the status line, what it means]; reasons from lightfield.LEFT_OUT
+    const LEFT_OUT = [
+        ["unreadable", "not readable", "The Hub may not read these files (mode 600 on NAS_B, hover a name). They are complete; chmod a+r on the NAS, then Start indexes them."],
+        ["broken", "will not open", "HDF5 refuses them (hover a name for the error); most likely recordings that were never closed."],
+        ["waiting", "not indexed yet", "New since the last index, or readable again: Start picks them up."],
+        ["outside_casts", "outside the casts", "Their 15 minutes touch no CTD cast, so there are no in-water frames to index."],
+        ["no_cast_frames", "no frame in a cast", "They overlap a cast, but none of their frames falls between in-water and on-deck."],
+    ];
     const store = {
         get(k, d) { try { const v = localStorage.getItem("lf." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
         set(k, v) { try { localStorage.setItem("lf." + k, JSON.stringify(v)); } catch (e) {} },
@@ -152,12 +164,21 @@
     async function loadState() {
         try { state = await json(BASE + "/api/state"); } catch (e) { $("status").textContent = e.message; return; }
         const indexed = state.recordings.reduce((n, r) => n + r.indexed, 0);
-        let s = `<span>${state.recordings.length} of ${state.source_files} recordings indexed, ${indexed.toLocaleString()} frames</span>`;
-        if (state.source_unreadable) s += `<span class="lf-muted">· ${state.source_unreadable} not readable yet (still being copied)</span>`;
+        const src = state.sources;
+        let s = `<span>${state.recordings.length} of ${src.total} recordings indexed, ${indexed.toLocaleString()} frames</span>`;
+        s += LEFT_OUT.filter(([r]) => src.left_out[r].length)
+            .map(([r, short]) => `<span class="${r === "unreadable" || r === "broken" ? "lf-error" : "lf-muted"}">· ${src.left_out[r].length} ${short}</span>`).join("");
         if (state.indexing.length) s += `<span>· indexing: ${state.indexing.map((w) => `<a href="{{ url_for('processing.dashboard') }}">${esc(w.name)}</a> ${esc(w.status)}`).join(", ")}</span>`;
         for (const t of ["pisco_index_lifi", "pisco_export_lifi"])
             if (!state.tools.includes(t)) s += `<span class="lf-error">· tool ${t} is not registered</span>`;
         $("status").innerHTML = s;
+        const open = $("left-out").open;
+        $("left-out").innerHTML = `<summary class="lf-muted">Which recordings are left out, and why</summary>` +
+            LEFT_OUT.filter(([r]) => src.left_out[r].length).map(([r, short, why]) =>
+                `<div class="lf-left"><strong>${src.left_out[r].length} ${short}</strong> <span class="lf-muted">${why}</span>
+                 <div class="lf-mono">${src.left_out[r].map((x) => `<span title="${esc(x.detail)}">${esc(x.stem)}</span>`).join(" ")}</div></div>`).join("");
+        $("left-out").open = open;
+        $("left-out").hidden = src.indexed === src.total;
         $("ix-go").disabled = state.indexing.length > 0;
         $("casts").innerHTML = state.casts.map((c) =>
             `<div class="lf-cast${c.label === cast ? " on" : ""}" data-cast="${esc(c.label)}">
