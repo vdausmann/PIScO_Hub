@@ -348,21 +348,6 @@ length). The new-workflow form's *Fill from DSHIP* uses it for station,
 `ctd_cast`, position and date; the EcoTaxa export writes `ctd_cast` as
 `sample_ctd_cast`.
 
-## DSHIP
-
-With `DSHIP_URL` set (MSM147: `http://192.168.100.10:8080`), the Hub reads
-the ship's DSHIP action log read-only, as the anonymous user its web
-interface uses, every `DSHIP_POLL_INTERVAL` seconds, and keeps a snapshot
-under `<DATA_ROOT>/dship/`. Device operations (`MSM147_2-9`) become a
-station written `002-09`; operations of `DSHIP_CAST_DEVICE` (CTD) are
-numbered in time order as CTD casts, aborted ones included.
-`GET /dship/at?time=…` returns the operation a recording belongs to — it
-may start up to 45 min before the device goes in — with its events
-(in the water, max depth, on deck: time, position, water depth, rope
-length). The new-workflow form's *Fill from DSHIP* uses it for station,
-`ctd_cast`, position and date; the EcoTaxa export writes `ctd_cast` as
-`sample_ctd_cast`.
-
 ## Share mirror and cast overviews
 
 Each instrument on the rosette keeps its own files and numbers; the DSHIP
@@ -383,6 +368,10 @@ user `wiss`), each instrument's folder and its overview are copied to
 `SHARE_MIRROR_LADCP_DIR` / `SHARE_MIRROR_LISST_DIR` there (`07_LADCP`,
 `08_LISST`) over SMB — new and changed files only, unfinished downloads
 (`_incoming/`) left out, nothing on the share deleted.
+The other direction: files named in `SHARE_PULL` (paths under
+`SHARE_MIRROR_URL`, MSM147: `06_underway_and_satellite/TSG/TSG.dat`, the
+DSHIP underway export) are copied to `<DATA_ROOT>/share/<same path>` on
+each pass when they changed, so worker tools can read them.
 `GET /mirror/status` shows the last run; `POST /mirror/run` starts one now.
 
 ## Endpoint summary
@@ -419,10 +408,7 @@ user `wiss`), each instrument's folder and its overview are copied to
 | GET | `/api/v1/dship/status` | read | DSHIP connection: expedition, last read, error |
 | GET | `/api/v1/dship/operations` | read | device operations with station, cast number and events (`?device=`) |
 | GET | `/api/v1/dship/at?time=` | read | the cast-device operation a time belongs to |
-| GET | `/api/v1/dship/status` | read | DSHIP connection: expedition, last read, error |
-| GET | `/api/v1/dship/operations` | read | device operations with station, cast number and events (`?device=`) |
-| GET | `/api/v1/dship/at?time=` | read | the cast-device operation a time belongs to |
-| GET | `/api/v1/mirror/status` | read | share mirror: last run, error, overview rows and files sent per instrument |
+| GET | `/api/v1/mirror/status` | read | share mirror: last run, error, overview rows and files sent per instrument, files pulled |
 | POST | `/api/v1/mirror/run` | operate | write the cast overviews and copy to the share now |
 | GET | `/api/v1/nav/latest` | read | the ship's latest NMEA fix and the state of each feed |
 | GET | `/api/v1/nav/at?time=` | read | ship position at a time (ISO 8601 or epoch), interpolated from the track log |

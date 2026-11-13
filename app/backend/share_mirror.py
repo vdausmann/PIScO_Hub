@@ -14,10 +14,15 @@ Instruments: LADCP (the LADCP page's data folder, unfinished downloads
 in _incoming/ left out) and LISST (LISST_DIR). Overviews are written
 even when SHARE_MIRROR_URL is empty.
 
+The other way round, the files named in SHARE_PULL (paths under
+SHARE_MIRROR_URL, e.g. the underway export another group keeps there)
+are copied to <DATA_ROOT>/share/<same path> on each pass when they
+changed, so tools on the workers can read them from the shared storage.
+
 Settings: SHARE_MIRROR_URL (//192.168.100.34/public_wiss/MSM147; empty =
 no copying), SHARE_MIRROR_USER / SHARE_MIRROR_PASSWORD,
 SHARE_MIRROR_INTERVAL, SHARE_MIRROR_LADCP_DIR / SHARE_MIRROR_LISST_DIR
-(subfolders on the share), LISST_DIR, LISST_CLOCK_OFFSET_H.
+(subfolders on the share), SHARE_PULL, LISST_DIR, LISST_CLOCK_OFFSET_H.
 """
 
 import errno
@@ -118,6 +123,28 @@ class Share:
                 dst.write(chunk)
         self.smb.replace(partial, target, **self.kw)
 
+    def get(self, rel, local):
+        """Copy a file from the share unless `local` already has its size
+        and time; True if it was copied."""
+        st = self.smb.stat(self.path(rel), **self.kw)
+        try:
+            have = os.stat(local)
+            if have.st_size == st.st_size and abs(have.st_mtime - st.st_mtime) < 2:
+                return False
+        except OSError:
+            pass
+        os.makedirs(os.path.dirname(local), exist_ok=True)
+        partial = local + ".hubpart"
+        with self.smb.open_file(self.path(rel), mode="rb", **self.kw) as src, open(partial, "wb") as dst:
+            while True:
+                chunk = src.read(1 << 20)
+                if not chunk:
+                    break
+                dst.write(chunk)
+        os.utime(partial, (st.st_mtime, st.st_mtime))
+        os.replace(partial, local)
+        return True
+
     def close(self):
         self.smb.reset_connection_cache(**self.kw)
 
@@ -135,11 +162,15 @@ class ShareMirror:
             self.lisst_offset_h = get("LISST_CLOCK_OFFSET_H", "0") or "0"
             self.subdirs = {"LADCP": get("SHARE_MIRROR_LADCP_DIR", "07_LADCP") or "07_LADCP",
                             "LISST": get("SHARE_MIRROR_LISST_DIR", "08_LISST") or "08_LISST"}
-            self.overview_root = os.path.join(
-                get("DATA_ROOT", os.path.join(app.config["HUB_ROOT"], "data")), "overview")
+            data_root = get("DATA_ROOT", os.path.join(app.config["HUB_ROOT"], "data"))
+            self.overview_root = os.path.join(data_root, "overview")
+            self.pull_root = os.path.join(data_root, "share")
+            self.pull = [p.strip().strip("/") for p in (get("SHARE_PULL", "") or "").split(",")
+                         if p.strip() and ".." not in p.split("/")]
         self.lock = threading.Lock()          # one run at a time
         self.wake = threading.Event()
-        self.state = {"url": self.url or None, "last_run": None, "error": None, "instruments": {}}
+        self.state = {"url": self.url or None, "last_run": None, "error": None, "instruments": {},
+                      "pulled": {}}
         app.extensions["share_mirror"] = self
         threading.Thread(target=self._run, daemon=True, name="share-mirror").start()
 
@@ -215,6 +246,12 @@ class ShareMirror:
                 except Exception as e:
                     error = f"{type(e).__name__}: {e}"
                     traceback.print_exc()
+                if self.pull:
+                    try:
+                        self._pull()
+                    except Exception as e:
+                        error = error or f"{type(e).__name__}: {e}"
+                        traceback.print_exc()
             self.state.update(last_run=_iso(started), error=error,
                               duration_s=round(time.time() - started, 1))
 
@@ -238,6 +275,23 @@ class ShareMirror:
                         share.put(os.path.join(base, rel), sub, rel, made)
                         sent += 1
                 info.update(last_sync=_iso(time.time()), files_sent=sent)
+        finally:
+            share.close()
+
+    def _pull(self):
+        share = Share(self.url, self.user, self.password)
+        share.connect()
+        try:
+            for rel in self.pull:
+                info = self.state["pulled"].setdefault(rel, {})
+                local = os.path.join(self.pull_root, *rel.split("/"))
+                try:
+                    if share.get(rel, local):
+                        info["last_copy"] = _iso(time.time())
+                    info.update(local=local, size=os.path.getsize(local),
+                                modified=_iso(os.path.getmtime(local)), error=None)
+                except OSError as e:
+                    info["error"] = f"{type(e).__name__}: {e}"
         finally:
             share.close()
 

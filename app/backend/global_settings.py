@@ -39,6 +39,7 @@ def seed_settings(app):
         'SHARE_MIRROR_INTERVAL': {'value': '600', 'type': 'int', 'desc': 'Seconds between overview updates and copies to the share.'},
         'SHARE_MIRROR_LADCP_DIR': {'value': '07_LADCP', 'type': 'str', 'desc': 'Subfolder of SHARE_MIRROR_URL for the LADCP data.'},
         'SHARE_MIRROR_LISST_DIR': {'value': '08_LISST', 'type': 'str', 'desc': 'Subfolder of SHARE_MIRROR_URL for the LISST data.'},
+        'SHARE_PULL': {'value': '', 'type': 'str', 'desc': 'Files on SHARE_MIRROR_URL to copy to <DATA_ROOT>/share/ when they change, comma-separated paths under it (MSM147: 06_underway_and_satellite/TSG/TSG.dat, read by the satellite gallery). Restart the Hub after a change.'},
         'LISST_DIR': {'value': '', 'type': 'str', 'desc': 'Folder of the LISST-Deep raw files (L*.RBN) and their processed exports. Empty means no LISST overview.'},
         'LISST_CLOCK_OFFSET_H': {'value': '0', 'type': 'str', 'desc': "Hours to add to the LISST's clock to get UTC. If the clock was reset, a schedule: '7, 0@2026-10-21T16:00' is +7 h until that instrument-clock time and 0 from then on (MSM147: PDT, then UTC)."},
         'MODULES_FILE': {'value': 'modules.json', 'type': 'str',

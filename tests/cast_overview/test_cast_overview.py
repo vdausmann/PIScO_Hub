@@ -117,3 +117,38 @@ def test_share_browse_refuses_paths_out_of_the_share():
     for bad in ("../etc", "MSM147/../../x", "./a"):
         with pytest.raises(share_browse.BrowseError):
             share_browse.clean(bad)
+
+
+class _FakeSmb:
+    """smbclient's stat/open_file over a dict of {share path: (bytes, mtime)}."""
+
+    def __init__(self, files):
+        self.files = files
+        self.opened = 0
+
+    def stat(self, path, **kw):
+        data, mtime = self.files[path]
+        return os.stat_result((0o100644, 0, 0, 1, 0, 0, len(data), mtime, mtime, mtime))
+
+    def open_file(self, path, mode, **kw):
+        self.opened += 1
+        return io.BytesIO(self.files[path][0])
+
+
+def test_pull_copies_only_changed(tmp_path):
+    share = share_mirror.Share.__new__(share_mirror.Share)
+    share.root, share.kw = r"\\srv\public_wiss\MSM147", {}
+    path = r"\\srv\public_wiss\MSM147\06_underway\TSG\TSG.dat"
+    share.smb = _FakeSmb({path: (b"date time\tlat\n", 1_800_000_000)})
+    local = str(tmp_path / "share" / "06_underway" / "TSG" / "TSG.dat")
+
+    assert share.get("06_underway/TSG/TSG.dat", local)
+    assert open(local, "rb").read() == b"date time\tlat\n"
+    assert os.path.getmtime(local) == 1_800_000_000
+    assert not share.get("06_underway/TSG/TSG.dat", local)       # unchanged: no copy
+    assert share.smb.opened == 1
+
+    share.smb.files[path] = (b"date time\tlat\nrow\n", 1_800_000_300)
+    assert share.get("06_underway/TSG/TSG.dat", local)
+    assert open(local, "rb").read().endswith(b"row\n")
+    assert not os.path.exists(local + ".hubpart")
