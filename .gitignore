@@ -20,3 +20,17 @@ hardware_control/ladcp.json
 
 # landing-page links to the ship's services; links.example.json shows the shape
 links.json
+
+# macOS Finder metadata
+.DS_Store
+
+# local Claude Code settings
+.claude/
+
+# LADCP/WorkHorse session transcripts and sensor log dumps from testing
+workhorse_*/
+wh_*/
+sensorlog_*.csv
+
+# reference material (manuals, photos), kept out of git
+misc/
