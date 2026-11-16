@@ -32,7 +32,8 @@
           "PISCO2",
           "PISCO3"
         ],
-        "default": "PISCO3"
+        "default": "PISCO2",
+        "description": "Which camera took the frames. It has to agree with the frame size and pixel size below - PISCO2 is 2560 px at 22.5 \u00b5m, PISCO3 is 4504 px at 17.13 \u00b5m - because it goes into the frame names, and from there into every object_id, img_file_name and sample_instrument in EcoTaxa, where only sample_instrument can be corrected afterwards. Sticky, so it holds the last run's value on this Hub: check it when the camera changes."
       },
       "lat": {
         "type": "number",
