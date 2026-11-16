@@ -14,8 +14,8 @@
       "station": {
         "type": "string",
         "title": "Station",
-        "description": "DSHIP station id, e.g. 012-01",
-        "pattern": "^\\d{3}-\\d{2}$"
+        "description": "Station identifier: the DSHIP form (012-01) where there is one, otherwise the station's own name (ENTE3). It goes into file names, the EcoTaxa project title and sample_id, so letters, digits, dot, underscore and hyphen only - no spaces or slashes.",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$"
       },
       "ctd_cast": {
         "type": "integer",
@@ -152,7 +152,7 @@
       "taxon_model": {
         "type": "string",
         "title": "Taxon ViT",
-        "description": "Model directory or HF id of the taxon stage, run on the living objects. Its labels must all be in ecotaxa_taxonomy_map.json - M181_multiclass is; ATAIIR2604_NorthSea_multiclass still lacks four.",
+        "description": "Model directory or HF id of the taxon stage, run on the living objects. Its labels must all be in ecotaxa_taxonomy_map.json - M181_multiclass is, and so is ATAIIR2604_NorthSea_multiclass, whose seven labels all resolve (checked 2026-11-16).",
         "sticky": true,
         "default": "/mnt/pisco/models/vit/M181_multiclass"
       },
@@ -169,6 +169,13 @@
         "minimum": 0,
         "default": 30000,
         "description": "The binary ViT calls 99.5% of objects not-living, and a PISCO3 cast has millions. Export only this many of them, picked at random (the same ones on a re-export); every living object is exported. The kept fraction is written to subsample.json beside the export, for scaling not-living abundances back up. Empty or 0 exports all."
+      },
+      "hub_base": {
+        "type": "string",
+        "title": "Hub base URL",
+        "description": "This Hub, as the people who open the EcoTaxa project will reach it. It is written into every object_link, so it has to resolve for them: not localhost, and not a tunnel-only address.",
+        "default": "http://10.136.78.160:5000",
+        "sticky": true
       }
     },
     "required": [
@@ -363,7 +370,9 @@
           }
         },
         "taxonomyMapPath": "/opt/pisco/tools/process_pisco_profiles/ecotaxa_taxonomy_map.json",
-        "linkBase": "http://10.11.11.110:5000",
+        "linkBase": {
+          "$param": "hub_base"
+        },
         "ctdCast": {
           "$param": "ctd_cast"
         },
