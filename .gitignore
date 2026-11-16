@@ -34,3 +34,6 @@ sensorlog_*.csv
 
 # reference material (manuals, photos), kept out of git
 misc/
+
+# setuptools build artefact of `pip install -e .`
+*.egg-info/
