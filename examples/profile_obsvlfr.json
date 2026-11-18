@@ -170,6 +170,13 @@
         "description": "This Hub, as the people who open the EcoTaxa project will reach it. It is written into every object_link, so it has to resolve for them: not localhost, and not a tunnel-only address.",
         "default": "http://10.136.78.160:5000",
         "sticky": true
+      },
+      "project_id": {
+        "type": "integer",
+        "title": "EcoTaxa project",
+        "minimum": 1,
+        "sticky": true,
+        "description": "Import into this EcoTaxa project instead of creating one per profile. Set it to gather a whole cruise in one project, where each profile becomes its own sample (sample_id is {cruise}_{station}). Empty creates a new project per profile. Sticky, so the rest of the cruise follows the first station - but it is an id, not a name, so check it when the cruise changes."
       }
     },
     "required": [
@@ -385,6 +392,9 @@
           }
         },
         "targetPath": "",
+        "projectId": {
+          "$param": "project_id"
+        },
         "projectTitle": {
           "$format": "{cruise}_{station}"
         },
