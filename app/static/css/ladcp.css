@@ -106,3 +106,8 @@
 .transcript .tx { color: #93c5fd; } .transcript .info { color: #a3a3a3; font-style: italic; }
 .console-form { display: flex; gap: .5rem; }
 .console-form input { flex: 1; font-family: monospace; }
+
+.yoyo { border-left: 4px solid var(--accent); padding: .6rem .8rem; margin: .6rem 0; background: var(--bg); border-radius: 8px; }
+.yoyo-row { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
+.yoyo-suggestion { margin-top: .5rem; padding: .5rem .7rem; border-radius: 8px; border-left: 4px solid var(--warn);
+	display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }

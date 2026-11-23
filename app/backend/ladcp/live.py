@@ -28,6 +28,51 @@ HISTORY_STEP = 10           # seconds between history entries
 HISTORY_SPAN = 6 * 3600     # the longest window the page offers
 
 
+class YoyoDetector:
+    """Spots the turn of a yoyo cast: the package heaved a long way back
+    towards the surface, then lowered again. The depth is the integral
+    of the vertical speed, so it drifts; the test is relative — the heave
+    must take back most of the depth gained since the last turn — and it
+    only ever suggests. The operator splits (or dismisses) on the page.
+
+    min_heave_m     the heave must be at least this long
+    return_fraction ... and take back at least this share of the depth
+    min_lower_m     lowering by this much after the shallowest point is
+                    the turn (holding at 20 m, then going down again)
+    """
+
+    def __init__(self, min_heave_m=150, return_fraction=0.6, min_lower_m=30):
+        self.min_heave_m = min_heave_m
+        self.return_fraction = return_fraction
+        self.min_lower_m = min_lower_m
+        self.suggestion = None
+        self.rebase(0.0)
+
+    def rebase(self, depth, time=None):
+        """Start looking afresh from here (the start, a split, a dismissal)."""
+        self.base = self.peak = self.trough = depth
+        self.trough_time = time
+        self.suggestion = None
+
+    def feed(self, time, depth):
+        if depth is None or self.suggestion is not None:
+            return self.suggestion
+        if depth > self.peak:
+            self.peak = self.trough = depth
+            self.trough_time = time
+            return None
+        if depth < self.trough:
+            self.trough, self.trough_time = depth, time
+        heave = self.peak - self.trough
+        if (heave >= self.min_heave_m
+                and heave >= self.return_fraction * (self.peak - self.base)
+                and depth - self.trough >= self.min_lower_m):
+            self.suggestion = {"turn_time": self.trough_time, "turn_depth": round(self.trough, 1),
+                               "peak_depth": round(self.peak, 1), "depth_now": round(depth, 1),
+                               "detected": time}
+        return self.suggestion
+
+
 class LiveBuffer:
     def __init__(self, keep=3000, threshold=25):
         self.records = collections.deque(maxlen=keep)
@@ -43,6 +88,7 @@ class LiveBuffer:
         self.prev_time = None
         self.first_received = None
         self.last_received = None
+        self.yoyo = YoyoDetector()
 
     def note_error(self, text):
         with self.lock:
@@ -89,6 +135,7 @@ class LiveBuffer:
             if self.first_received is None:
                 self.first_received = now
             self.last_received = now
+            self.yoyo.feed(t if t is not None else now, self.depth)
 
     def snapshot(self, since=0, limit=1500):
         with self.lock:

@@ -184,3 +184,19 @@ def test_pull_copies_only_changed(tmp_path):
     assert share.get("06_underway/TSG/TSG.dat", local)
     assert open(local, "rb").read().endswith(b"row\n")
     assert not os.path.exists(local + ".hubpart")
+
+
+def test_cast_corrections_shift_later_casts():
+    events = [_event(f"MSM147_4-{i}", i, "in the water", f"2026-10-16 {i}:00") for i in (12, 13, 14)]
+    corrections = dship.parse_corrections("MSM147_4-13+1")
+    assert corrections == {"MSM147_4-13": 1}
+    ops = {o["name"]: o for o in dship.operations(events, "CTD", None, corrections)}
+    assert ops["MSM147_4-12"]["cast"] == 1
+    assert ops["MSM147_4-13"]["casts"] == [2, 3]
+    assert ops["MSM147_4-14"]["cast"] == 4
+    assert dship.summary(ops["MSM147_4-13"])["casts"] == [2, 3]
+    assert dship.format_corrections(dship.parse_corrections(" MSM147_4-13 +1; MSM147_4-14-1")) == \
+        "MSM147_4-13+1, MSM147_4-14-1"
+    import pytest
+    with pytest.raises(ValueError):
+        dship.parse_corrections("MSM147_4-13")

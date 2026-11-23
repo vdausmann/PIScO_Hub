@@ -34,6 +34,7 @@
 		<button id="btn-erase" title="Erase the recorders (asks if files are not downloaded)">Erase</button>
 		<span class="start-group">
 			<label>Deck box <input id="deck-voltage" type="text" inputmode="decimal" size="5" placeholder="V"></label>
+			<label title="Watch for the turns of a yoyo cast and suggest a new profile for each part"><input id="yoyo" type="checkbox"> Yoyo cast</label>
 			<button id="btn-start" class="primary">Start</button>
 		</span>
 		<button id="btn-stop" title="Break the instruments, no download">Stop only</button>
@@ -49,6 +50,21 @@
 			<button id="op-confirm-no">Cancel</button>
 		</div>
 		<ul id="op-messages" class="messages"></ul>
+	</section>
+
+	<section id="yoyo-panel" class="yoyo hidden">
+		<div class="yoyo-row">
+			<b>Profiles this cast</b> <span id="yoyo-segments"></span>
+			<button id="btn-split" title="Start the next profile now: the serial capture moves to a new folder, the instruments keep pinging">Split: new profile</button>
+		</div>
+		<div id="yoyo-suggestion" class="yoyo-suggestion hidden">
+			<span id="yoyo-suggestion-text"></span>
+			<button id="btn-split-turn" class="primary">Split here</button>
+			<button id="btn-turn-dismiss">Not a new cast</button>
+		</div>
+		<p class="hint">A split changes nothing on the instruments: the recorder keeps one file, downloaded
+			under profile <b id="yoyo-recorder">—</b> at stop. The number comes from DSHIP's next CTD operation;
+			without one it is this cast + 1, recorded as a cast correction (DSHIP_CAST_CORRECTIONS).</p>
 	</section>
 
 	<section id="instruments" class="instruments"></section>

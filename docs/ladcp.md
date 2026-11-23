@@ -131,3 +131,28 @@ operation is kept with the deployment and as `<profile>/dship.json`.
 Every CTD operation counts, aborted ones and ones that never went in too,
 so numbers can be skipped. Without DSHIP the profile counter applies as
 before.
+
+## Yoyo casts
+
+Tick **Yoyo cast** before Start (or while deployed) and the Hub watches
+the depth estimate for turns: a heave of at least 150 m that takes back
+most of the depth gained since the last turn, followed by lowering again
+by 30 m. It then suggests a split, with the turn marked on the depth plot.
+**Split here** (or **Split: new profile** at any time) starts the next
+profile; **Not a new cast** looks for the next turn instead.
+
+A split changes nothing on the instruments. The serial capture continues
+in `<new profile>/serial/`; the recorder keeps writing the one file named
+after the profile the cast started with, and Stop & download stores it
+in that folder. The new profile's `dship.json` says where it was split
+from (`split_from`, `turn_utc`) and where the recorder file is
+(`recorder_file_in`).
+
+The new number is DSHIP's next CTD operation if one exists by then. If
+DSHIP still shows the same operation, the page asks first: the split then
+becomes the current cast + 1, and `<operation>+1` is added to
+`DSHIP_CAST_CORRECTIONS` so later casts are numbered one higher as well.
+Confirm only if the CTD really started a new cast (a new hex file); this
+is what went wrong on MSM147 at 4-13 (hex 018 + 019 in one operation),
+which shifted every later LADCP profile by one.
+

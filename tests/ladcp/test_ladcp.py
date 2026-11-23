@@ -427,3 +427,78 @@ def test_live_history_is_thinned_and_sent_once(monkeypatch):
     assert first["history"][0]["eim"] == [80, 80, 80]
     assert "ei" not in first["history"][0]
     assert buf.snapshot(first["seq"])["history"] == []
+
+
+# ---- yoyo casts ------------------------------------------------------------------
+
+def _feed(det, depths, dt=10):
+    out = None
+    for i, d in enumerate(depths):
+        out = det.feed(i * dt, d) or out
+    return out
+
+
+def test_yoyo_turn_is_suggested_after_a_long_heave_and_lowering():
+    from app.backend.ladcp.live import YoyoDetector
+    down = list(range(0, 1001, 10))
+    up = list(range(1000, 19, -10))
+    hold = [20] * 30                                   # waiting at SL=20m
+    again = list(range(20, 101, 10))
+    sg = _feed(YoyoDetector(), down + up + hold + again)
+    assert sg is not None
+    assert sg["peak_depth"] == 1000 and sg["turn_depth"] == 20
+    # the turn is where it was shallowest, not when the lowering was noticed
+    assert sg["turn_time"] == (len(down) + len(up) - 1) * 10
+
+
+def test_yoyo_ignores_an_ordinary_cast_and_bottom_wiggles():
+    from app.backend.ladcp.live import YoyoDetector
+    # a normal cast: down, up, on deck
+    assert _feed(YoyoDetector(), list(range(0, 1001, 10)) + list(range(1000, -1, -10))) is None
+    # heaving 100 m near the bottom and lowering again is not a turn
+    wiggle = list(range(0, 1001, 10)) + list(range(1000, 899, -10)) + list(range(900, 1001, 10))
+    assert _feed(YoyoDetector(), wiggle) is None
+    # a long heave that stays deep (1000 -> 700 of 1000 m) is not back near the surface
+    mid = list(range(0, 1001, 10)) + list(range(1000, 699, -10)) + list(range(700, 801, 10))
+    assert _feed(YoyoDetector(), mid) is None
+
+
+def test_yoyo_rebase_after_a_dismissal():
+    from app.backend.ladcp.live import YoyoDetector
+    det = YoyoDetector()
+    cycle = list(range(0, 1001, 10)) + list(range(1000, 19, -10)) + list(range(20, 101, 10))
+    assert _feed(det, cycle) is not None
+    det.rebase(100, 0)
+    assert det.suggestion is None
+    assert det.feed(1, 150) is None
+
+
+def test_split_moves_the_serial_capture_and_keeps_the_recorder_profile(rig):
+    import json
+    service, sim, tmp_path = rig
+    service.start(profile=20, cast={"cast": 20, "operation": "X_4-13", "station": "004-13",
+                                    "source": "dship"}, yoyo=True)
+    op = _wait(service)
+    assert op.state == "done", op.as_dict()
+    time.sleep(1.5)
+    out = service.split(21, {"cast": 21, "operation": "X_4-13", "source": "split"}, turn_time=None)
+    assert out["profile"] == 21 and out["recorder_profile"] == 20
+    with pytest.raises(ValueError):
+        service.split(20)                              # already part of this cast
+    yo = service.yoyo_status()
+    assert yo["enabled"] and [s["profile"] for s in yo["segments"]] == [20, 21]
+    time.sleep(1.5)
+    data = tmp_path / "data" / "ladcp" / "TEST"
+    info = json.loads((data / "021" / "dship.json").read_text())
+    assert info["split_from"] == "020" and info["recorder_file_in"] == "020"
+    assert len(os.listdir(data / "021" / "serial")) == 2
+    assert all(os.path.getsize(data / "021" / "serial" / f) > 0 for f in os.listdir(data / "021" / "serial"))
+
+    service.stop(download=True)
+    op = _wait(service)
+    assert op.state == "done", op.as_dict()
+    # the recorder file keeps its name and goes with the profile the cast started as,
+    # and the dship.json there does not push it into 020_1
+    assert op.result["folder"].endswith("020")
+    assert sorted(f for f in os.listdir(op.result["folder"]) if f.endswith(".000")) == \
+        ["020DN000.000", "020UP000.000"]

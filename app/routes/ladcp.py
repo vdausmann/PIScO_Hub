@@ -107,7 +107,65 @@ def start():
             profile = nxt["cast"]
             cast = {k: nxt.get(k) for k in ("cast", "operation", "station", "source")}
     return jsonify(_service().start(force=bool(body.get("force")), deck_voltage=voltage,
-                                    profile=profile, cast=cast).as_dict()), 202
+                                    profile=profile, cast=cast,
+                                    yoyo=bool(body.get("yoyo"))).as_dict()), 202
+
+
+@ladcp_bp.route("/yoyo", methods=["POST"])
+@login_required
+def set_yoyo():
+    _service().set_yoyo(bool(_body().get("enabled")))
+    return jsonify(_service().yoyo_status())
+
+
+@ladcp_bp.route("/yoyo/dismiss", methods=["POST"])
+@login_required
+def dismiss_turn():
+    _service().dismiss_turn()
+    return jsonify(_service().yoyo_status())
+
+
+@ladcp_bp.route("/split", methods=["POST"])
+@login_required
+def split():
+    """A new profile for the next part of a yoyo cast. Its number: the
+    next CTD operation if DSHIP has one by now; if not, DSHIP logs the
+    yoyo as one operation while the CTD starts a new cast, so this one is
+    the current cast + 1 and the operation gets a cast correction
+    (DSHIP_CAST_CORRECTIONS) — after the operator confirms (`force`)."""
+    from ..backend import dship
+    body = _body()
+    service = _service()
+    deployed = service.state.get("deployed") or {}
+    if not deployed:
+        return jsonify({"error": "the ADCPs are not deployed; there is nothing to split"}), 400
+    current = int(deployed["profile"])
+    current_op = (deployed.get("cast") or {}).get("operation")
+    turn_time = body.get("turn_time")
+    profile = body.get("profile")
+    if profile not in (None, ""):
+        # a number typed on the page: no DSHIP bookkeeping
+        return jsonify(service.split(int(profile), None, turn_time))
+    nxt = _next_cast(refresh=True)
+    if nxt is not None and nxt.get("operation") and nxt["operation"] != current_op \
+            and nxt["cast"] > current:
+        cast = {k: nxt.get(k) for k in ("cast", "operation", "station", "source")}
+        return jsonify(service.split(nxt["cast"], cast, turn_time))
+    number = current + 1
+    ds = dship.service(current_app)
+    if ds is None or not current_op:
+        return jsonify(service.split(number, None, turn_time))
+    if not body.get("force"):
+        return jsonify({"needs_confirmation": True, "profile": number, "operation": current_op,
+                        "message": f"DSHIP has no new CTD operation since {current_op}. Split as "
+                                   f"cast {number}? Only if the CTD started a new cast (new hex "
+                                   f"file): this records '{current_op}+1' in DSHIP_CAST_CORRECTIONS, "
+                                   "so every later cast is numbered one higher too."}), 409
+    corrections = ds.add_correction(current_op, 1)
+    cast = {"cast": number, "operation": current_op,
+            "station": (deployed.get("cast") or {}).get("station"), "source": "split",
+            "correction": corrections}
+    return jsonify(dict(service.split(number, cast, turn_time), corrections=corrections))
 
 
 @ladcp_bp.route("/stop", methods=["POST"])

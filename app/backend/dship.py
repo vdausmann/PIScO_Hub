@@ -36,7 +36,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
-from .models import GlobalSetting
+from .models import GlobalSetting, db
 
 COLUMNS = {
     "time": "ac_a_timestamp", "action": "ac_ad_name", "operation": "ac_do_name",
@@ -150,11 +150,37 @@ class Client:
         return events
 
 
-def operations(events, cast_device="CTD", device_ops=None):
+def parse_corrections(text):
+    """DSHIP_CAST_CORRECTIONS: 'MSM147_4-13+1, MSM147_9-2+1' — operation
+    4-13 took one CTD cast number more than DSHIP shows (a yoyo whose
+    segments DSHIP logged as one operation, but the CTD wrote as two hex
+    files), so every later cast is one higher. -1 says an operation had
+    no cast of its own (it shares the next one's number)."""
+    out = {}
+    for part in (text or "").replace(";", ",").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        # the operation ends in <station>-<operation>, so 'MSM147_4-13' alone
+        # is not read as operation MSM147_4 with -13
+        m = re.fullmatch(r"(?P<op>.+?_\d+-\d+)\s*(?P<n>[+-]\s*\d+)", part)
+        if not m:
+            raise ValueError(f"cannot read the cast correction {part!r}: write it as MSM147_4-13+1")
+        out[m["op"].strip()] = out.get(m["op"].strip(), 0) + int(m["n"].replace(" ", ""))
+    return out
+
+
+def format_corrections(corrections):
+    return ", ".join(f"{op}{n:+d}" for op, n in corrections.items() if n)
+
+
+def operations(events, cast_device="CTD", device_ops=None, corrections=None):
     """Device operations, oldest first, with station, in-water / max-depth
     / on-deck events and, for the cast device, the cast number. From
     DSHIP's list of operations when given (it also holds operations
-    without events), else from the events alone."""
+    without events), else from the events alone. `corrections`
+    (parse_corrections) adds cast numbers DSHIP does not know about."""
+    corrections = corrections or {}
     ops = {}
     for d in device_ops or []:
         ops[d["name"]] = {"name": d["name"], "device": d["device"], "device_name": d["device_name"],
@@ -184,6 +210,7 @@ def operations(events, cast_device="CTD", device_ops=None):
                             or "problem" in (e["action"] or "").lower() for e in op["events"]) \
             or (op["on_deck"] is not None and op["max_depth"] is None)
         op["cast"] = None
+        op["casts"] = []
         result.append(op)
     # DSHIP's operation ids grow as operations are created: that is the
     # cast order, also for operations that never got an event.
@@ -193,6 +220,9 @@ def operations(events, cast_device="CTD", device_ops=None):
         if op["device"] == cast_device and (device_ops is not None or op["in_water"] is not None):
             n += 1
             op["cast"] = n
+            extra = corrections.get(op["name"], 0)
+            op["casts"] = list(range(n, n + 1 + max(extra, 0)))
+            n += extra
     result.sort(key=lambda o: (o["start"] is None, o["start"] or 0, o["id"] or 0))
     # A yoyo cast stays in the water between operations, so it has no
     # on-deck event; the next operation of the same device starting is
@@ -217,6 +247,7 @@ def summary(op):
     return {
         "operation": op["name"], "station": op["station"], "cruise": op["cruise"],
         "device": op["device"], "device_name": op["device_name"], "cast": op["cast"],
+        "casts": op.get("casts") or ([op["cast"]] if op["cast"] is not None else []),
         "aborted": op["aborted"],
         "in_water": event(op["in_water"]), "max_depth": event(op["max_depth"]),
         "on_deck": event(op["on_deck"]),
@@ -253,6 +284,7 @@ class DshipService:
             self.password = GlobalSetting.get("DSHIP_PASSWORD", "anonymous") or "anonymous"
             self.device = GlobalSetting.get("DSHIP_CAST_DEVICE", "CTD") or "CTD"
             self.interval = float(GlobalSetting.get("DSHIP_POLL_INTERVAL", 120) or 120)
+            self.corrections = self._read_corrections()
             self.directory = os.path.join(
                 GlobalSetting.get("DATA_ROOT", os.path.join(app.config["HUB_ROOT"], "data")), "dship")
         self.lock = threading.Lock()
@@ -268,6 +300,41 @@ class DshipService:
         app.extensions["dship"] = self
 
     # ---- reading ----
+    def _read_corrections(self):
+        """DSHIP_CAST_CORRECTIONS, re-read on every refresh so a change on
+        the settings page needs no restart. A setting that cannot be read
+        is reported and ignored rather than stopping the poll."""
+        try:
+            corrections = parse_corrections(GlobalSetting.get("DSHIP_CAST_CORRECTIONS", "") or "")
+            self.corrections_error = None
+            return corrections
+        except ValueError as e:
+            self.corrections_error = str(e)
+            return {}
+
+    def _renumber(self):
+        with self.app.app_context():
+            corrections = self._read_corrections()
+        with self.lock:
+            self.corrections = corrections
+            self.ops = operations(self.events, self.device, self.device_ops, corrections)
+
+    def add_correction(self, operation, extra=1):
+        """Record that `operation` took `extra` more cast numbers than DSHIP
+        shows, and renumber. Returns the new setting's text."""
+        with self.app.app_context():
+            corrections = self._read_corrections()
+            corrections[operation] = corrections.get(operation, 0) + int(extra)
+            text = format_corrections(corrections)
+            setting = GlobalSetting.query.get("DSHIP_CAST_CORRECTIONS")
+            if setting is None:
+                setting = GlobalSetting(key="DSHIP_CAST_CORRECTIONS", setting_type="str")
+                db.session.add(setting)
+            setting.value = text
+            db.session.commit()
+        self._renumber()
+        return text
+
     def _run(self):
         while True:
             try:
@@ -283,8 +350,11 @@ class DshipService:
                 raise DshipError("DSHIP has no current expedition")
             events = client.action_log(expedition["id"])
             device_ops = client.device_operations(expedition["id"])
-        ops = operations(events, self.device, device_ops)
+        with self.app.app_context():
+            corrections = self._read_corrections()
+        ops = operations(events, self.device, device_ops, corrections)
         with self.lock:
+            self.corrections = corrections
             self.expedition, self.events, self.ops = expedition, events, ops
             self.device_ops = device_ops
             self.fetched_at, self.error = time.time(), None
@@ -322,7 +392,7 @@ class DshipService:
         self.expedition, self.events = data.get("expedition"), data.get("events") or []
         self.fetched_at = data.get("fetched_at")
         self.device_ops = data.get("device_operations")
-        self.ops = operations(self.events, self.device, self.device_ops)
+        self.ops = operations(self.events, self.device, self.device_ops, self.corrections)
 
     # ---- looking up ----
     def status(self):
@@ -335,6 +405,8 @@ class DshipService:
                 datetime.fromtimestamp(self.fetched_at, timezone.utc).isoformat(timespec="seconds"),
                 "error": self.error, "events": len(self.events), "operations": len(self.ops),
                 "cast_device": self.device,
+                "cast_corrections": format_corrections(self.corrections),
+                "cast_corrections_error": self.corrections_error,
             }
 
     def list(self, device=None):

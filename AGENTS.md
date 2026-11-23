@@ -340,7 +340,13 @@ the ship's DSHIP action log read-only, as the anonymous user its web
 interface uses, every `DSHIP_POLL_INTERVAL` seconds, and keeps a snapshot
 under `<DATA_ROOT>/dship/`. Device operations (`MSM147_2-9`) become a
 station written `002-09`; operations of `DSHIP_CAST_DEVICE` (CTD) are
-numbered in time order as CTD casts, aborted ones included.
+numbered in time order as CTD casts, aborted ones included. An operation
+without an on-deck event (a yoyo segment the CTD stays in the water for)
+ends where the next operation of the same device starts. When the CTD
+starts a cast that DSHIP logs as no operation of its own (a new hex file
+within one yoyo operation), `DSHIP_CAST_CORRECTIONS` puts it back:
+`MSM147_4-13+1` gives 4-13 two cast numbers and shifts every later cast;
+DSHIP's operation names stay as they are.
 `GET /dship/at?time=…` returns the operation a recording belongs to — it
 may start up to 45 min before the device goes in — with its events
 (in the water, max depth, on deck: time, position, water depth, rope

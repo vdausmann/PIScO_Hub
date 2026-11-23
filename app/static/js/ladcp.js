@@ -92,7 +92,68 @@ function renderHeader() {
 		$(id).disabled = running;
 	renderMode(running || Boolean(st.deployed));
 	$("data-dir").textContent = status.data_dir;
+	renderYoyo();
 }
+
+// ---- yoyo casts -------------------------------------------------------------------
+function renderYoyo() {
+	const yo = status.yoyo;
+	const panel = $("yoyo-panel");
+	if (!yo) {
+		panel.classList.add("hidden");
+		return;
+	}
+	$("yoyo").checked = yo.enabled;
+	panel.classList.toggle("hidden", !yo.enabled && yo.segments.length < 2);
+	$("yoyo-segments").textContent = yo.segments.map((s) =>
+		pad3(s.profile) + (s.cast && s.cast.operation ? ` (${s.cast.operation})` : "")).join(" → ");
+	$("yoyo-recorder").textContent = pad3(yo.recorder_profile);
+	$("btn-split").disabled = busy();
+	const sg = yo.suggestion;
+	$("yoyo-suggestion").classList.toggle("hidden", !sg);
+	if (sg) {
+		$("yoyo-suggestion-text").textContent =
+			`Turn at ${hhmmss(sg.turn_time)}: heaved from ~${fmt(sg.peak_depth, 0)} m to ~${fmt(sg.turn_depth, 0)} m, ` +
+			`now lowering again (~${fmt(sg.depth_now, 0)} m). A new cast?`;
+	}
+}
+
+async function splitCast(turnTime) {
+	let body = {turn_time: turnTime ?? null};
+	for (;;) {
+		const res = await fetch(BASE + "/split", {method: "POST", credentials: "same-origin",
+			headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+		let out = null;
+		try { out = await res.json(); } catch (_) { /* empty */ }
+		if (res.status === 409 && out && out.needs_confirmation) {
+			if (!confirm(out.message)) return;
+			body = {...body, force: true};
+			continue;
+		}
+		if (!res.ok) { alert((out && out.error) || `${res.status} ${res.statusText}`); return; }
+		break;
+	}
+	refreshStatus();
+}
+
+$("btn-split").onclick = () => {
+	if (confirm("Start a new profile for the next part of the cast now?")) splitCast(null);
+};
+$("btn-split-turn").onclick = () => {
+	const sg = status && status.yoyo && status.yoyo.suggestion;
+	splitCast(sg ? sg.turn_time : null);
+};
+$("btn-turn-dismiss").onclick = async () => {
+	try { await post("/yoyo/dismiss"); } catch (e) { alert(e.message); }
+	refreshStatus();
+};
+$("yoyo").onchange = async () => {
+	// before a start it only travels with the start; while deployed it switches the detector
+	if (status && status.state.deployed) {
+		try { await post("/yoyo", {enabled: $("yoyo").checked}); } catch (e) { alert(e.message); }
+		refreshStatus();
+	}
+};
 
 const ICONS = {pending: "○", running: "◐", done: "✓", failed: "✗", skipped: "–"};
 
@@ -140,7 +201,7 @@ $("btn-erase").onclick = () => {
 };
 $("btn-start").onclick = () => {
 	const v = $("deck-voltage").value.trim();
-	act("/start", {deck_voltage: v || null});
+	act("/start", {deck_voltage: v || null, yoyo: $("yoyo").checked});
 };
 $("btn-stop").onclick = () => {
 	if (confirm("Stop the ADCPs without downloading?")) act("/stop", {download: false});
@@ -491,6 +552,20 @@ function drawDepth() {
 	ctx.lineWidth = 1;
 	ctx.fillStyle = "#a16207";
 	for (const r of recs) if (r.target) ctx.fillRect(x(r.received) - 1.5, y((r.depth || 0) + r.target) - 1.5, 3, 3);
+	// splits (solid) and a suggested turn (dashed)
+	const yo = status && status.yoyo;
+	if (yo) {
+		const mark = (t, dashed) => {
+			if (!t || t < now - win) return;
+			ctx.save();
+			ctx.strokeStyle = css("--warn");
+			if (dashed) ctx.setLineDash([4, 4]);
+			ctx.beginPath(); ctx.moveTo(x(t), M.t); ctx.lineTo(x(t), h - M.b); ctx.stroke();
+			ctx.restore();
+		};
+		yo.segments.slice(1).forEach((s) => mark(s.started, false));
+		if (yo.suggestion) mark(yo.suggestion.turn_time, true);
+	}
 	ctx.fillStyle = css("--text");
 	ctx.textAlign = "left";
 	ctx.textBaseline = "top";

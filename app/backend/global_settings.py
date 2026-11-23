@@ -31,6 +31,8 @@ def seed_settings(app):
         'DSHIP_PASSWORD': {'value': 'anonymous', 'type': 'str', 'desc': 'Password for DSHIP_USER.'},
         'DSHIP_CAST_DEVICE': {'value': 'CTD', 'type': 'str',
                               'desc': 'DSHIP device short name PIScO is mounted on; its operations are numbered as casts.'},
+        'DSHIP_CAST_CORRECTIONS': {'value': '', 'type': 'str',
+                                   'desc': "CTD casts DSHIP does not show, as operation+count: 'MSM147_4-13+1' says operation 4-13 took two cast numbers (a yoyo the CTD wrote as two hex files), so every later cast is one higher. Comma separated; -1 for an operation without a cast of its own. The LADCP page's Split adds entries here."},
         'DSHIP_POLL_INTERVAL': {'value': '120', 'type': 'int', 'desc': "Seconds between reads of DSHIP's action log."},
         'SHARE_MIRROR_URL': {'value': '', 'type': 'str',
                              'desc': "Folder on the ship's SMB share the instrument data and their cast overviews are copied to, e.g. //192.168.100.34/public_wiss/MSM147. Empty means no copying (the overviews are still written to <DATA_ROOT>/overview). Restart the Hub after a change."},

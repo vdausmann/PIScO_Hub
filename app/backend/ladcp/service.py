@@ -224,6 +224,7 @@ class LadcpService:
                 "operation": self.operation.as_dict() if self.operation else None,
                 "instruments": [i.as_dict(i.name in active) for i in self.instruments.values()],
                 "history": self.history[-20:],
+                "yoyo": self.yoyo_status(),
             }
 
     def live(self, since=None):
@@ -295,13 +296,14 @@ class LadcpService:
                 [f"Erase {i.name}" for i in self._enabled()]
         return self._launch("erase", steps, self._erase, force)
 
-    def start(self, force=False, deck_voltage=None, profile=None, cast=None):
+    def start(self, force=False, deck_voltage=None, profile=None, cast=None, yoyo=False):
         """`cast`: the DSHIP CTD operation the profile number came from
-        (dship.next_cast), recorded with the deployment."""
+        (dship.next_cast), recorded with the deployment. `yoyo`: watch for
+        the turns of a yoyo cast and suggest splitting it (see split)."""
         steps = ["Check clock"] + [f"Contact {i.name}" for i in self._enabled()] + \
                 ["Assign roles", "Program secondary", "Program primary", "Start secondary",
                  "Start primary", "Live data"]
-        return self._launch("start", steps, self._start, force, deck_voltage, profile, cast)
+        return self._launch("start", steps, self._start, force, deck_voltage, profile, cast, yoyo)
 
     def stop(self, download=True):
         steps = ["Stop primary", "Stop secondary", "Assign roles"]
@@ -481,7 +483,7 @@ class LadcpService:
         op.step(label, "done", f"{inst.name} as {inst.role}, {cfgmod.deployment_name(profile, orientation)}")
         return readback
 
-    def _start(self, op, force, deck_voltage, profile, cast=None):
+    def _start(self, op, force, deck_voltage, profile, cast=None, yoyo=False):
         if self.state.get("last_action") == "start" and not force:
             raise NeedsConfirmation("the last action was a START — the ADCPs may be running "
                                     "already. Start them again?")
@@ -507,6 +509,9 @@ class LadcpService:
         # failure halfway is not mistaken for "nothing happened".
         self.state.update(profile=number, last_action="start", deck_voltage=deck_voltage,
                           deployed={"profile": number, "started": _now(), "cast": cast,
+                                    # the recorder file keeps this number through splits
+                                    "recorder_profile": number, "yoyo": bool(yoyo),
+                                    "segments": [{"profile": number, "cast": cast, "started": _now()}],
                                     "instruments": {i.name: {"role": i.role,
                                                              "orientation": i.info.get("orientation"),
                                                              "serial": i.info.get("serial")}
@@ -515,10 +520,7 @@ class LadcpService:
         if cast:
             # Which CTD cast this profile is, beside its data, so the cast
             # and the LADCP files can be found from each other.
-            base = os.path.join(self.data_dir(), f"{number:03d}")
-            os.makedirs(base, exist_ok=True)
-            with open(os.path.join(base, "dship.json"), "w") as f:
-                json.dump(cast, f, indent=2)
+            self._write_cast(number, cast)
             op.say(f"Profile {number:03d} is CTD cast {cast.get('cast')}"
                    + (f" ({cast['operation']}, station {cast['station']})" if cast.get("operation")
                       else " (predicted: DSHIP has no open CTD operation yet)"), "info")
@@ -555,6 +557,91 @@ class LadcpService:
         else:
             op.say(f"{primary.name} started on its own (no sync).", "info")
         return {"profile": number, "readback": readback}
+
+    def _write_cast(self, number, cast):
+        base = os.path.join(self.data_dir(), f"{int(number):03d}")
+        os.makedirs(base, exist_ok=True)
+        with open(os.path.join(base, "dship.json"), "w") as f:
+            json.dump(cast, f, indent=2)
+
+    # ---- yoyo casts ----
+    def _yoyo_source(self):
+        """The instrument whose depth the turn detector follows: the
+        primary (down-looker) if it streams, else any that does."""
+        streaming = [i for i in self.instruments.values() if i.live is not None and i.reader]
+        for inst in streaming:
+            if inst.role in ("primary", "single"):
+                return inst
+        return streaming[0] if streaming else None
+
+    def yoyo_status(self):
+        deployed = self.state.get("deployed") or {}
+        if not deployed:
+            return None
+        source = self._yoyo_source()
+        return {"enabled": bool(deployed.get("yoyo")),
+                "suggestion": source.live.yoyo.suggestion if source and deployed.get("yoyo") else None,
+                "source": source.name if source else None,
+                "segments": deployed.get("segments") or [],
+                "recorder_profile": deployed.get("recorder_profile", deployed.get("profile"))}
+
+    def set_yoyo(self, on):
+        with self.lock:
+            deployed = self.state.get("deployed")
+            if not deployed:
+                raise ValueError("the ADCPs are not deployed")
+            deployed["yoyo"] = bool(on)
+            self._rebase_turns()
+            self._save_state()
+
+    def _rebase_turns(self):
+        for inst in self.instruments.values():
+            if inst.live is not None:
+                inst.live.yoyo.rebase(inst.live.depth, inst.live.prev_time)
+
+    def dismiss_turn(self):
+        """Not a new cast: look for the next turn from here."""
+        with self.lock:
+            self._rebase_turns()
+
+    def split(self, profile, cast=None, turn_time=None):
+        """Start a new profile without touching the instruments: the
+        serial capture goes on in <profile>/serial/, while the recorder
+        keeps writing its one file, named after the profile the cast
+        started with and downloaded there at stop. Breaking into the
+        WorkHorses mid-cast, over the cable, is not worth the risk."""
+        with self.lock:
+            if self._busy():
+                raise Busy(f"'{self.operation.kind}' is still running")
+            deployed = self.state.get("deployed")
+            if not deployed:
+                raise ValueError("the ADCPs are not deployed; there is nothing to split")
+            old = int(deployed["profile"])
+            number = int(profile)
+            used = {int(s["profile"]) for s in deployed.get("segments") or []} | {old}
+            if number in used:
+                raise ValueError(f"profile {number:03d} is already part of this cast")
+            readers = [i for i in self.instruments.values() if i.reader is not None]
+            for inst in readers:
+                self._stop_reader(inst)
+                self._start_reader(inst, number)
+            recorder = int(deployed.get("recorder_profile", old))
+            record = dict(cast or {}, split_from=f"{old:03d}",
+                          turn_utc=None if turn_time is None else
+                          datetime.fromtimestamp(turn_time, timezone.utc).isoformat(timespec="seconds"),
+                          split_utc=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                          recorder_file_in=f"{recorder:03d}")
+            self._write_cast(number, record)
+            deployed.setdefault("segments", []).append(
+                {"profile": number, "cast": cast, "started": _now(), "turn_utc": record["turn_utc"]})
+            deployed.update(profile=number, cast=cast)
+            self.state["profile"] = number
+            self._rebase_turns()
+            self._save_state()
+            for inst in readers:
+                inst.transcript.add("info", f"split: profile {old:03d} -> {number:03d}; nothing sent")
+            return {"profile": number, "split_from": old, "recorder_profile": recorder,
+                    "serial": [i.recording for i in readers]}
 
     def _start_one(self, inst, start_command, profile):
         inst.live = LiveBuffer(threshold=self.config["bottom_threshold"])
@@ -624,7 +711,9 @@ class LadcpService:
 
     def _stop(self, op, download):
         deployed = self.state.get("deployed") or {}
-        profile = deployed.get("profile") or self.state["profile"]
+        # After a yoyo split the recorder file still carries the number
+        # the cast started with; it is downloaded under that one.
+        profile = deployed.get("recorder_profile") or deployed.get("profile") or self.state["profile"]
         order = sorted(self._enabled(), key=lambda i: {"primary": 0, "single": 0}.get(
             i.role or (deployed.get("instruments", {}).get(i.name) or {}).get("role"), 1))
         stopped = []
@@ -778,7 +867,8 @@ class LadcpService:
         base = os.path.join(self.data_dir(), f"{int(profile):03d}")
         candidate, n = base, 0
         while True:
-            names = [f for f in os.listdir(candidate) if f != "serial"] if os.path.isdir(candidate) else []
+            names = [f for f in os.listdir(candidate) if f not in ("serial", "dship.json")] \
+                if os.path.isdir(candidate) else []
             if not names:
                 return candidate
             n += 1
