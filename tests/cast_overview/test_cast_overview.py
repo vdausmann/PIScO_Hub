@@ -42,6 +42,38 @@ def test_match_takes_the_cast_overlapped_most():
     assert cast_overview.match(ops, _ms("2026-10-15 08:00") / 1000) is None
 
 
+def _event(name, op_id, action, t, comment=""):
+    return {"time": _ms(t), "action": action, "operation": name, "operation_id": op_id,
+            "device": "CTD", "device_name": "CTD", "comment": comment, "lat": 32.66,
+            "lon": -17.43, "water_depth_m": 2960.0, "winch": None, "rope_m": None}
+
+
+def test_yoyo_segment_without_on_deck_ends_at_the_next_operation():
+    # MSM147 8-10 .. 8-12: the CTD stays in the water between segments,
+    # so only the last one has an on-deck event.
+    events = [
+        _event("MSM147_8-10", 1, "in the water", "2026-10-22 18:24"),
+        _event("MSM147_8-10", 1, "information", "2026-10-22 19:50", "SL = 20m"),
+        _event("MSM147_8-11", 2, "information", "2026-10-22 19:51", "Start CTD Schnitt"),
+        _event("MSM147_8-11", 2, "information", "2026-10-22 21:50", "Ende CTD Schnitt"),
+        _event("MSM147_8-12", 3, "information", "2026-10-22 21:51", "Start CTD Schnitt"),
+        _event("MSM147_8-12", 3, "on deck", "2026-10-22 23:39"),
+        _event("MSM147_8-13", 4, "in the water", "2026-10-23 03:52"),
+    ]
+    ops = cast_overview.cast_ops(dship.operations(events, "CTD", [
+        {"name": f"MSM147_8-1{i}", "device": "CTD", "device_name": "CTD", "id": i + 1,
+         "closed": None} for i in range(4)]))
+    assert [o["end"] for o in ops[:3]] == [_ms("2026-10-22 19:51"), _ms("2026-10-22 21:51"),
+                                           _ms("2026-10-22 23:39")]
+    assert ops[3]["end"] is None  # still under way
+    # a recording of the third segment is not swallowed by the first
+    start = _ms("2026-10-22 21:49") / 1000
+    assert cast_overview.match(ops, start, start + 6600)["cast"] == 3
+    # recordings long after no longer land in an open-ended earlier segment
+    later = _ms("2026-10-23 04:00") / 1000
+    assert cast_overview.match(ops, later, later + 3600)["cast"] == 4
+
+
 def _rbn(path, start, seconds):
     """A LISST-Deep raw file: 1080-byte header, 120-byte records at 1 Hz."""
     with open(path, "wb") as f:

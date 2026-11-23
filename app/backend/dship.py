@@ -194,6 +194,16 @@ def operations(events, cast_device="CTD", device_ops=None):
             n += 1
             op["cast"] = n
     result.sort(key=lambda o: (o["start"] is None, o["start"] or 0, o["id"] or 0))
+    # A yoyo cast stays in the water between operations, so it has no
+    # on-deck event; the next operation of the same device starting is
+    # what ends it. Only an operation with no successor runs on.
+    following = {}
+    for op in reversed(result):
+        if op["start"] is None:
+            continue
+        if op["end"] is None and op["device"] in following:
+            op["end"] = following[op["device"]]
+        following[op["device"]] = op["start"]
     return result
 
 
@@ -341,7 +351,8 @@ class DshipService:
 
     def next_cast(self, refresh=False):
         """The cast-device operation being set up or under way — the first
-        not yet back on deck and not closed — or, when DSHIP has none yet,
+        not yet ended (on deck, or followed by the next operation) and not
+        closed — or, when DSHIP has none yet,
         the number the next one will get. For numbering a deployment on
         deck before the cast starts."""
         if refresh and self.url:
@@ -351,7 +362,7 @@ class DshipService:
                 self.error = str(e)
         with self.lock:
             ops = [o for o in self.ops if o["device"] == self.device and o["cast"] is not None]
-        open_ops = [o for o in ops if o["on_deck"] is None and not o.get("closed")]
+        open_ops = [o for o in ops if o["end"] is None and not o.get("closed")]
         if open_ops:
             op = min(open_ops, key=lambda o: o["cast"])
             return dict(summary(op), source="dship")

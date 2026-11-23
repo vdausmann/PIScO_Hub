@@ -53,7 +53,8 @@ def cast_ops(ops, device="CTD"):
 
 def match(ops, start_s, end_s=None):
     """The cast a recording from start_s to end_s belongs to: the one it
-    overlaps most, counting from LEAD_S before in-water to on deck."""
+    overlaps most, counting from LEAD_S before in-water to on deck (or,
+    for a yoyo segment, to the next operation's start)."""
     end_s = start_s if end_s is None else end_s
     best, best_overlap = None, None
     for op in ops:
