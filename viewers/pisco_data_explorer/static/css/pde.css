@@ -253,3 +253,12 @@
     .pde-export-form { width: auto; border-right: none; overflow: visible; }
     .pde-export-preview { min-height: 320px; }
 }
+
+/* Saved presets and the table download. */
+.pde .pde-export-delete { margin-top: 0.5rem; padding: 4px 10px; }
+.pde-export-form .pde-row button { padding: 6px 12px; }
+.pde-table-bar { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+                 margin: 1rem 0 0.5rem; }
+.pde-table-bar h3 { margin: 0; }
+.pde .pde-table-bar select { width: auto; }
+.pde .pde-table-bar button { padding: 6px 12px; }

@@ -181,7 +181,16 @@ PIScO Data Explorer
             <button id="export-open" type="button" disabled title="Set labels, size and format, and save the figure">Export figure…</button>
         </div>
         <div id="main-plot"></div>
-        <h3>Data preview</h3>
+        <div class="pde-table-bar">
+            <h3>Data preview</h3>
+            <span id="table-count" class="pde-muted"></span>
+            <span class="pde-export-spacer"></span>
+            <select id="table-format" aria-label="Table format">
+                <option value="csv">CSV</option>
+                <option value="tsv">TSV</option>
+            </select>
+            <button type="button" id="table-download" disabled title="All rows of the table, not only the ones shown">Download table</button>
+        </div>
         <div id="data-table-wrap"></div>
     </div>
 
@@ -197,8 +206,33 @@ PIScO Data Explorer
             <div class="pde-export-form">
 
                 <fieldset>
+                    <legend>Preset</legend>
+                    <select id="exp-preset" aria-label="Preset">
+                        <option value="">Custom</option>
+                        <optgroup label="Sizes">
+                            <option value="screen">Screen — 1200 × 800 px</option>
+                            <option value="slide">Slide 16:9 — 1600 × 900 px</option>
+                            <option value="single">Journal, one column — 8.5 × 7 cm, 600 dpi</option>
+                            <option value="double">Journal, two columns — 17.5 × 11 cm, 600 dpi</option>
+                            <option value="a4">A4 landscape — 25 × 17 cm, 300 dpi</option>
+                        </optgroup>
+                        <optgroup label="Saved" id="exp-saved-group" hidden></optgroup>
+                    </select>
+                    <div id="exp-preset-note" class="pde-status"></div>
+                    <label for="exp-preset-name">Save these settings as</label>
+                    <div class="pde-row">
+                        <input id="exp-preset-name" type="text" maxlength="80" placeholder="e.g. Paper — depth profiles">
+                        <button type="button" id="exp-preset-save">Save</button>
+                    </div>
+                    <button type="button" id="exp-preset-delete" class="pde-secondary pde-export-delete" hidden>Delete this preset</button>
+                    <div class="pde-hint">Saved on the Hub, for every browser and user. A preset keeps the size,
+                        style and format, and the labels: an axis label is applied where the figure's axis is
+                        the one it was saved on, a series by its name.</div>
+                </fieldset>
+
+                <fieldset>
                     <legend>Labels</legend>
-                    <label for="exp-title">Title <span class="pde-muted">· empty: none</span></label>
+                    <label for="exp-title">Title <span class="pde-muted">· empty: none · <code>{profile}</code>: the profile's name</span></label>
                     <input id="exp-title" type="text">
                     <label for="exp-xlabel">X axis</label>
                     <input id="exp-xlabel" type="text">
@@ -275,15 +309,6 @@ PIScO Data Explorer
 
                 <fieldset>
                     <legend>Size and file</legend>
-                    <label for="exp-preset">Preset</label>
-                    <select id="exp-preset">
-                        <option value="">Custom</option>
-                        <option value="screen">Screen — 1200 × 800 px</option>
-                        <option value="slide">Slide 16:9 — 1600 × 900 px</option>
-                        <option value="single">Journal, one column — 8.5 × 7 cm, 600 dpi</option>
-                        <option value="double">Journal, two columns — 17.5 × 11 cm, 600 dpi</option>
-                        <option value="a4">A4 landscape — 25 × 17 cm, 300 dpi</option>
-                    </select>
                     <div class="pde-row pde-export-trio">
                         <div><label for="exp-width">Width</label>
                              <input id="exp-width" type="number" min="1" step="any" value="1200" data-style></div>

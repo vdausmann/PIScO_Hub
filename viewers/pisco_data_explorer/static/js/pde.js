@@ -375,6 +375,14 @@ function themed(layout) {
 }
 
 let lastFigure = null;
+let lastTable = null;
+
+// "<profile(s)>_<plot>", for the files the page saves.
+function fileBase() {
+    const what = plotType() === "esd" ? "esd_spectrum" : "depth_profile";
+    const profiles = (loaded?.profiles || []).join("_") || "pisco";
+    return `${profiles}_${what}`.replace(/[^\w.+-]+/g, "_").slice(0, 120);
+}
 
 function drawFigure(figure) {
     lastFigure = figure;
@@ -414,6 +422,10 @@ async function plot() {
         if (seq !== plotSeq) return;
         drawFigure(body.figure);
         renderTable(body.table);
+        lastTable = body.table;
+        $("table-download").disabled = !body.table.data.length;
+        $("table-count").textContent = body.table.data.length
+            ? `${body.table.data.length.toLocaleString()} row(s)` : "";
         setStatus("pde-status-line", body.status || `${body.points.toLocaleString()} point(s)`);
     } catch (e) {
         if (seq !== plotSeq) return;
@@ -454,6 +466,30 @@ function renderTable(table) {
         note.textContent = `First ${TABLE_ROWS} of ${table.data.length.toLocaleString()} rows`;
         wrap.appendChild(note);
     }
+}
+
+// All rows of the table the last plot came with, as CSV or TSV.
+function downloadTable() {
+    if (!lastTable?.data?.length) return;
+    const tsv = $("table-format").value === "tsv";
+    const sep = tsv ? "\t" : ",";
+    const cell = v => {
+        if (v === null || v === undefined || (typeof v === "number" && !Number.isFinite(v))) return "";
+        const text = String(v);
+        if (tsv) return text.replace(/[\t\r\n]+/g, " ");
+        return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
+    const cols = lastTable.columns;
+    const lines = [cols.map(c => cell(c.name)).join(sep),
+                   ...lastTable.data.map(row => cols.map(c => cell(row[c.id])).join(sep))];
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([lines.join("\n") + "\n"],
+        { type: tsv ? "text/tab-separated-values" : "text/csv" }));
+    link.download = `${fileBase()}_table.${tsv ? "tsv" : "csv"}`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
 // ─── Figure export ────────────────────────────────────────────────────────────
@@ -509,6 +545,7 @@ const exporter = (() => {
             if (el.type === "checkbox") el.checked = !!style[el.id]; else el.value = style[el.id];
         }
         $("exp-preset").value = style.preset || "";
+        wantedPreset = style.preset || "";
         unitLabels();
     }
 
@@ -556,6 +593,165 @@ const exporter = (() => {
         unitLabels();
     }
 
+    // ── saved presets, kept on the Hub ──
+    // A preset holds the style fields as they are, and the labels with the
+    // original title they replace: an axis label goes back only onto the
+    // same axis, a series name onto the series of that name (an ESD depth
+    // bin's "(n=…)" ignored, since the count differs per profile).
+    const SAVED = "saved:";
+    let saved = [];              // [{name, settings, saved_by, saved}]
+    let wantedPreset = "";       // the stored choice, until the list arrives
+
+    const profileName = () => (loaded?.profiles || []).join(", ");
+    const seriesKey = name => String(name ?? "").replace(/\s*\(n=[\d,]+\)\s*$/, "").trim();
+    const savedPreset = () => {
+        const value = $("exp-preset").value;
+        return value.startsWith(SAVED) ? saved.find(p => p.name === value.slice(SAVED.length)) : null;
+    };
+
+    function capture() {
+        const style = {};
+        for (const el of styleFields()) style[el.id] = el.type === "checkbox" ? el.checked : el.value;
+        const src = source?.layout || {};
+        const axis = (key, label, min, max) => ({
+            from: titleText(src[key]?.title), to: $(label).value, min: $(min).value, max: $(max).value });
+        const series = {};
+        (source?.data || []).forEach((trace, i) => {
+            const row = traceRows[i], original = trace.name ?? "";
+            if (row.name.value !== original || !row.show.checked) {
+                series[seriesKey(original)] = {
+                    name: row.name.value !== original ? row.name.value : null, show: row.show.checked };
+            }
+        });
+        let title = $("exp-title").value;
+        const profile = profileName();
+        if (profile && title.includes(profile)) title = title.replaceAll(profile, "{profile}");
+        return {
+            style, title, show_legend: $("exp-showlegend").checked,
+            legend_title: { from: titleText(src.legend?.title), to: $("exp-legend-title").value },
+            x: axis("xaxis", "exp-xlabel", "exp-xmin", "exp-xmax"),
+            y: axis("yaxis", "exp-ylabel", "exp-ymin", "exp-ymax"),
+            series,
+        };
+    }
+
+    function applyStyle(style = {}) {
+        for (const el of styleFields()) {
+            if (!(el.id in style)) continue;
+            if (el.type === "checkbox") el.checked = !!style[el.id]; else el.value = style[el.id];
+        }
+        unitLabels();
+    }
+
+    // Labels onto the figure in the dialog, starting from the figure's own.
+    // Returns what did not fit, for the note under the preset.
+    function applyLabels(settings) {
+        if (!source) return [];
+        takeLabels(source);
+        const src = source.layout || {};
+        const kept = [];
+        $("exp-title").value = settings.title ?? "";
+        if (settings.show_legend !== undefined) $("exp-showlegend").checked = settings.show_legend;
+        const legend = settings.legend_title;
+        if (legend && legend.from === titleText(src.legend?.title)) $("exp-legend-title").value = legend.to;
+        for (const [key, axisKey, label, min, max] of [["x", "xaxis", "exp-xlabel", "exp-xmin", "exp-xmax"],
+                                                       ["y", "yaxis", "exp-ylabel", "exp-ymin", "exp-ymax"]]) {
+            const axis = settings[key];
+            if (!axis) continue;
+            if (axis.from !== titleText(src[axisKey]?.title)) {
+                kept.push(`${key.toUpperCase()} label and range not applied: the preset was made for “${axis.from}”.`);
+                continue;
+            }
+            $(label).value = axis.to;
+            $(min).value = axis.min ?? "";
+            $(max).value = axis.max ?? "";
+        }
+        source.data.forEach((trace, i) => {
+            const entry = settings.series?.[seriesKey(trace.name)];
+            if (!entry) return;
+            if (entry.name !== null && entry.name !== undefined) traceRows[i].name.value = entry.name;
+            traceRows[i].show.checked = entry.show !== false;
+        });
+        return kept;
+    }
+
+    function presetNote(preset, extra = []) {
+        const parts = [];
+        if (preset) {
+            const when = (preset.saved || "").slice(0, 10);
+            parts.push(`Saved${preset.saved_by ? ` by ${preset.saved_by}` : ""}${when ? ` on ${when}` : ""}.`);
+        }
+        setStatus("exp-preset-note", [...parts, ...extra].join(" "), extra.length > 0);
+        $("exp-preset-delete").hidden = !preset;
+    }
+
+    async function loadPresets() {
+        try {
+            saved = (await getJSON("/export_presets")).presets || [];
+        } catch (e) {
+            setStatus("exp-preset-note", `Saved presets unavailable: ${e.message}`, true);
+            return;
+        }
+        const group = $("exp-saved-group");
+        const current = wantedPreset || $("exp-preset").value;
+        group.replaceChildren(...saved.map(p => new Option(p.name, SAVED + p.name)));
+        group.hidden = !saved.length;
+        $("exp-preset").value = [...$("exp-preset").options].some(o => o.value === current) ? current : "";
+        wantedPreset = "";
+        presetNote(savedPreset());
+    }
+
+    function choosePreset() {
+        const value = $("exp-preset").value;
+        const preset = savedPreset();
+        if (preset) {
+            applyStyle(preset.settings.style);
+            presetNote(preset, applyLabels(preset.settings));
+            $("exp-preset-name").value = preset.name;
+        } else {
+            applyPreset(value);
+            presetNote(null);
+        }
+        saveStyle();
+        schedule();
+    }
+
+    async function savePreset() {
+        const name = $("exp-preset-name").value.trim();
+        if (!name) { setStatus("exp-preset-note", "Give the preset a name first.", true); return; }
+        try {
+            const response = await fetch(`${BASE}/export_presets`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name, settings: capture() }),
+            });
+            const body = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(body.error || response.statusText);
+            wantedPreset = SAVED + body.name;     // its option exists once the list is back
+            await loadPresets();
+            saveStyle();
+            setStatus("exp-preset-note", `${body.replaced ? "Updated" : "Saved"} “${body.name}”.`);
+            $("exp-preset-delete").hidden = false;
+        } catch (e) {
+            setStatus("exp-preset-note", `Could not save: ${e.message}`, true);
+        }
+    }
+
+    async function deletePreset() {
+        const preset = savedPreset();
+        if (!preset || !confirm(`Delete the preset “${preset.name}” for everyone on this Hub?`)) return;
+        try {
+            const response = await fetch(`${BASE}/export_presets/${encodeURIComponent(preset.name)}`, { method: "DELETE" });
+            if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || response.statusText);
+        } catch (e) {
+            setStatus("exp-preset-note", `Could not delete: ${e.message}`, true);
+            return;
+        }
+        $("exp-preset").value = "";
+        await loadPresets();
+        saveStyle();
+        setStatus("exp-preset-note", `Deleted “${preset.name}”.`);
+    }
+
     // ── labels and legend entries, taken from the figure on screen ──
     function takeLabels(figure) {
         source = figure;
@@ -588,9 +784,7 @@ const exporter = (() => {
         });
         list.hidden = !traceRows.length;
 
-        const what = plotType() === "esd" ? "esd_spectrum" : "depth_profile";
-        const profiles = (loaded?.profiles || []).join("_") || "pisco";
-        $("exp-filename").value = `${profiles}_${what}`.replace(/[^\w.+-]+/g, "_").slice(0, 120);
+        $("exp-filename").value = fileBase();
     }
 
     // [lo, hi] in the axis's own units, or null to let Plotly choose.
@@ -653,7 +847,7 @@ const exporter = (() => {
         const xRange = axisRange(src.xaxis || {}, "exp-xmin", "exp-xmax", "X", problems);
         const yRange = axisRange(src.yaxis || {}, "exp-ymin", "exp-ymax", "Y", problems);
 
-        const title = $("exp-title").value.trim();
+        const title = $("exp-title").value.trim().replaceAll("{profile}", profileName());
         const legendTitle = $("exp-legend-title").value.trim();
         const pos = $("exp-legend-pos").value;
         const inside = !["right", "bottom"].includes(pos);
@@ -737,7 +931,11 @@ const exporter = (() => {
     function open() {
         if (!lastFigure?.data?.length) return;
         // Keep the labels typed for this figure; a new figure starts from its own.
-        if (source !== lastFigure) takeLabels(lastFigure);
+        if (source !== lastFigure) {
+            takeLabels(lastFigure);
+            const preset = savedPreset();
+            if (preset) presetNote(preset, applyLabels(preset.settings));
+        }
         $("export-dialog").showModal();
         preview();
     }
@@ -772,7 +970,11 @@ const exporter = (() => {
         $("exp-download").addEventListener("click", download);
         $("exp-reset").addEventListener("click", () => { takeLabels(lastFigure || source); schedule(); });
 
-        $("exp-preset").addEventListener("change", () => { applyPreset($("exp-preset").value); saveStyle(); schedule(); });
+        $("exp-preset").addEventListener("change", choosePreset);
+        $("exp-preset-save").addEventListener("click", savePreset);
+        $("exp-preset-name").addEventListener("keydown", e => { if (e.key === "Enter") savePreset(); });
+        $("exp-preset-delete").addEventListener("click", deletePreset);
+        loadPresets();
         unitLabels();
         $("exp-unit").addEventListener("change", () => {
             changeUnit($("exp-unit").dataset.prev, $("exp-unit").value);
@@ -782,7 +984,10 @@ const exporter = (() => {
         dialog.addEventListener("input", e => {
             if (e.target.matches("[data-style]")) {
                 if (["exp-width", "exp-height", "exp-unit", "exp-res", "exp-fontsize",
-                     "exp-linewidth", "exp-markersize"].includes(e.target.id)) $("exp-preset").value = "";
+                     "exp-linewidth", "exp-markersize"].includes(e.target.id) && $("exp-preset").value) {
+                    $("exp-preset").value = "";
+                    presetNote(null);
+                }
                 saveStyle();
             }
             schedule();
@@ -814,6 +1019,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const path = $("tsv-path").value.trim();
         if (path) load({ path });
     });
+    $("table-download").addEventListener("click", downloadTable);
     $("load-hub-btn").addEventListener("click", () => {
         const path = $("hub-export-select").value;
         if (path) load({ path });

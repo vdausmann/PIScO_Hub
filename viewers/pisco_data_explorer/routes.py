@@ -2,12 +2,12 @@ import json
 import pathlib
 
 from flask import Blueprint, jsonify, make_response, render_template, request, url_for
-from flask_login import login_required
+from flask_login import current_user, login_required
 from werkzeug.exceptions import BadRequest
 
 from app.backend import fov, frame_preview
 from app.backend.models import GlobalSetting
-from .backend import hub_profiles, pde
+from .backend import export_presets, hub_profiles, pde
 
 config_path = pathlib.Path(__file__).parent.resolve()
 with open(config_path / "config.json") as f:
@@ -271,6 +271,46 @@ def optics_save():
         runs += hub_profiles.sibling_runs(workflow)
     hub_profiles.save_optics(runs, values)
     return jsonify({"saved": [w.name or w.id for w in runs]})
+
+
+# ─── Export presets ───────────────────────────────────────────────────────────
+# Shared by every browser and user of this Hub: <DATA_ROOT>/pde/export_presets.json.
+
+def _preset_store():
+    root = (GlobalSetting.get("DATA_ROOT", "") or "").strip()
+    if not root:
+        raise BadRequest("DATA_ROOT is not set, so presets have nowhere to go")
+    return export_presets.PresetStore(pathlib.Path(root) / "pde" / "export_presets.json")
+
+
+@pde_bp.route("/export_presets")
+@login_required
+def export_presets_list():
+    try:
+        return jsonify({"presets": _preset_store().list()})
+    except export_presets.PresetError as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@pde_bp.route("/export_presets", methods=["POST"])
+@login_required
+def export_presets_save():
+    """Body {"name": …, "settings": {…}}; a preset of that name is replaced."""
+    body = request.get_json(silent=True) or {}
+    try:
+        saved = _preset_store().save(body.get("name"), body.get("settings"),
+                                     getattr(current_user, "username", None))
+    except export_presets.PresetError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify(saved)
+
+
+@pde_bp.route("/export_presets/<path:preset>", methods=["DELETE"])
+@login_required
+def export_presets_delete(preset):
+    if not _preset_store().delete(preset):
+        return jsonify({"error": f"no preset '{preset}'"}), 404
+    return "", 204
 
 
 @pde_bp.route("/choices")
