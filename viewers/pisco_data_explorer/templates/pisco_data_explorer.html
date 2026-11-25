@@ -176,11 +176,152 @@ PIScO Data Explorer
                 </div>
             </div>
         </details>
-        <div id="pde-status-line" class="pde-status"></div>
+        <div class="pde-plot-bar">
+            <div id="pde-status-line" class="pde-status"></div>
+            <button id="export-open" type="button" disabled title="Set labels, size and format, and save the figure">Export figure…</button>
+        </div>
         <div id="main-plot"></div>
         <h3>Data preview</h3>
         <div id="data-table-wrap"></div>
     </div>
+
+    <!-- Figure export: the current figure in a print style, with the
+         labels, legend, size and format chosen here. Rendered in the
+         browser; the server is not involved. -->
+    <dialog id="export-dialog" class="pde-export" aria-labelledby="export-heading">
+        <div class="pde-export-head">
+            <h3 id="export-heading">Export figure</h3>
+            <button type="button" class="pde-export-x" data-close aria-label="Close">×</button>
+        </div>
+        <div class="pde-export-body">
+            <div class="pde-export-form">
+
+                <fieldset>
+                    <legend>Labels</legend>
+                    <label for="exp-title">Title <span class="pde-muted">· empty: none</span></label>
+                    <input id="exp-title" type="text">
+                    <label for="exp-xlabel">X axis</label>
+                    <input id="exp-xlabel" type="text">
+                    <label for="exp-ylabel">Y axis</label>
+                    <input id="exp-ylabel" type="text">
+                    <div class="pde-hint">Plotly's tags work: <code>&lt;sup&gt;</code>, <code>&lt;sub&gt;</code>, <code>&lt;i&gt;</code>, <code>&lt;b&gt;</code>, <code>&lt;br&gt;</code>.</div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Axes</legend>
+                    <label>X range <span class="pde-muted">· both or neither</span></label>
+                    <div class="pde-row">
+                        <input id="exp-xmin" type="number" step="any" placeholder="auto">
+                        <input id="exp-xmax" type="number" step="any" placeholder="auto">
+                    </div>
+                    <label>Y range <span class="pde-muted">· both or neither</span></label>
+                    <div class="pde-row">
+                        <input id="exp-ymin" type="number" step="any" placeholder="auto">
+                        <input id="exp-ymax" type="number" step="any" placeholder="auto">
+                    </div>
+                    <label for="exp-numfmt">Large and small numbers</label>
+                    <select id="exp-numfmt" data-style>
+                        <option value="power" selected>Powers of ten (10³)</option>
+                        <option value="e">E notation (1e3)</option>
+                        <option value="B">SI prefixes (1k)</option>
+                        <option value="none">Plain (1000)</option>
+                    </select>
+                    <label class="pde-check"><input type="checkbox" id="exp-logdecades" data-style checked> Log axes: label powers of ten only</label>
+                    <label class="pde-check"><input type="checkbox" id="exp-grid" data-style checked> Grid lines</label>
+                    <label class="pde-check"><input type="checkbox" id="exp-frame" data-style checked> Frame around the plot</label>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Legend</legend>
+                    <label class="pde-check"><input type="checkbox" id="exp-showlegend"> Show legend</label>
+                    <label for="exp-legend-title">Legend title</label>
+                    <input id="exp-legend-title" type="text">
+                    <label for="exp-legend-pos">Position</label>
+                    <select id="exp-legend-pos" data-style>
+                        <option value="right" selected>Right, outside</option>
+                        <option value="bottom">Below the plot</option>
+                        <option value="tr">Inside, top right</option>
+                        <option value="tl">Inside, top left</option>
+                        <option value="br">Inside, bottom right</option>
+                        <option value="bl">Inside, bottom left</option>
+                    </select>
+                    <label>Entries <span class="pde-muted">· untick to leave a series out</span></label>
+                    <div id="exp-traces" class="pde-export-traces"></div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Style</legend>
+                    <label for="exp-font">Font</label>
+                    <select id="exp-font" data-style>
+                        <option value="Arial, Helvetica, sans-serif" selected>Arial / Helvetica</option>
+                        <option value="'Times New Roman', Times, serif">Times New Roman</option>
+                        <option value="'DejaVu Sans', Verdana, sans-serif">DejaVu Sans / Verdana</option>
+                        <option value="'Courier New', Courier, monospace">Courier</option>
+                    </select>
+                    <div class="pde-row pde-export-trio">
+                        <div><label for="exp-fontsize">Font size <span id="exp-fontunit" class="pde-muted">px</span></label>
+                             <input id="exp-fontsize" type="number" min="4" max="72" step="0.5" value="14" data-style></div>
+                        <div><label for="exp-linewidth">Line width</label>
+                             <input id="exp-linewidth" type="number" min="0" max="20" step="0.5" value="2" data-style></div>
+                        <div><label for="exp-markersize">Marker size</label>
+                             <input id="exp-markersize" type="number" min="0" max="40" step="0.5" value="6" data-style></div>
+                    </div>
+                    <label for="exp-bg">Background</label>
+                    <select id="exp-bg" data-style>
+                        <option value="white" selected>White</option>
+                        <option value="transparent">Transparent (PNG, SVG, WebP)</option>
+                    </select>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Size and file</legend>
+                    <label for="exp-preset">Preset</label>
+                    <select id="exp-preset">
+                        <option value="">Custom</option>
+                        <option value="screen">Screen — 1200 × 800 px</option>
+                        <option value="slide">Slide 16:9 — 1600 × 900 px</option>
+                        <option value="single">Journal, one column — 8.5 × 7 cm, 600 dpi</option>
+                        <option value="double">Journal, two columns — 17.5 × 11 cm, 600 dpi</option>
+                        <option value="a4">A4 landscape — 25 × 17 cm, 300 dpi</option>
+                    </select>
+                    <div class="pde-row pde-export-trio">
+                        <div><label for="exp-width">Width</label>
+                             <input id="exp-width" type="number" min="1" step="any" value="1200" data-style></div>
+                        <div><label for="exp-height">Height</label>
+                             <input id="exp-height" type="number" min="1" step="any" value="800" data-style></div>
+                        <div><label for="exp-unit">Unit</label>
+                             <select id="exp-unit" data-style>
+                                 <option value="px" selected>px</option>
+                                 <option value="cm">cm</option>
+                                 <option value="in">in</option>
+                             </select></div>
+                    </div>
+                    <label for="exp-res"><span id="exp-res-label">Scale (×)</span></label>
+                    <input id="exp-res" type="number" min="0.5" step="any" value="2" data-style>
+                    <label for="exp-format">Format</label>
+                    <select id="exp-format" data-style>
+                        <option value="png" selected>PNG</option>
+                        <option value="svg">SVG (vector)</option>
+                        <option value="jpeg">JPEG</option>
+                        <option value="webp">WebP</option>
+                    </select>
+                    <label for="exp-filename">File name</label>
+                    <input id="exp-filename" type="text">
+                </fieldset>
+            </div>
+
+            <div class="pde-export-preview">
+                <div id="exp-preview-box"><div id="exp-preview"></div></div>
+                <div id="exp-info" class="pde-status"></div>
+            </div>
+        </div>
+        <div class="pde-export-foot">
+            <button type="button" id="exp-reset" class="pde-secondary" title="Labels and legend back to the figure's own">Reset labels</button>
+            <span class="pde-export-spacer"></span>
+            <button type="button" class="pde-secondary" data-close>Close</button>
+            <button type="button" id="exp-download" class="pde-primary">Download</button>
+        </div>
+    </dialog>
 
 </div>
 

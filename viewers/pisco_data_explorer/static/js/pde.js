@@ -378,6 +378,7 @@ let lastFigure = null;
 
 function drawFigure(figure) {
     lastFigure = figure;
+    $("export-open").disabled = !figure.data?.length;
     Plotly.react("main-plot", figure.data, themed(figure.layout),
         { responsive: true, displaylogo: false });
 }
@@ -454,6 +455,344 @@ function renderTable(table) {
         wrap.appendChild(note);
     }
 }
+
+// ─── Figure export ────────────────────────────────────────────────────────────
+// The figure on screen, redrawn in a print style (black on white, whatever
+// the Hub's theme) with the labels, legend, size and format the dialog
+// holds, and saved by Plotly's own image renderer. The preview is the
+// export at its real layout size, scaled down to fit, so what it shows
+// is what the file will look like.
+//
+// Sizes in cm or inches are laid out at 72 units per inch, so a font
+// size is in points and the DPI only sets the raster's resolution.
+
+const exporter = (() => {
+    const STYLE_KEY = "pde-export-style";
+    const PRESETS = {
+        screen: { unit: "px", width: 1200, height: 800, res: 2, fontsize: 14, linewidth: 2, markersize: 6 },
+        slide:  { unit: "px", width: 1600, height: 900, res: 2, fontsize: 20, linewidth: 3, markersize: 8 },
+        single: { unit: "cm", width: 8.5, height: 7, res: 600, fontsize: 8, linewidth: 1, markersize: 4 },
+        double: { unit: "cm", width: 17.5, height: 11, res: 600, fontsize: 9, linewidth: 1.2, markersize: 4.5 },
+        a4:     { unit: "cm", width: 25, height: 17, res: 300, fontsize: 11, linewidth: 1.5, markersize: 5 },
+    };
+    const PER_INCH = { px: null, cm: 72 / 2.54, in: 72 };
+    const LEGEND = {
+        right:  { x: 1.02, xanchor: "left", y: 1, yanchor: "top" },
+        bottom: { orientation: "h", x: 0.5, xanchor: "center", y: -0.12, yanchor: "top" },
+        tr: { x: 0.99, xanchor: "right", y: 0.99, yanchor: "top" },
+        tl: { x: 0.01, xanchor: "left", y: 0.99, yanchor: "top" },
+        br: { x: 0.99, xanchor: "right", y: 0.01, yanchor: "bottom" },
+        bl: { x: 0.01, xanchor: "left", y: 0.01, yanchor: "bottom" },
+    };
+
+    let source = null;      // the figure the dialog's labels were taken from
+    let traceRows = [];     // [{show, name}] per trace of `source`
+    let timer = null;
+
+    const num = id => { const v = parseFloat($(id).value); return isNaN(v) ? null : v; };
+    const titleText = t => (typeof t === "string" ? t : t?.text) || "";
+    const styleFields = () => document.querySelectorAll("#export-dialog [data-style]");
+
+    // ── settings that outlive a figure: size, font, format… ──
+    function saveStyle() {
+        const style = { preset: $("exp-preset").value };
+        for (const el of styleFields()) style[el.id] = el.type === "checkbox" ? el.checked : el.value;
+        try { localStorage.setItem(STYLE_KEY, JSON.stringify(style)); } catch { /* private window */ }
+    }
+
+    function loadStyle() {
+        let style = null;
+        try { style = JSON.parse(localStorage.getItem(STYLE_KEY)); } catch { /* none */ }
+        if (!style) return;
+        for (const el of styleFields()) {
+            if (!(el.id in style)) continue;
+            if (el.type === "checkbox") el.checked = !!style[el.id]; else el.value = style[el.id];
+        }
+        $("exp-preset").value = style.preset || "";
+        unitLabels();
+    }
+
+    function unitLabels() {
+        const px = $("exp-unit").value === "px";
+        $("exp-res-label").textContent = px ? "Scale (×)" : "Resolution (dpi)";
+        $("exp-fontunit").textContent = px ? "px" : "pt";
+        $("exp-unit").dataset.prev = $("exp-unit").value;
+    }
+
+    // Layout size in Plotly's units and the factor to the raster's pixels.
+    function size() {
+        const unit = $("exp-unit").value;
+        const k = PER_INCH[unit] ?? 1;
+        const res = num("exp-res") || (unit === "px" ? 1 : 300);
+        return {
+            w: Math.max(50, Math.round((num("exp-width") || 0) * k)),
+            h: Math.max(50, Math.round((num("exp-height") || 0) * k)),
+            scale: unit === "px" ? res : res / 72,
+        };
+    }
+
+    // Switching the unit keeps the figure as it is: same layout, same pixels.
+    function changeUnit(from, to) {
+        const kFrom = PER_INCH[from] ?? 1, kTo = PER_INCH[to] ?? 1;
+        const round = v => Math.round(v * 100) / 100;
+        for (const id of ["exp-width", "exp-height"]) {
+            const v = num(id);
+            if (v !== null) $(id).value = round(v * kFrom / kTo);
+        }
+        const res = num("exp-res");
+        if (res !== null && (from === "px") !== (to === "px")) {
+            $("exp-res").value = to === "px" ? round(res / 72) : Math.round(res * 72);
+        }
+        unitLabels();
+    }
+
+    function applyPreset(name) {
+        const p = PRESETS[name];
+        if (!p) return;
+        $("exp-unit").value = p.unit;
+        for (const key of ["width", "height", "res", "fontsize", "linewidth", "markersize"]) {
+            $(`exp-${key}`).value = p[key];
+        }
+        unitLabels();
+    }
+
+    // ── labels and legend entries, taken from the figure on screen ──
+    function takeLabels(figure) {
+        source = figure;
+        const layout = figure.layout || {};
+        $("exp-title").value = titleText(layout.title);
+        $("exp-xlabel").value = titleText(layout.xaxis?.title);
+        $("exp-ylabel").value = titleText(layout.yaxis?.title);
+        $("exp-legend-title").value = titleText(layout.legend?.title);
+        $("exp-showlegend").checked = layout.showlegend ?? figure.data.length > 1;
+        for (const id of ["exp-xmin", "exp-xmax", "exp-ymin", "exp-ymax"]) $(id).value = "";
+
+        const list = $("exp-traces");
+        list.innerHTML = "";
+        traceRows = figure.data.map((trace, i) => {
+            const row = document.createElement("div");
+            row.className = "pde-export-trace";
+            const show = document.createElement("input");
+            show.type = "checkbox";
+            show.checked = trace.visible !== false;
+            show.title = "Include this series";
+            const swatch = document.createElement("span");
+            swatch.className = "pde-export-swatch";
+            swatch.style.background = trace.line?.color || trace.marker?.color || "#888";
+            const name = document.createElement("input");
+            name.type = "text";
+            name.value = trace.name ?? `Series ${i + 1}`;
+            row.append(show, swatch, name);
+            list.appendChild(row);
+            return { show, name };
+        });
+        list.hidden = !traceRows.length;
+
+        const what = plotType() === "esd" ? "esd_spectrum" : "depth_profile";
+        const profiles = (loaded?.profiles || []).join("_") || "pisco";
+        $("exp-filename").value = `${profiles}_${what}`.replace(/[^\w.+-]+/g, "_").slice(0, 120);
+    }
+
+    // [lo, hi] in the axis's own units, or null to let Plotly choose.
+    function axisRange(axis, minId, maxId, label, problems) {
+        const a = num(minId), b = num(maxId);
+        if (a === null && b === null) return null;
+        if (a === null || b === null || a === b) {
+            problems.push(`${label} range needs two different values`);
+            return null;
+        }
+        let range = [Math.min(a, b), Math.max(a, b)];
+        if (axis.type === "log") {
+            if (range[0] <= 0) { problems.push(`${label} is logarithmic: the range must be above 0`); return null; }
+            range = range.map(Math.log10);
+        }
+        if (axis.autorange === "reversed") range.reverse();
+        return range;
+    }
+
+    function build() {
+        const problems = [];
+        const { w, h, scale } = size();
+        const format = $("exp-format").value;
+        const fontSize = num("exp-fontsize") || 12;
+        const font = { family: $("exp-font").value, size: fontSize, color: "#000" };
+        const transparent = $("exp-bg").value === "transparent" && format !== "jpeg";
+        const background = transparent ? "rgba(0,0,0,0)" : "#fff";
+        const lineWidth = num("exp-linewidth"), markerSize = num("exp-markersize");
+        const grid = $("exp-grid").checked, frame = $("exp-frame").checked;
+        $("exp-logdecades").disabled = ![source.layout?.xaxis?.type, source.layout?.yaxis?.type].includes("log");
+
+        const data = source.data.map((trace, i) => {
+            const row = traceRows[i];
+            const out = { ...trace, name: row.name.value, visible: row.show.checked };
+            if (lineWidth !== null) out.line = { ...trace.line, width: lineWidth };
+            if (markerSize !== null) out.marker = { ...trace.marker, size: markerSize };
+            return out;
+        });
+
+        const axis = (src, title, range) => {
+            const out = {
+                ...src,
+                title: { text: title, font, standoff: Math.round(fontSize * 0.6) },
+                automargin: true,
+                color: "#000",
+                tickfont: font,
+                showgrid: grid, gridcolor: "#dcdcdc", gridwidth: Math.max(0.5, fontSize / 20),
+                zeroline: false,
+                showline: true, linecolor: "#000", linewidth: Math.max(0.75, fontSize / 14),
+                mirror: frame ? "ticks" : false,
+                ticks: "outside", ticklen: Math.round(fontSize * 0.4), tickcolor: "#000",
+                tickwidth: Math.max(0.75, fontSize / 14),
+                exponentformat: $("exp-numfmt").value,
+                minorloglabels: $("exp-logdecades").checked ? "none" : "small digits",
+            };
+            if (range) { out.range = range; out.autorange = false; }
+            return out;
+        };
+        const src = source.layout || {};
+        const xRange = axisRange(src.xaxis || {}, "exp-xmin", "exp-xmax", "X", problems);
+        const yRange = axisRange(src.yaxis || {}, "exp-ymin", "exp-ymax", "Y", problems);
+
+        const title = $("exp-title").value.trim();
+        const legendTitle = $("exp-legend-title").value.trim();
+        const pos = $("exp-legend-pos").value;
+        const inside = !["right", "bottom"].includes(pos);
+        const pad = Math.round(fontSize * 0.8);
+        const layout = {
+            width: w, height: h,
+            font,
+            paper_bgcolor: background,
+            plot_bgcolor: background,
+            title: title ? { text: title, font: { ...font, size: Math.round(fontSize * 1.25) },
+                             x: 0.5, xanchor: "center" } : undefined,
+            xaxis: axis(src.xaxis || {}, $("exp-xlabel").value, xRange),
+            yaxis: axis(src.yaxis || {}, $("exp-ylabel").value, yRange),
+            showlegend: $("exp-showlegend").checked,
+            legend: {
+                ...LEGEND[pos],
+                title: legendTitle ? { text: legendTitle, font } : undefined,
+                font,
+                bgcolor: inside ? (transparent ? "rgba(255,255,255,0)" : "rgba(255,255,255,0.85)") : "rgba(0,0,0,0)",
+                bordercolor: inside ? "#000" : "rgba(0,0,0,0)",
+                borderwidth: inside ? 0.75 : 0,
+            },
+            margin: { l: pad, r: pad, b: pad, t: title ? Math.round(fontSize * 3) : pad },
+        };
+        return { data, layout, w, h, scale, format, problems };
+    }
+
+    const MAX_PIXELS = 80e6;   // beyond this the browser's canvas gives up
+
+    // Plotly places a legend below the plot by plot fraction and does not
+    // look at the x-axis title, so the two can overlap: measure on the
+    // rendered figure and move the legend down until they don't.
+    async function clearBottomLegend(target, fig) {
+        if ($("exp-legend-pos").value !== "bottom" || !fig.layout.showlegend) return;
+        const gap = (num("exp-fontsize") || 12) * 0.5;
+        for (let pass = 0; pass < 3; pass++) {
+            const title = target.querySelector(".g-xtitle"), box = target.querySelector(".legend");
+            if (!title || !box) return;
+            const unit = target.getBoundingClientRect().width / fig.w;   // screen px per layout px
+            const overlap = (title.getBoundingClientRect().bottom - box.getBoundingClientRect().top) / unit + gap;
+            if (overlap <= 0.5) return;
+            fig.layout = { ...fig.layout,
+                           legend: { ...fig.layout.legend, y: fig.layout.legend.y - overlap / target._fullLayout._size.h } };
+            await Plotly.react(target, fig.data, fig.layout, { staticPlot: true, displayModeBar: false });
+        }
+    }
+
+    // Renders the preview and returns the figure as rendered, ready to save.
+    async function preview() {
+        if (!source) return null;
+        const fig = build();
+        const box = $("exp-preview-box");
+        const target = $("exp-preview");
+        await Plotly.react(target, fig.data, fig.layout, { staticPlot: true, displayModeBar: false });
+        await clearBottomLegend(target, fig);
+        const area = box.parentElement;
+        const fit = Math.min(1, (area.clientWidth - 48) / fig.w, (area.clientHeight - 72) / fig.h);
+        target.style.transform = `scale(${fit})`;
+        box.style.width = `${fig.w * fit}px`;
+        box.style.height = `${fig.h * fit}px`;
+        box.classList.toggle("transparent", fig.layout.paper_bgcolor !== "#fff");
+
+        const out = fig.format === "svg"
+            ? `SVG, ${fig.w} × ${fig.h} (vector)`
+            : `${fig.format.toUpperCase()}, ${Math.round(fig.w * fig.scale)} × ${Math.round(fig.h * fig.scale)} px`;
+        if (fig.format !== "svg" && fig.w * fig.h * fig.scale ** 2 > MAX_PIXELS) {
+            fig.problems.push("too many pixels for the browser to render: lower the size or resolution");
+            fig.tooLarge = true;
+        }
+        const note = fig.problems.length ? ` · ⚠️ ${fig.problems.join("; ")}` : "";
+        setStatus("exp-info", `${out}${fit < 1 ? ` · preview at ${Math.round(fit * 100)} %` : ""}${note}`,
+                  !!fig.problems.length);
+        return fig;
+    }
+
+    function schedule() {
+        clearTimeout(timer);
+        timer = setTimeout(preview, 150);
+    }
+
+    function open() {
+        if (!lastFigure?.data?.length) return;
+        // Keep the labels typed for this figure; a new figure starts from its own.
+        if (source !== lastFigure) takeLabels(lastFigure);
+        $("export-dialog").showModal();
+        preview();
+    }
+
+    async function download() {
+        clearTimeout(timer);
+        const fig = await preview();
+        if (!fig || fig.tooLarge) return;
+        const name = ($("exp-filename").value.trim() || "pisco_figure").replace(/\.(png|svg|jpe?g|webp)$/i, "");
+        setStatus("exp-info", "Rendering…");
+        try {
+            await Plotly.downloadImage({ data: fig.data, layout: fig.layout }, {
+                format: fig.format, width: fig.w, height: fig.h,
+                scale: fig.format === "svg" ? 1 : fig.scale, filename: name,
+            });
+            setStatus("exp-info", `Saved ${name}.${fig.format === "jpeg" ? "jpeg" : fig.format}`);
+        } catch (e) {
+            setStatus("exp-info", `Could not render: ${e.message || e}`, true);
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        const dialog = $("export-dialog");
+        loadStyle();
+
+        $("export-open").addEventListener("click", open);
+        for (const el of dialog.querySelectorAll("[data-close]")) {
+            el.addEventListener("click", () => dialog.close());
+        }
+        // A click on the backdrop lands on the dialog element itself.
+        dialog.addEventListener("click", e => { if (e.target === dialog) dialog.close(); });
+        $("exp-download").addEventListener("click", download);
+        $("exp-reset").addEventListener("click", () => { takeLabels(lastFigure || source); schedule(); });
+
+        $("exp-preset").addEventListener("change", () => { applyPreset($("exp-preset").value); saveStyle(); schedule(); });
+        unitLabels();
+        $("exp-unit").addEventListener("change", () => {
+            changeUnit($("exp-unit").dataset.prev, $("exp-unit").value);
+            saveStyle();
+        });
+
+        dialog.addEventListener("input", e => {
+            if (e.target.matches("[data-style]")) {
+                if (["exp-width", "exp-height", "exp-unit", "exp-res", "exp-fontsize",
+                     "exp-linewidth", "exp-markersize"].includes(e.target.id)) $("exp-preset").value = "";
+                saveStyle();
+            }
+            schedule();
+        });
+        dialog.addEventListener("change", schedule);
+        window.addEventListener("resize", () => { if (dialog.open) schedule(); });
+    });
+
+    return { open };
+})();
 
 // ─── Wiring ───────────────────────────────────────────────────────────────────
 
